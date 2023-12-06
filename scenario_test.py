@@ -10,7 +10,7 @@ from neo_controller import NeoController
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1)
 
-#random.seed(8)
+random.seed(8)
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
@@ -40,12 +40,15 @@ asteroids_random = generate_asteroids(
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=100,
+                            num_asteroids=5,
+                            #asteroid_states=asteroids_random,
+                            #asteroid_states=[{'position': (500, 920), 'speed': 60, 'angle': -15, 'size': 4}],
                             ship_states=[
                                 {'position': (width//2, height//2), 'angle': 90, 'lives': 30, 'team': 1, "mines_remaining": 30},
                                 # {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
+                            seed=14,
                             time_limit=120,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
