@@ -7,9 +7,13 @@ import time
 import random
 from neo_controller import NeoController
 
+from ctypes import windll
+windll.shcore.SetProcessDpiAwareness(1)
+
 #random.seed(8)
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
+from src.kesslergame.controller_gamepad import GamepadController
 from examples.test_controller import TestController
 #from examples.graphics_both import GraphicsBoth
 
@@ -23,10 +27,10 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-width, height = (1000, 800)
+width, height = (2560, 1440)
 
 asteroids_random = generate_asteroids(
-                                num_asteroids=7,
+                                num_asteroids=1,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
                                 speed_range=(1, 150),
@@ -36,7 +40,7 @@ asteroids_random = generate_asteroids(
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=10,
+                            num_asteroids=1,
                             ship_states=[
                                 {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
                                 # {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
@@ -48,7 +52,7 @@ my_test_scenario = Scenario(name='Test Scenario',
 
 # Define Game Settings
 game_settings = {'perf_tracker': True,
-                 'graphics_type': GraphicsType.Tkinter,#UnrealEngine,
+                 'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
                  'realtime_multiplier': 1,
                  'graphics_obj': None,
                  'frequency': 30}
@@ -58,7 +62,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[NeoController()])#, TestController()])
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[NeoController()])#, TestController()])GamepadController NeoController
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))
