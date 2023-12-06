@@ -5,6 +5,7 @@ from skfuzzy import control as ctrl
 import math
 import numpy as np
 from collections import deque
+import heapq
 
 
 delta_time = 1/30 # s
@@ -15,7 +16,7 @@ ship_max_speed = 240.0 # px/s
 eps = 0.00000001
 ship_radius = 20.0 # px
 
-def build_thrust_lookup_table(max_forward_thrust_time_limit=60):
+def build_thrust_lookup_table(max_forward_thrust_time_limit=round(5/delta_time)):
     lookup = []
 
     def update(ship_distance, ship_speed, thrust):
@@ -347,22 +348,23 @@ class NeoController(KesslerController):
 
     def __init__(self):
         self.init_done = False
-        self.eval_frames = 0
+        self.current_timestep = 0
         self.previously_targetted_asteroid = None
         self.fire_on_frames = set()
         self.shot_at_asteroids = {} # Dict of tuples, with the values corresponding to the timesteps we need to wait until they can be shot at again
         self.last_time_fired = -1
         self.thrust_lookup_table = build_thrust_lookup_table()
         print(self.thrust_lookup_table)
-        self.action_queue = deque()
+        self.action_queue = []  # This will be our heap
+        heapq.heapify(self.action_queue)  # Transform list into a heap
 
     def finish_init(self, game_state):
         pass
 
-    def enqueue_actions(self, actions):
-        self.action_queue.extend(actions)
+    def enqueue_action(self, timestep, thrust=None, turn_rate=None, fire=None, drop_mine=None):
+        heapq.heappush(self.action_queue, (timestep, thrust, turn_rate, fire, drop_mine))
 
-    def plan_actions(self):
+    def plan_actions(self, ship_state: Dict, game_state: Dict):
         # Simulate and look for a good move
         pass
 
@@ -502,25 +504,32 @@ class NeoController(KesslerController):
             turn_rate = 0
     '''
 
-    def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool]:
-        self.eval_frames += 1
+    def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
         # Method processed each time step by this controller.
+        self.current_timestep += 1
         if not self.init_done:
             self.finish_init(game_state)
             self.init_done = True
         
         #print("thrust is " + str(thrust) + "\n" + "turn rate is " + str(turn_rate) + "\n" + "fire is " + str(fire) + "\n")
-        print(ship_state["velocity"])
-        print(ship_state['position'])
+        #print(ship_state["velocity"])
+        #print(ship_state['position'])
         
-        if self.action_queue:
-            action = self.action_queue.popleft()
-            return action
-        else:
-            self.plan_actions()
-            if self.action_queue:
-                action = self.action_queue.popleft()
-                return action
-            else:
-                return 0, 0, False, True
-        #return thrust, turn_rate, fire, False
+        thrust_default, turn_rate_default, fire_default, drop_mine_default = 0, 0, False, False
+
+        # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
+        if not self.action_queue:
+            self.plan_actions(ship_state, game_state)
+
+        # Execute the actions already in the queue for this timestep
+        # Initialize defaults. If a component of the action is missing, then the default value will be returned
+        thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined = thrust_default, turn_rate_default, fire_default, drop_mine_default
+
+        while self.action_queue and self.action_queue[0][0] == self.current_timestep:
+            _, thrust, turn_rate, fire, drop_mine = heapq.heappop(self.action_queue)
+            thrust_combined = thrust if thrust is not None else thrust_combined
+            turn_rate_combined = turn_rate if turn_rate is not None else turn_rate_combined
+            fire_combined = fire if fire is not None else fire_combined
+            drop_mine_combined = drop_mine if drop_mine is not None else drop_mine_combined
+        # The next action in the queue is for a future timestep
+        return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
