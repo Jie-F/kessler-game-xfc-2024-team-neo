@@ -40,9 +40,9 @@ asteroids_random = generate_asteroids(
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=1,
+                            num_asteroids=100,
                             ship_states=[
-                                {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                {'position': (width//2, height//2), 'angle': 90, 'lives': 30, 'team': 1, "mines_remaining": 30},
                                 # {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
