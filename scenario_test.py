@@ -40,7 +40,7 @@ asteroids_random = generate_asteroids(
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=50,
+                            num_asteroids=100,
                             #asteroid_states=asteroids_random,
                             #asteroid_states=[{'position': (500, 920), 'speed': 60, 'angle': -15, 'size': 4}],
                             ship_states=[

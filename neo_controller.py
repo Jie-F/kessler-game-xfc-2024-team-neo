@@ -17,6 +17,7 @@ ship_max_speed = 240.0 # px/s
 eps = 0.00000001
 ship_radius = 20.0 # px
 timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time)
+collision_check_pad = 1
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -74,7 +75,7 @@ def ship_sim_update(ship_distance, ship_speed, thrust):
     ship_distance += ship_speed * delta_time
     return ship_distance, ship_speed
 
-def build_thrust_lookup_table(max_forward_thrust_time_limit=round(5/delta_time)):
+def build_thrust_lookup_table(max_forward_thrust_time_limit=round(1/delta_time)):
     lookup = []
 
     for max_forward_thrust_time in range(1, max_forward_thrust_time_limit + 1):
@@ -95,50 +96,23 @@ def build_thrust_lookup_table(max_forward_thrust_time_limit=round(5/delta_time))
         print(f"Ship speed before final timestep: {ship_speed}")
         if ship_speed >= ship_drag*delta_time + eps:
             final_thrust = max(ship_speed / delta_time - ship_drag, 0)
-            print(f"Final thrust nonzero: {final_thrust}")
+            #print(f"Final thrust nonzero: {final_thrust}")
             ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, -final_thrust)
             deceleration_timestep_count += 1
         else:
-            print("Final thrust is 0")
+            #print("Final thrust is 0")
             final_thrust = ship_max_thrust
             ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, 0)
-        print(f"Ship speed should be 0: {ship_speed}")
+        #print(f"Ship speed should be 0: {ship_speed}")
         assert(abs(ship_speed) < eps)
         #final_thrust = round(final_thrust, 4)
         #print(f"Dist: {ship_distance}, accel timesteps: {max_forward_thrust_time}, decel timesteps: {deceleration_timestep_count}, final decel: {final_thrust}")
         # Lookup table has tuples (distance, accel timesteps, total decel timesteps, final decel rate)
         lookup.append((ship_distance, max_forward_thrust_time, deceleration_timestep_count, final_thrust))
-    '''
-    for max_forward_thrust_time in range(1, max_forward_thrust_time_limit + 1):
-        # For each amount of time to hold max thrust for, re-do the simulation
-        ship_distance = 0
-        ship_speed = 0
-        for _ in range(max_forward_thrust_time):
-            # Thrust forward for max_forward_thrust_time timesteps
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, -ship_max_thrust)
-        # Now slow down the ship until it is stationary again
-        # Keep slowing down the ship until the point where in the next timestep, we can get down to 0
-        deceleration_timestep_count = 0
-        while -ship_speed < (-ship_max_thrust - ship_drag) * delta_time:
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, ship_max_thrust)
-            deceleration_timestep_count += 1
-        # One timestep left until we get down to 0 speed! The magnitude of thrust required is up to -ship_max_thrust but is pretty much always less
-        #print(f"Before final thrust, the ship speed is {ship_speed}")
-        if abs(ship_speed) >= eps:
-            final_thrust = min(ship_speed / delta_time + ship_drag, 0)
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, final_thrust)
-            deceleration_timestep_count += 1
-        assert(abs(ship_speed) < eps)
-        #final_thrust = round(final_thrust, 4)
-        #print(f"Dist: {ship_distance}, accel timesteps: {max_forward_thrust_time}, decel timesteps: {deceleration_timestep_count}, final decel: {final_thrust}")
-        # Lookup table has tuples (distance, accel timesteps, total decel timesteps, final decel rate)
-        lookup.append((ship_distance, max_forward_thrust_time, deceleration_timestep_count, final_thrust))
-    '''
     return lookup
 
 def check_collision(a_x, a_y, a_r, b_x, b_y, b_r):
-    collision_fudge_factor = 1.01
-    if (a_x - b_x)**2 + (a_y - b_y)**2 <= collision_fudge_factor*(a_r + b_r)**2:
+    if (a_x - b_x)**2 + (a_y - b_y)**2 <= (a_r + b_r + collision_check_pad)**2:
         return True
     else:
         return False
@@ -507,14 +481,16 @@ class NeoController(KesslerController):
                 seconds_it_takes_to_steer_ship_by_this_angle = timesteps_it_takes_to_steer_ship_by_this_angle * delta_time
                 # Now we know the extra time it takes for the ship to first steer to the correct alignment, given that front and back alignment are acceptable
                 # Simulate moving in this direction in different speeds/distances until we hopefully find one that gets us to safety
+                how_far_into_the_future_we_are = timesteps_it_takes_to_steer_ship_by_this_angle
                 for thrust_amount in self.thrust_lookup_table:
-                    print("Testing thrust thing")
+                    #print("Testing thrust thing")
                     ship_sim_pos_x, ship_sim_pos_y = ship_state['position']
                     ship_sim_dist = 0
                     ship_sim_speed = 0
                     initial_thrust = ship_max_thrust*alignment
                     nope_this_aint_gonna_work_rip = False
                     for _ in range(thrust_amount[1]):
+                        how_far_into_the_future_we_are += 1
                         ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, initial_thrust)
                         ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
 
@@ -522,7 +498,7 @@ class NeoController(KesslerController):
                             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
                             for a in duplicated_asteroids:
                                 # Check feasibility
-                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][0], a['position'][1] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][1], a['radius']):
+                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
                                     nope_this_aint_gonna_work_rip = True
                                     break
                         if nope_this_aint_gonna_work_rip:
@@ -538,27 +514,29 @@ class NeoController(KesslerController):
                     decel_thrust = -initial_thrust
                     nope_this_aint_gonna_work_rip = False
                     for _ in range(thrust_amount[2] - 1):
+                        how_far_into_the_future_we_are += 1
                         ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, decel_thrust)
                         ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
                         for real_asteroid in game_state['asteroids']:
                             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
                             for a in duplicated_asteroids:
                                 # Check feasibility
-                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][0], a['position'][1] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][1], a['radius']):
+                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
                                     nope_this_aint_gonna_work_rip = True
                                     break
                     if nope_this_aint_gonna_work_rip:
                         # Try the next thrust amount just in case we can dodge it by going faster
                         continue
                     final_decel_thrust = -thrust_amount[3]*alignment - eps
-                    print(f"Final decel thrust {final_decel_thrust}")
-                    print(ship_sim_dist, ship_sim_speed)
+                    #print(f"Final decel thrust {final_decel_thrust}")
+                    #print(ship_sim_dist, ship_sim_speed)
+                    how_far_into_the_future_we_are += 1
                     ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, final_decel_thrust)
-                    print(ship_sim_dist, ship_sim_speed)
+                    #print(ship_sim_dist, ship_sim_speed)
                     # Ship's final, hopefully safe, resting position:
                     ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
-                    print(ship_sim_pos_x, ship_state['position'][0] + unit_vec_x*thrust_amount[0]*alignment)
-                    print(ship_sim_pos_y, ship_state['position'][1] + unit_vec_y*thrust_amount[0]*alignment)
+                    #print(ship_sim_pos_x, ship_state['position'][0] + unit_vec_x*thrust_amount[0]*alignment)
+                    #print(ship_sim_pos_y, ship_state['position'][1] + unit_vec_y*thrust_amount[0]*alignment)
                     assert(abs(ship_sim_pos_x - (ship_state['position'][0] + unit_vec_x*thrust_amount[0]*alignment)) < eps)
                     assert(abs(ship_sim_pos_y - (ship_state['position'][1] + unit_vec_y*thrust_amount[0]*alignment)) < eps)
                     
@@ -567,7 +545,7 @@ class NeoController(KesslerController):
                     for real_asteroid in game_state['asteroids']:
                         duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
                         for a in duplicated_asteroids:
-                            next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(ship_sim_pos_x, ship_sim_pos_y, 0, 0, ship_radius, a['position'][0] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][0], a['position'][1] + timesteps_it_takes_to_steer_ship_by_this_angle*a['velocity'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+                            next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(ship_sim_pos_x, ship_sim_pos_y, 0, 0, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
                     # The imminent collision time is after the maneuver is done and the ship is stationary
                     if next_imminent_collision_time < safe_time_threshold:
                         # Try the next thrust amount just in case we can dodge it by going more
@@ -587,11 +565,11 @@ class NeoController(KesslerController):
                     self.enqueue_action(timestep, 0, (heading_difference_deg - ship_max_turn_rate*np.sign(heading_difference_deg)*delta_time)/delta_time)
             new_start_timestep = self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle
             for timestep in range(new_start_timestep, new_start_timestep + thrust_amount[1]):
-                self.enqueue_action(timestep, ship_max_thrust)
+                self.enqueue_action(timestep, ship_max_thrust*alignment)
             new_start_timestep = new_start_timestep + thrust_amount[1]
             for timestep in range(new_start_timestep, new_start_timestep + thrust_amount[2] - 1):
-                self.enqueue_action(timestep, -ship_max_thrust)
-            self.enqueue_action(timestep, -thrust_amount[3])
+                self.enqueue_action(timestep, -ship_max_thrust*alignment)
+            self.enqueue_action(timestep, -thrust_amount[3]*alignment)
     '''
     #print('Self:')
             #print(self)
