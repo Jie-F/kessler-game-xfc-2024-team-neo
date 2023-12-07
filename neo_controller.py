@@ -7,6 +7,7 @@ import math
 import numpy as np
 from collections import deque
 import heapq
+import sys
 
 
 delta_time = 1/30 # s/ts
@@ -59,57 +60,6 @@ def min_rotation_to_align_deg(current_heading, target_heading):
     else:
         return reverse_diff, -1
 
-def ship_sim_update(ship_distance, ship_speed, thrust):
-    # This was totally just taken from the Kessler game code lul
-    drag_amount = ship_drag*delta_time
-    if drag_amount > abs(ship_speed):
-        ship_speed = 0
-    else:
-        ship_speed -= drag_amount*np.sign(ship_speed)
-    ship_speed += thrust*delta_time
-    if ship_speed > ship_max_speed:
-        ship_speed = ship_max_speed
-    elif ship_speed < -ship_max_speed:
-        ship_speed = -ship_max_speed
-    ship_distance += ship_speed*delta_time
-    return ship_distance, ship_speed
-
-def build_thrust_lookup_table(max_forward_thrust_time_limit=round(1/delta_time)):
-    lookup = []
-
-    for max_forward_thrust_time in range(1, max_forward_thrust_time_limit + 1):
-        # For each amount of time to hold max thrust for, re-do the simulation
-        ship_distance = 0
-        ship_speed = 0
-        for _ in range(max_forward_thrust_time):
-            # Thrust forward for max_forward_thrust_time timesteps
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, ship_max_thrust)
-        # Now slow down the ship until it is stationary again
-        # Keep slowing down the ship until the point where in the next timestep, we can get down to 0
-        deceleration_timestep_count = 0
-        while ship_speed > (ship_max_thrust + ship_drag)*delta_time:
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, -ship_max_thrust)
-            deceleration_timestep_count += 1
-        # One timestep left until we get down to 0 speed! The magnitude of thrust required is up to -ship_max_thrust but is pretty much always less
-        #print(f"Before final thrust, the ship speed is {ship_speed}")
-        #print(f"Ship speed before final timestep: {ship_speed}")
-        if ship_speed >= ship_drag*delta_time + eps:
-            final_thrust = max(ship_speed / delta_time - ship_drag, 0)
-            #print(f"Final thrust nonzero: {final_thrust}")
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, -final_thrust)
-            deceleration_timestep_count += 1
-        else:
-            #print("Final thrust is 0")
-            final_thrust = ship_max_thrust
-            ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, 0)
-        #print(f"Ship speed should be 0: {ship_speed}")
-        assert(abs(ship_speed) < eps)
-        final_thrust = round(final_thrust, 4)
-        #print(f"Dist: {ship_distance}, accel timesteps: {max_forward_thrust_time}, decel timesteps: {deceleration_timestep_count}, final decel: {final_thrust}")
-        # Lookup table has tuples (distance, accel timesteps, total decel timesteps, final decel rate)
-        lookup.append((ship_distance, max_forward_thrust_time, deceleration_timestep_count, final_thrust))
-    return lookup
-
 def check_collision(a_x, a_y, a_r, b_x, b_y, b_r):
     if (a_x - b_x)**2 + (a_y - b_y)**2 < (a_r + b_r + collision_check_pad)**2:
         return True
@@ -135,39 +85,16 @@ def collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_ra
         t2 = (-b - math.sqrt(d)) / (2*a)
     else:
         if a == 0:
-            print("AFHU(SDH*(FJHW*(JF*(WEJFI(OSDJUI(FHWU*(ERUI(WHJFI(USDUJFI(SDUJI(FJSI(DFJI()))))))))))))")
+            print("Uhh yeah nuh uh")
+            sys.exit()
         t1 = math.nan
         t2 = math.nan
-    #print(t1, t2)
-    return t1, t2
-
-def will_collide_and_when_chatgpt(px, py, pxv, pyv, cx, cy, vx, vy, r):
-    vx, vy = vx - pxv, vy - pyv
-
-    # Coefficients of the quadratic equation
-    a = vx**2 + vy**2
-    b = 2 * (vx * (cx - px) + vy * (cy - py))
-    c = (cx - px)**2 + (cy - py)**2 - r**2
-
-    # Discriminant
-    discriminant = b**2 - 4 * a * c
-
-    if discriminant < 0:
-        return (math.nan, math.nan)  # No collision
-
-    # Calculating time of collision
-    t1 = (-b + math.sqrt(discriminant)) / (2 * a)
-    t2 = (-b - math.sqrt(discriminant)) / (2 * a)
     return t1, t2
 
 def predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius):
     next_imminent_collision_time = math.inf
     t1, t2 = collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
-    t3, t4 = will_collide_and_when_chatgpt(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ship_r + ast_radius)
     #print(f"Quadratic equation gave t1 {t1} t2: {t2} and chatgpt got me {t3} and {t4}")
-    if not (math.isnan(t1) or math.isnan(t2) or math.isnan(t3) or math.isnan(t4)):
-        assert(abs(min(t1, t2) - min(t3, t4)) < eps and abs(max(t1, t2) - max(t3, t4)) < eps)
-
     if not math.isnan(t1) and t1 >= 0:
         next_imminent_collision_time = min(t1, next_imminent_collision_time)
     if not math.isnan(t2) and t2 >= 0:
@@ -217,6 +144,12 @@ def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='half_sur
             elif pattern == 'none':
                 # This pattern multiplies the number of asteroids by 1
                 if (dx, dy) != (0, 0):
+                    continue
+            # Check to make sure the asteroids are headed in the direction of the main game bounds
+            # This optimization multiplies the amount of duplicates asteroids by 0.375 approximately, for the surround/half_surround pattern
+            if (dx, dy) != (0, 0):
+                if (dx != 0 and np.sign(dx) == np.sign(asteroid['velocity'][0])) or (dy != 0 and np.sign(dy) == np.sign(asteroid['velocity'][1])):
+                    # This imaginary asteroid's heading out into space
                     continue
             #print(f"It: col{col} row{row}")
             duplicate = asteroid.copy()
@@ -452,6 +385,118 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
 
 
 
+class NeoShipSim():
+    # This was totally just taken from the Kessler game code lul
+    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[]):
+        self.speed = ship_state['speed']
+        self.position = ship_state['position']
+        self.velocity = ship_state['velocity']
+        self.heading = ship_state['heading']
+        self.initial_timestep = initial_timestep
+        self.future_timesteps = 0
+        self.move_sequence = []
+        self.state_sequence = [(self.initial_timestep, self.position, self.velocity, self.speed, self.heading)]
+        self.asteroids = asteroids
+        self.game_state = game_state
+
+    def get_instantaneous_asteroid_collision(self):
+        collision = False
+        for a in self.asteroids:
+            if check_collision(self.position[0], self.position[1], ship_radius, a['position'][0], a['position'][1], a['radius']):
+                collision = True
+                break
+        return collision
+
+    def get_next_extrapolated_collision_time(self):
+        # Assume constant velocity from here
+        next_imminent_collision_time = math.inf
+        #print('Extrapolating stuff at rest in end')
+        for a in self.asteroids:
+            next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0] + self.future_timesteps*delta_time*a['velocity'][0], a['position'][1] + self.future_timesteps*delta_time*a['velocity'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+        return next_imminent_collision_time
+
+    def update(self, thrust=0, turn_rate=0):
+        self.future_timesteps += 1
+        # Apply drag. Fully stop the ship if it would cross zero speed in this time (prevents oscillation)
+        drag_amount = ship_drag * delta_time
+        if drag_amount > abs(self.speed):
+            self.speed = 0
+        else:
+            self.speed -= drag_amount * np.sign(self.speed)
+        # Apply thrust
+        self.speed += thrust * delta_time
+        # Update the angle based on turning rate
+        self.heading += turn_rate * delta_time
+        # Keep the angle within (-180, 180)
+        while self.heading > 360:
+            self.heading -= 360.0
+        while self.heading < 0:
+            self.heading += 360.0
+        # Use speed magnitude to get velocity vector
+        self.velocity = [math.cos(math.radians(self.heading))*self.speed, math.sin(math.radians(self.heading))*self.speed]
+        # Update the position based off the velocities
+        self.position = [pos + vel*delta_time for pos, vel in zip(self.position, self.velocity)]
+        # Wrap position
+        for idx, pos in enumerate(self.position):
+            bound = self.game_state['map_size'][idx]
+            offset = bound - pos
+            if offset < 0 or offset > bound:
+                self.position[idx] += bound * np.sign(offset)
+        if self.get_instantaneous_asteroid_collision():
+            return False
+        self.move_sequence.append((self.initial_timestep + self.future_timesteps, thrust, turn_rate))
+        self.state_sequence.append((self.initial_timestep + self.future_timesteps, self.position, self.velocity, self.speed, self.heading))
+        return True
+
+    def rotate_heading(self, heading_difference_deg):
+        target_heading = (self.heading + heading_difference_deg) % 360
+        still_need_to_turn = heading_difference_deg
+        while abs(still_need_to_turn) > ship_max_turn_rate*delta_time:
+            if not self.update(0, ship_max_turn_rate*np.sign(heading_difference_deg)):
+                return False
+            still_need_to_turn -= ship_max_turn_rate*np.sign(heading_difference_deg)*delta_time
+        if not self.update(0, still_need_to_turn/delta_time):
+            return False
+        assert(abs(target_heading - self.heading) < eps)
+        return True
+
+    def accelerate(self, target_speed):
+        # Keep in mind speed can be negative
+        # Drag will always slow down the ship
+        while abs(self.speed - target_speed) > eps:
+            drag = -ship_drag*np.sign(self.speed)
+            delta_speed_to_target = target_speed - self.speed
+            thrust_amount = delta_speed_to_target/delta_time - drag
+            thrust_amount = min(max(-ship_max_thrust, thrust_amount), ship_max_thrust)
+            if not self.update(thrust_amount, 0):
+                return False
+        return True
+
+    def cruise(self, cruise_time, cruise_turn_rate=0):
+        # Maintain current speed
+        for _ in range(cruise_time):
+            if not self.update(np.sign(self.speed)*ship_drag, cruise_turn_rate):
+                return False
+        return True
+
+    def get_move_sequence(self):
+        return self.move_sequence
+    
+    def get_state_sequence(self):
+        return self.state_sequence
+
+    def get_future_timesteps(self):
+        return self.future_timesteps
+    
+    def get_position(self):
+        return self.position
+
+    def get_velocity(self):
+        return self.velocity
+
+    def get_heading(self):
+        return self.heading
+
 class NeoController(KesslerController):
     @property
     def name(self) -> str:
@@ -464,8 +509,6 @@ class NeoController(KesslerController):
         self.fire_on_frames = set()
         self.shot_at_asteroids = {} # Dict of tuples, with the values corresponding to the timesteps we need to wait until they can be shot at again
         self.last_time_fired = -1
-        self.thrust_lookup_table = build_thrust_lookup_table()
-        print(self.thrust_lookup_table)
         self.action_queue = []  # This will be our heap
         heapq.heapify(self.action_queue)  # Transform list into a heap
 
@@ -498,162 +541,59 @@ class NeoController(KesslerController):
             print("AVOID")
             # Run a simulation and find a course of action to put me to safety
             # Monte Carlo Tree Search?
-            current_ship_heading = ship_state['heading']
             safe_maneuver_found = False
             best_imminent_collision_time_found = 0
-            max_search_iterations = 100
+            best_maneuver_move_sequence = None
+            max_search_iterations = 1000
             min_search_iterations = 10
             search_iterations_count = 0
-            best_maneuver_timesteps = math.nan
-            best_maneuver_timesteps_steer = math.nan
-            best_maneuver_alignment = 1
-            best_maneuver_turn = 0
+            duplicated_asteroids = []
+            for real_asteroid in game_state['asteroids']:
+                duplicated_asteroids.extend(duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround'))
             while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
                 search_iterations_count += 1
                 print(f"Search iteration {search_iterations_count}")
-                random_ship_heading_angle = random.uniform(0.0, 360.0)
-                # Get the unit vector in the direction the ship will move
-                unit_vec_x = math.cos(math.radians(random_ship_heading_angle))
-                unit_vec_y = math.sin(math.radians(random_ship_heading_angle))
-                #print(f"The ship is moving in direction: {unit_vec_x} {unit_vec_y}")
-                heading_difference_deg, alignment = min_rotation_to_align_deg(current_ship_heading, random_ship_heading_angle)
-                assert(abs(heading_difference_deg) <= 90)
-                #print(f"Current heading {current_ship_heading}, target heading: {random_ship_heading_angle}, need to turn: {heading_difference_deg}")
-                timesteps_it_takes_to_steer_ship_by_this_angle = math.ceil(abs(heading_difference_deg) / (ship_max_turn_rate*delta_time))
-                #seconds_it_takes_to_steer_ship_by_this_angle = timesteps_it_takes_to_steer_ship_by_this_angle*delta_time
-                # Now we know the extra time it takes for the ship to first steer to the correct alignment, given that front and back alignment are acceptable
-                # Simulate moving in this direction in different speeds/distances until we hopefully find one that gets us to safety
-                for thrust_amount in self.thrust_lookup_table:
-                    how_far_into_the_future_we_are = timesteps_it_takes_to_steer_ship_by_this_angle
-                    #print("Testing thrust thing")
-                    ship_sim_pos_x, ship_sim_pos_y = ship_state['position']
-                    ship_sim_dist = 0
-                    ship_sim_speed = 0
-                    initial_thrust = ship_max_thrust*alignment
-                    nope_this_aint_gonna_work_rip = False
-                    for _ in range(thrust_amount[1]):
-                        how_far_into_the_future_we_are += 1
-                        ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, initial_thrust)
-                        ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
+                random_ship_heading_angle = random.uniform(-90.0, 90.0)
+                random_ship_cruise_speed = random.uniform(-ship_max_speed, ship_max_speed)
+                random_ship_cruise_turn_rate = random.uniform(-ship_max_turn_rate/2, ship_max_turn_rate/2)
+                max_cruise_seconds = 1
+                random_ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/delta_time))
 
-                        for a in game_state['asteroids']:
-                            # Check collision only against real asteroids since we're just looking at this timestep and we're not extrapolating into the future
-                            if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][0], a['position'][1] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][1], a['radius']):
-                                nope_this_aint_gonna_work_rip = True
-                                break
-                        if nope_this_aint_gonna_work_rip:
-                            break
-                    if nope_this_aint_gonna_work_rip:
-                        if thrust_amount[1] <= timesteps_until_terminal_velocity:
-                            # Try the next thrust amount
-                            continue
-                        else:
-                            # Early break condition. If we're already past terminal velocity and this isn't feasible, then any further thrust values will also be infeasible so no need to try them
-                            break
-                    # We're approaching the goal. Time to start decelerating
-                    decel_thrust = -initial_thrust
-                    nope_this_aint_gonna_work_rip = False
-                    for _ in range(thrust_amount[2] - 1):
-                        how_far_into_the_future_we_are += 1
-                        ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, decel_thrust)
-                        ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
-                        for a in game_state['asteroids']:
-                            # Check collision only against real asteroids since we're just looking at this timestep and we're not extrapolating into the future
-                            if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][0], a['position'][1] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][1], a['radius']):
-                                nope_this_aint_gonna_work_rip = True
-                                break
-                    if nope_this_aint_gonna_work_rip:
-                        # Try the next thrust amount just in case we can dodge it by going faster
-                        continue
-                    final_decel_thrust = -(thrust_amount[3] - eps)*alignment # Not sure if the eps helps at all ugh
-                    #print(f"Final decel thrust {final_decel_thrust}")
-                    #print(ship_sim_dist, ship_sim_speed)
-                    how_far_into_the_future_we_are += 1
-                    ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, final_decel_thrust)
-                    ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
-                    yikes = False
-                    for a in game_state['asteroids']:
-                        # Check collision only against real asteroids since we're just looking at this timestep and we're not extrapolating into the future
-                        if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][0], a['position'][1] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][1], a['radius']):
-                            yikes = True
-                            break
-                    if yikes:
-                        # Try the next thrust amount just in case we can dodge it by going more
-                        continue
-                    #print(ship_sim_dist, ship_sim_speed)
-                    # Ship's final, hopefully safe, resting position:
-                    ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
-                    #print(unit_vec_x, unit_vec_y)
-                    #print(ship_state['position'])
-                    
-                    #print(ship_state['position'][0] + unit_vec_x*thrust_amount[0], ship_state['position'][1] + unit_vec_y*thrust_amount[0])
-                    assert(abs(ship_sim_pos_x - (ship_state['position'][0] + unit_vec_x*thrust_amount[0])) < eps)
-                    assert(abs(ship_sim_pos_y - (ship_state['position'][1] + unit_vec_y*thrust_amount[0])) < eps)
-                    
-                    next_imminent_collision_time = math.inf
-                    #print('Extrapolating stuff at rest in end')
-                    for real_asteroid in game_state['asteroids']:
-                        duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
-                        for a in duplicated_asteroids:
-                            next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(ship_sim_pos_x, ship_sim_pos_y, 0, 0, ship_radius, a['position'][0] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][0], a['position'][1] + (how_far_into_the_future_we_are*delta_time)*a['velocity'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
-                    # The imminent collision time is after the maneuver is done and the ship is stationary
-                    # Keep track of the best so far
-                    if next_imminent_collision_time > best_imminent_collision_time_found:
-                        best_imminent_collision_time_found = next_imminent_collision_time
-                        best_maneuver_turn = heading_difference_deg
-                        best_maneuver_thrust = thrust_amount
-                        best_maneuver_alignment = alignment
-                        best_maneuver_timesteps = how_far_into_the_future_we_are
-                        best_maneuver_timesteps_steer = timesteps_it_takes_to_steer_ship_by_this_angle
-                        best_maneuver_sim_final_pos = (ship_sim_pos_x, ship_sim_pos_y)
-                    
-                    if next_imminent_collision_time >= safe_time_threshold:
-                        safe_maneuver_found = True
-                        print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
-                        print(f"Maneuver takes this many seconds: {best_maneuver_timesteps*delta_time}")
-                        #print(f"Projected location to move will be to: {ship_sim_pos_x}, {ship_sim_pos_y} with heading {current_ship_heading + heading_difference_deg}")
-                        break
-                    else:
-                        # Try the next thrust amount just in case we can dodge it by going more
-                        continue
+                sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, duplicated_asteroids)
+                if not sim_ship.rotate_heading(random_ship_heading_angle):
+                    continue
+                if not sim_ship.accelerate(random_ship_cruise_speed):
+                    continue
+                if not sim_ship.cruise(random_ship_cruise_timesteps, random_ship_cruise_turn_rate):
+                    continue
+                if not sim_ship.accelerate(0):
+                    continue
+                next_imminent_collision_time = sim_ship.get_next_extrapolated_collision_time()
+                if next_imminent_collision_time > best_imminent_collision_time_found:
+                    print(f"Alright we found a better one with time {next_imminent_collision_time}")
+                    best_imminent_collision_time_found = next_imminent_collision_time
+                    best_maneuver_move_sequence = sim_ship.get_move_sequence()
+                if next_imminent_collision_time >= safe_time_threshold:
+                    safe_maneuver_found = True
+                    print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
+                    print(f"Maneuver takes this many seconds: {len(best_maneuver_move_sequence)*delta_time}")
+                    #print(f"Projected location to move will be to: {ship_sim_pos_x}, {ship_sim_pos_y} with heading {current_ship_heading + heading_difference_deg}")
+                    break
+                else:
+                    # Try the next thrust amount just in case we can dodge it by going more
+                    continue
                 #print("Went through all possible thrusts for this direction! Trying new random one.")
             if search_iterations_count == max_search_iterations:
                 print("Hit the max iteration count")
             else:
                 print(f"Did {search_iterations_count} search iterations to find something good")
-            print(f"We're gonna end up at {best_maneuver_sim_final_pos[0]}, {best_maneuver_sim_final_pos[1]}")
+            end_state = sim_ship.get_state_sequence()[-1]
+            print(f"We're gonna end up at {end_state[1][0]}, {end_state[1][1]}")
             # Enqueue the safe maneuver
-            # First rotate the ship
-            still_need_to_turn = best_maneuver_turn 
-            for timestep in range(self.current_timestep, self.current_timestep + best_maneuver_timesteps_steer):
-                #print(f"The total turning we need to do is {safe_maneuver_turn}")
-                #print(f"In one timestep we can turn this many degs {ship_max_turn_rate*delta_time}")
-                if abs(still_need_to_turn) > ship_max_turn_rate*delta_time:
-                    # Turn at the max rate by 6 degrees this timestep
-                    self.enqueue_action(timestep, 0, ship_max_turn_rate*np.sign(best_maneuver_turn))
-                    #print(f"Just enqueued turn rate {ship_max_turn_rate*np.sign(safe_maneuver_turn)}")
-                    #print(self.action_queue)
-                    still_need_to_turn -= ship_max_turn_rate*np.sign(best_maneuver_turn)*delta_time
-                else:
-                    # Turn the remaining bit below 6 degrees
-                    #already_turned_degrees = (best_maneuver_timesteps_steer - 1)*ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time
-                    #print(f"We need to turn {safe_maneuver_turn} in total but we've already turned {already_turned_degrees}")
-                    self.enqueue_action(timestep, 0, still_need_to_turn/delta_time)
-                    #print(f"Just enqueued turn rate below max {still_need_to_turn/delta_time}")
-            new_start_timestep = self.current_timestep + best_maneuver_timesteps_steer
-            for timestep in range(new_start_timestep, new_start_timestep + best_maneuver_thrust[1]):
-                self.enqueue_action(timestep, ship_max_thrust*best_maneuver_alignment)
-            new_start_timestep = new_start_timestep + best_maneuver_thrust[1]
-            for timestep in range(new_start_timestep, new_start_timestep + best_maneuver_thrust[2] - 1):
-                self.enqueue_action(timestep, -ship_max_thrust*best_maneuver_alignment)
-            self.enqueue_action(timestep + 1, -best_maneuver_thrust[3]*best_maneuver_alignment)
-
-            # Enqueue a buffer null action just in case it fixes shit
-            #self.enqueue_action(timestep + 2)
+            for move in best_maneuver_move_sequence:
+                self.enqueue_action(move[0], move[1], move[2])
 
             #print(self.action_queue)
-            # ISSUES TO FIX:
-            # THE SIMULATION DOESN'T WRAP COORDINATES
     '''
     #print('Self:')
             #print(self)
