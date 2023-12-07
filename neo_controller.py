@@ -554,22 +554,20 @@ class NeoController(KesslerController):
                         safe_maneuver_found = True
                         safe_maneuver_turn = heading_difference_deg
                         safe_maneuver_thrust = thrust_amount
-                    # DOP NOT FORGET TO INCREASE THE TIMESTEP BY TIME IT TAKES TO TURN SHP!
-                    # sdf789y89234yhr90aserhF*(N YSR()E*F GYHSEU(DFHNM(SDYNUF( USDHU(FGVsdhu80F HSD*(UFYH*()SD))))))
             # Enqueue the safe maneuver
             # First rotate the ship
             for timestep in range(self.current_timestep, self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle):
-                if heading_difference_deg > ship_max_turn_rate*delta_time:
-                    self.enqueue_action(timestep, 0, ship_max_turn_rate*np.sign(heading_difference_deg))
+                if safe_maneuver_turn > ship_max_turn_rate*delta_time:
+                    self.enqueue_action(timestep, 0, ship_max_turn_rate*np.sign(safe_maneuver_turn))
                 else:
-                    self.enqueue_action(timestep, 0, (heading_difference_deg - ship_max_turn_rate*np.sign(heading_difference_deg)*delta_time)/delta_time)
+                    self.enqueue_action(timestep, 0, (safe_maneuver_turn - ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time)/delta_time)
             new_start_timestep = self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle
-            for timestep in range(new_start_timestep, new_start_timestep + thrust_amount[1]):
+            for timestep in range(new_start_timestep, new_start_timestep + safe_maneuver_thrust[1]):
                 self.enqueue_action(timestep, ship_max_thrust*alignment)
-            new_start_timestep = new_start_timestep + thrust_amount[1]
-            for timestep in range(new_start_timestep, new_start_timestep + thrust_amount[2] - 1):
+            new_start_timestep = new_start_timestep + safe_maneuver_thrust[1]
+            for timestep in range(new_start_timestep, new_start_timestep + safe_maneuver_thrust[2] - 1):
                 self.enqueue_action(timestep, -ship_max_thrust*alignment)
-            self.enqueue_action(timestep, -thrust_amount[3]*alignment)
+            self.enqueue_action(timestep, -safe_maneuver_thrust[3]*alignment)
     '''
     #print('Self:')
             #print(self)
