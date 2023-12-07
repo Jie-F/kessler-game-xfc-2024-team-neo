@@ -457,7 +457,7 @@ class NeoController(KesslerController):
         for real_asteroid in game_state['asteroids']:
             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
             for a in duplicated_asteroids:
-                next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['radius'], ship_state['velocity'][0], ship_state['velocity'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+                next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_state['radius'], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
         print(f"Next imminent collision is in {next_imminent_collision_time}s")
         safe_time_threshold = 10
         do_nothing_time = 5
@@ -470,10 +470,12 @@ class NeoController(KesslerController):
             # Avoid!
             print("AVOID")
             # Run a simulation and find a course of action to put me to safety
+            # Monte Carlo Tree Search?
             current_ship_heading = ship_state['heading']
             safe_maneuver_found = False
             while not safe_maneuver_found:
                 random_ship_heading_angle = random.uniform(-180.0, 180.0)
+                # Get the unit vector in the direction the ship will move
                 unit_vec_x = math.cos(math.radians(random_ship_heading_angle))
                 unit_vec_y = math.sin(math.radians(random_ship_heading_angle))
                 heading_difference_deg, alignment = min_rotation_to_align_deg(current_ship_heading, random_ship_heading_angle)
@@ -527,18 +529,20 @@ class NeoController(KesslerController):
                     if nope_this_aint_gonna_work_rip:
                         # Try the next thrust amount just in case we can dodge it by going faster
                         continue
-                    final_decel_thrust = -thrust_amount[3]*alignment - eps
+                    final_decel_thrust = -thrust_amount[3]*alignment
                     #print(f"Final decel thrust {final_decel_thrust}")
                     #print(ship_sim_dist, ship_sim_speed)
                     how_far_into_the_future_we_are += 1
                     ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, final_decel_thrust)
                     #print(ship_sim_dist, ship_sim_speed)
                     # Ship's final, hopefully safe, resting position:
-                    ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
-                    #print(ship_sim_pos_x, ship_state['position'][0] + unit_vec_x*thrust_amount[0]*alignment)
-                    #print(ship_sim_pos_y, ship_state['position'][1] + unit_vec_y*thrust_amount[0]*alignment)
-                    assert(abs(ship_sim_pos_x - (ship_state['position'][0] + unit_vec_x*thrust_amount[0]*alignment)) < eps)
-                    assert(abs(ship_sim_pos_y - (ship_state['position'][1] + unit_vec_y*thrust_amount[0]*alignment)) < eps)
+                    ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
+                    print(unit_vec_x, unit_vec_y)
+                    print(ship_state['position'])
+                    print(ship_sim_pos_x, ship_sim_pos_y)
+                    print(ship_state['position'][0] + unit_vec_x*thrust_amount[0], ship_state['position'][1] + unit_vec_y*thrust_amount[0])
+                    assert(abs(ship_sim_pos_x - (ship_state['position'][0] + unit_vec_x*thrust_amount[0])) < eps)
+                    assert(abs(ship_sim_pos_y - (ship_state['position'][1] + unit_vec_y*thrust_amount[0])) < eps)
                     
 
                     next_imminent_collision_time = math.inf
