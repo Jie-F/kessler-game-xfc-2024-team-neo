@@ -27,28 +27,28 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-width, height = (192*3, 108*3)
+width, height = (1920, 1080)
 
 asteroids_random = generate_asteroids(
-                                num_asteroids=1,
+                                num_asteroids=300,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
                                 speed_range=(1, 150),
                                 angle_range=(-180, 180),
-                                size_range=(1, 4)
+                                size_range=(1, 1)
                             )
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=2,
-                            #asteroid_states=asteroids_random,
-                            #asteroid_states=[{'position': (500, 920), 'speed': 60, 'angle': -15, 'size': 4}],
+                            #num_asteroids=200,
+                            asteroid_states=asteroids_random,
+                            #asteroid_states=[{'position': (0, 0), 'speed': 20, 'angle': -24, 'size': 4}],
                             ship_states=[
                                 {'position': (width//2, height//2), 'angle': 90, 'lives': 30, 'team': 1, "mines_remaining": 30},
                                 # {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
-                            seed=1,
+                            seed=2,
                             time_limit=120,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
