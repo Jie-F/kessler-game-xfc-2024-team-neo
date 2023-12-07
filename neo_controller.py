@@ -452,6 +452,7 @@ class NeoController(KesslerController):
     def plan_actions(self, ship_state: Dict, game_state: Dict):
         # Simulate and look for a good move
         print("Checking for imminent danger")
+        print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}")
         # Check for danger
         next_imminent_collision_time = math.inf
         for real_asteroid in game_state['asteroids']:
@@ -496,13 +497,11 @@ class NeoController(KesslerController):
                         ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, initial_thrust)
                         ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
 
-                        for real_asteroid in game_state['asteroids']:
-                            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
-                            for a in duplicated_asteroids:
-                                # Check feasibility
-                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
-                                    nope_this_aint_gonna_work_rip = True
-                                    break
+                        for a in game_state['asteroids']:
+                            # Check collision only against real asteroids since we're just looking at this timestep and we're not extrapolating into the future
+                            if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
+                                nope_this_aint_gonna_work_rip = True
+                                break
                         if nope_this_aint_gonna_work_rip:
                             break
                     if nope_this_aint_gonna_work_rip:
@@ -519,13 +518,11 @@ class NeoController(KesslerController):
                         how_far_into_the_future_we_are += 1
                         ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, decel_thrust)
                         ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*ship_sim_dist, ship_state['position'][1] + unit_vec_y*ship_sim_dist
-                        for real_asteroid in game_state['asteroids']:
-                            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
-                            for a in duplicated_asteroids:
-                                # Check feasibility
-                                if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
-                                    nope_this_aint_gonna_work_rip = True
-                                    break
+                        for a in game_state['asteroids']:
+                            # Check collision only against real asteroids since we're just looking at this timestep and we're not extrapolating into the future
+                            if check_collision(ship_sim_pos_x, ship_sim_pos_y, ship_radius, a['position'][0] + how_far_into_the_future_we_are*a['velocity'][0], a['position'][1] + how_far_into_the_future_we_are*a['velocity'][1], a['radius']):
+                                nope_this_aint_gonna_work_rip = True
+                                break
                     if nope_this_aint_gonna_work_rip:
                         # Try the next thrust amount just in case we can dodge it by going faster
                         continue
@@ -534,13 +531,14 @@ class NeoController(KesslerController):
                     #print(ship_sim_dist, ship_sim_speed)
                     how_far_into_the_future_we_are += 1
                     ship_sim_dist, ship_sim_speed = ship_sim_update(ship_sim_dist, ship_sim_speed, final_decel_thrust)
+                    # WE NEED TO CHECK COLLISIONS FOR JUST THIS TIMESTEP OTHERWISE THERES A CHANCE TO DIE AT THIS ONE FRAME
                     #print(ship_sim_dist, ship_sim_speed)
                     # Ship's final, hopefully safe, resting position:
                     ship_sim_pos_x, ship_sim_pos_y = ship_state['position'][0] + unit_vec_x*abs(ship_sim_dist), ship_state['position'][1] + unit_vec_y*abs(ship_sim_dist)
-                    print(unit_vec_x, unit_vec_y)
-                    print(ship_state['position'])
-                    print(ship_sim_pos_x, ship_sim_pos_y)
-                    print(ship_state['position'][0] + unit_vec_x*thrust_amount[0], ship_state['position'][1] + unit_vec_y*thrust_amount[0])
+                    #print(unit_vec_x, unit_vec_y)
+                    #print(ship_state['position'])
+                    
+                    #print(ship_state['position'][0] + unit_vec_x*thrust_amount[0], ship_state['position'][1] + unit_vec_y*thrust_amount[0])
                     assert(abs(ship_sim_pos_x - (ship_state['position'][0] + unit_vec_x*thrust_amount[0])) < eps)
                     assert(abs(ship_sim_pos_y - (ship_state['position'][1] + unit_vec_y*thrust_amount[0])) < eps)
                     
@@ -558,13 +556,19 @@ class NeoController(KesslerController):
                         safe_maneuver_found = True
                         safe_maneuver_turn = heading_difference_deg
                         safe_maneuver_thrust = thrust_amount
+                        print(f"Projected location to move will be to: {ship_sim_pos_x}, {ship_sim_pos_y}")
+                        break
             # Enqueue the safe maneuver
             # First rotate the ship
             for timestep in range(self.current_timestep, self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle):
                 if safe_maneuver_turn > ship_max_turn_rate*delta_time:
+                    # Turn at the max rate by 6 degrees this timestep
                     self.enqueue_action(timestep, 0, ship_max_turn_rate*np.sign(safe_maneuver_turn))
                 else:
-                    self.enqueue_action(timestep, 0, (safe_maneuver_turn - ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time)/delta_time)
+                    # Turn the remaining bit below 6 degrees
+                    already_turned_degrees = (timesteps_it_takes_to_steer_ship_by_this_angle - 1)*ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time
+                    still_need_to_turn = safe_maneuver_turn - already_turned_degrees
+                    self.enqueue_action(timestep, 0, still_need_to_turn/delta_time)
             new_start_timestep = self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle
             for timestep in range(new_start_timestep, new_start_timestep + safe_maneuver_thrust[1]):
                 self.enqueue_action(timestep, ship_max_thrust*alignment)
@@ -572,6 +576,10 @@ class NeoController(KesslerController):
             for timestep in range(new_start_timestep, new_start_timestep + safe_maneuver_thrust[2] - 1):
                 self.enqueue_action(timestep, -ship_max_thrust*alignment)
             self.enqueue_action(timestep, -safe_maneuver_thrust[3]*alignment)
+
+
+            # ISSUES TO FIX:
+            # THE SIMULATION DOESN'T WRAP COORDINATES
     '''
     #print('Self:')
             #print(self)
@@ -738,4 +746,15 @@ class NeoController(KesslerController):
             fire_combined = fire if fire is not None else fire_combined
             drop_mine_combined = drop_mine if drop_mine is not None else drop_mine_combined
         # The next action in the queue is for a future timestep. All actions for this timestep are processed.
+        # Bounds check the stuff before the Kessler code complains to me about it
+        if thrust_combined < -ship_max_thrust or thrust_combined > ship_max_thrust:
+            thrust_combined = min(max(-ship_max_thrust, thrust_combined), ship_max_thrust)
+            print("Dude the thrust is too high, go fix your code >:(")
+        if turn_rate_combined < -ship_max_turn_rate or turn_rate_combined > ship_max_turn_rate:
+            turn_rate_combined = min(max(-ship_max_turn_rate, turn_rate_combined), ship_max_turn_rate)
+            print("Dude the turn rate is too high, go fix your code >:(")
+        if fire_combined and not ship_state['can_fire']:
+            print("Why are you trying to fire when you haven't waited out the cooldown yet?")
+        if drop_mine_combined and not ship_state['can_deploy_mine']:
+            print("You can't deploy mines dude!")
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
