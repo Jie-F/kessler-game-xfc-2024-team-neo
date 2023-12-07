@@ -24,11 +24,11 @@ def angle_difference_rad(angle1, angle2):
     raw_diff = angle1 - angle2
 
     # Adjust for wraparound using modulo
-    adjusted_diff = raw_diff % (2 * math.pi)
+    adjusted_diff = raw_diff % (2*math.pi)
 
     # If the difference is greater than pi, adjust to keep within -pi to pi
     if adjusted_diff > math.pi:
-        adjusted_diff -= 2 * math.pi
+        adjusted_diff -= 2*math.pi
 
     return adjusted_diff
 
@@ -46,13 +46,15 @@ def angle_difference_deg(angle1, angle2):
     return adjusted_diff
 
 def min_rotation_to_align_deg(current_heading, target_heading):
-    # Ensure current and target headings are within 0 to 360 degrees
-    current_heading %= 360
-    target_heading %= 360
+    # Current and target headings are within -180 to 180 degrees
 
     # Calculate the differences for both direct and reverse alignment
-    direct_diff = angle_difference_deg(current_heading, target_heading)
-    reverse_diff = angle_difference_deg(current_heading, (target_heading + 180) % 360)
+    #current + (target-current) = target
+    direct_diff = angle_difference_deg(target_heading, current_heading)
+    reverse_heading = (current_heading + 180) % 360
+    if reverse_heading > 180:
+        reverse_heading -= 360
+    reverse_diff = angle_difference_deg(target_heading, reverse_heading)
 
     # Choose the one with the minimum absolute rotation
     if abs(direct_diff) < abs(reverse_diff):
@@ -62,17 +64,17 @@ def min_rotation_to_align_deg(current_heading, target_heading):
 
 def ship_sim_update(ship_distance, ship_speed, thrust):
     # This was totally just taken from the Kessler game code lul
-    drag_amount = ship_drag * delta_time
+    drag_amount = ship_drag*delta_time
     if drag_amount > abs(ship_speed):
         ship_speed = 0
     else:
-        ship_speed -= drag_amount * np.sign(ship_speed)
-    ship_speed += thrust * delta_time
+        ship_speed -= drag_amount*np.sign(ship_speed)
+    ship_speed += thrust*delta_time
     if ship_speed > ship_max_speed:
         ship_speed = ship_max_speed
     elif ship_speed < -ship_max_speed:
         ship_speed = -ship_max_speed
-    ship_distance += ship_speed * delta_time
+    ship_distance += ship_speed*delta_time
     return ship_distance, ship_speed
 
 def build_thrust_lookup_table(max_forward_thrust_time_limit=round(1/delta_time)):
@@ -88,12 +90,12 @@ def build_thrust_lookup_table(max_forward_thrust_time_limit=round(1/delta_time))
         # Now slow down the ship until it is stationary again
         # Keep slowing down the ship until the point where in the next timestep, we can get down to 0
         deceleration_timestep_count = 0
-        while ship_speed > (ship_max_thrust + ship_drag) * delta_time:
+        while ship_speed > (ship_max_thrust + ship_drag)*delta_time:
             ship_distance, ship_speed = ship_sim_update(ship_distance, ship_speed, -ship_max_thrust)
             deceleration_timestep_count += 1
         # One timestep left until we get down to 0 speed! The magnitude of thrust required is up to -ship_max_thrust but is pretty much always less
         #print(f"Before final thrust, the ship speed is {ship_speed}")
-        print(f"Ship speed before final timestep: {ship_speed}")
+        #print(f"Ship speed before final timestep: {ship_speed}")
         if ship_speed >= ship_drag*delta_time + eps:
             final_thrust = max(ship_speed / delta_time - ship_drag, 0)
             #print(f"Final thrust nonzero: {final_thrust}")
@@ -219,12 +221,12 @@ def find_best_asteroid(game_state, ship_state, shot_at_asteroids, time_to_simula
             return False
 
     def check_intercept_bounds(candidate_asteroid, new_ship_heading, additional_future_timesteps = 0):
-        bullet_t, _, intercept_x, intercept_y = calculate_interception(ship_x + (1 + additional_future_timesteps) * ship_state['velocity'][0], ship_y + (1 + additional_future_timesteps) * ship_state['velocity'][1], candidate_asteroid["position"][0] + (2 + additional_future_timesteps) * delta_time * candidate_asteroid["velocity"][0], candidate_asteroid["position"][1] + (2 + additional_future_timesteps) * delta_time * candidate_asteroid["velocity"][1], candidate_asteroid["velocity"][0], candidate_asteroid["velocity"][1], new_ship_heading, additional_future_timesteps * delta_time)
+        bullet_t, _, intercept_x, intercept_y = calculate_interception(ship_x + (1 + additional_future_timesteps)*ship_state['velocity'][0], ship_y + (1 + additional_future_timesteps)*ship_state['velocity'][1], candidate_asteroid["position"][0] + (2 + additional_future_timesteps)*delta_time*candidate_asteroid["velocity"][0], candidate_asteroid["position"][1] + (2 + additional_future_timesteps)*delta_time*candidate_asteroid["velocity"][1], candidate_asteroid["velocity"][0], candidate_asteroid["velocity"][1], new_ship_heading, additional_future_timesteps*delta_time)
         if 'dx' in candidate_asteroid and 'dy' in candidate_asteroid:
             bounds_check = check_coordinate_bounds(intercept_x, intercept_y, candidate_asteroid['dx'], candidate_asteroid['dy'])
         else:
             bounds_check = check_coordinate_bounds(intercept_x, intercept_y)
-        return bounds_check and bullet_t + additional_future_timesteps * delta_time >= 0
+        return bounds_check and bullet_t + additional_future_timesteps*delta_time >= 0
         
 
     def check_intercept_feasibility(candidate_asteroid):
@@ -244,9 +246,9 @@ def find_best_asteroid(game_state, ship_state, shot_at_asteroids, time_to_simula
             if timesteps_from_now > max_bullet_time:
                 # Fuggetaboutit, we ain't hunting down this asteroid until it loops around at least
                 return False, 10000000
-            _, shooting_theta, _, _ = calculate_interception(ship_x + timesteps_from_now*ship_vel_x, ship_y + timesteps_from_now*ship_vel_y, candidate_asteroid["position"][0] + (2 + timesteps_from_now) * delta_time * candidate_asteroid["velocity"][0], candidate_asteroid["position"][1] + (2 + timesteps_from_now) * delta_time * candidate_asteroid["velocity"][1], candidate_asteroid["velocity"][0], candidate_asteroid["velocity"][1], ship_heading, timesteps_from_now * delta_time)
+            _, shooting_theta, _, _ = calculate_interception(ship_x + timesteps_from_now*ship_vel_x, ship_y + timesteps_from_now*ship_vel_y, candidate_asteroid["position"][0] + (2 + timesteps_from_now)*delta_time*candidate_asteroid["velocity"][0], candidate_asteroid["position"][1] + (2 + timesteps_from_now)*delta_time*candidate_asteroid["velocity"][1], candidate_asteroid["velocity"][0], candidate_asteroid["velocity"][1], ship_heading, timesteps_from_now*delta_time)
             
-            shooting_theta_deg = shooting_theta * 180.0 / math.pi
+            shooting_theta_deg = shooting_theta*180.0 / math.pi
             shooting_theta_deg = abs(shooting_theta_deg)
             
             # Update the ship heading
@@ -257,7 +259,7 @@ def find_best_asteroid(game_state, ship_state, shot_at_asteroids, time_to_simula
             while ship_heading < 0:
                 ship_heading += 360.0
             #print(f"Ship heading: {ship_heading}")
-            number_of_timesteps_itll_take_to_turn = shooting_theta_deg / (ship_max_turn_rate * delta_time)
+            number_of_timesteps_itll_take_to_turn = shooting_theta_deg / (ship_max_turn_rate*delta_time)
             timesteps_from_now += number_of_timesteps_itll_take_to_turn
             if number_of_timesteps_itll_take_to_turn < 1:
                 # Turning is trivial, no need to test further, it should be fine
@@ -343,17 +345,17 @@ def find_best_asteroid(game_state, ship_state, shot_at_asteroids, time_to_simula
     for a_no_wraparound in asteroids:
         duplicated_asteroids = duplicate_asteroids_for_wraparound(a_no_wraparound, max_x, max_y, 'surround')
         for a in duplicated_asteroids:
-            _, shooting_theta, _, _ = calculate_interception(ship_x + ship_state['velocity'][0], ship_y + ship_state['velocity'][1], a['position'][0] + 2 * delta_time * a["velocity"][0], a["position"][1] + 2 * delta_time * a["velocity"][1], a["velocity"][0], a["velocity"][1], ship_heading)
+            _, shooting_theta, _, _ = calculate_interception(ship_x + ship_state['velocity'][0], ship_y + ship_state['velocity'][1], a['position'][0] + 2*delta_time*a["velocity"][0], a["position"][1] + 2*delta_time*a["velocity"][1], a["velocity"][0], a["velocity"][1], ship_heading)
             curr_angular_dist = abs(shooting_theta)
             #print(f"Checking feasibility for hitting asteroid at ({a['position'][0]}, {a['position'][1]})")
             intercept_feasible, additional_waiting_timesteps = check_intercept_feasibility(a)
             if (a["velocity"][0], a["velocity"][1], a["radius"], a['dx'], a['dy']) not in shot_at_asteroids and intercept_feasible:
                 # Prioritize based on not waiting too much time, and then by min angular distance
-                if additional_waiting_timesteps + curr_angular_dist / (ship_max_turn_rate * delta_time) <= closest_asteroid_total_waiting:
+                if additional_waiting_timesteps + curr_angular_dist / (ship_max_turn_rate*delta_time) <= closest_asteroid_total_waiting:
                     #print(f"New best asteroid: ({a['position'][0]}, {a['position'][1]})additional wait: {additional_waiting_timesteps}, ang dist: {curr_angular_dist}")
                     closest_asteroid = a
                     closest_asteroid_angular_dist = curr_angular_dist
-                    closest_asteroid_total_waiting = additional_waiting_timesteps + curr_angular_dist / (ship_max_turn_rate * delta_time)
+                    closest_asteroid_total_waiting = additional_waiting_timesteps + curr_angular_dist / (ship_max_turn_rate*delta_time)
             elif intercept_feasible:
                 #print('Cant shoot at this again')
                 #print(shot_at_asteroids)
@@ -384,19 +386,19 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     asteroid_direction = math.atan2(asteroid_vel_y, asteroid_vel_x) # Velocity is a 2-element array [vx,vy].
     my_theta2 = asteroid_ship_theta - asteroid_direction
     cos_my_theta2 = math.cos(my_theta2)
-    # Need the speeds of the asteroid and bullet. speed * time is distance to the intercept point
+    # Need the speeds of the asteroid and bullet. speed*time is distance to the intercept point
     asteroid_vel = math.sqrt(asteroid_vel_x**2 + asteroid_vel_y**2)
     bullet_speed = 800 # Hard-coded bullet speed from bullet.py
     
     # Discriminant of the quadratic formula b^2-4ac
     asteroid_dist = math.sqrt((ship_pos_x - asteroid_pos_x)**2 + (ship_pos_y - asteroid_pos_y)**2)
-    targ_det = (-2 * asteroid_dist * asteroid_vel * cos_my_theta2)**2 - (4*(asteroid_vel**2 - bullet_speed**2) * asteroid_dist**2)
+    targ_det = (-2*asteroid_dist*asteroid_vel*cos_my_theta2)**2 - (4*(asteroid_vel**2 - bullet_speed**2)*asteroid_dist**2)
     if targ_det < 0:
         # There is no intercept. Return a fake intercept
         return 100000, 100000, -100, -100
     # Combine the Law of Cosines with the quadratic formula for solve for intercept time. Remember, there are two values produced.
-    intercept1 = ((2 * asteroid_dist * asteroid_vel * cos_my_theta2) + math.sqrt(targ_det)) / (2 * (asteroid_vel**2 - bullet_speed**2))
-    intercept2 = ((2 * asteroid_dist * asteroid_vel * cos_my_theta2) - math.sqrt(targ_det)) / (2 * (asteroid_vel**2 - bullet_speed**2))
+    intercept1 = ((2*asteroid_dist*asteroid_vel*cos_my_theta2) + math.sqrt(targ_det)) / (2*(asteroid_vel**2 - bullet_speed**2))
+    intercept2 = ((2*asteroid_dist*asteroid_vel*cos_my_theta2) - math.sqrt(targ_det)) / (2*(asteroid_vel**2 - bullet_speed**2))
     #print(f"intercept 1: {intercept1}, intercept2: {intercept2}")
     # Take the smaller intercept time, as long as it is positive AFTER ADDING LOOKAHEAD TIME; if not, take the larger one.
     if intercept1 > intercept2:
@@ -411,8 +413,8 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
             bullet_t = intercept2
             
     # Calculate the intercept point. The work backwards to find the ship's firing angle my_theta1.
-    intercept_x = asteroid_pos_x + asteroid_vel_x * bullet_t
-    intercept_y = asteroid_pos_y + asteroid_vel_y * bullet_t
+    intercept_x = asteroid_pos_x + asteroid_vel_x*bullet_t
+    intercept_y = asteroid_pos_y + asteroid_vel_y*bullet_t
     
     my_theta1 = math.atan2(intercept_y - ship_pos_y, intercept_x - ship_pos_x)
     
@@ -420,7 +422,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     shooting_theta = my_theta1 - ((math.pi/180)*ship_heading)
 
     # Wrap all angles to (-pi, pi)
-    shooting_theta = (shooting_theta + math.pi) % (2 * math.pi) - math.pi
+    shooting_theta = (shooting_theta + math.pi) % (2*math.pi) - math.pi
 
     return bullet_t, shooting_theta, intercept_x, intercept_y
 
@@ -452,7 +454,7 @@ class NeoController(KesslerController):
     def plan_actions(self, ship_state: Dict, game_state: Dict):
         # Simulate and look for a good move
         print("Checking for imminent danger")
-        print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}")
+        print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
         # Check for danger
         next_imminent_collision_time = math.inf
         for real_asteroid in game_state['asteroids']:
@@ -480,8 +482,10 @@ class NeoController(KesslerController):
                 unit_vec_x = math.cos(math.radians(random_ship_heading_angle))
                 unit_vec_y = math.sin(math.radians(random_ship_heading_angle))
                 heading_difference_deg, alignment = min_rotation_to_align_deg(current_ship_heading, random_ship_heading_angle)
+                assert(abs(heading_difference_deg) <= 90)
+                print(f"Current heading {current_ship_heading}, target heading: {random_ship_heading_angle}, need to turn: {heading_difference_deg}")
                 timesteps_it_takes_to_steer_ship_by_this_angle = math.ceil(abs(heading_difference_deg) / (ship_max_turn_rate*delta_time))
-                seconds_it_takes_to_steer_ship_by_this_angle = timesteps_it_takes_to_steer_ship_by_this_angle * delta_time
+                seconds_it_takes_to_steer_ship_by_this_angle = timesteps_it_takes_to_steer_ship_by_this_angle*delta_time
                 # Now we know the extra time it takes for the ship to first steer to the correct alignment, given that front and back alignment are acceptable
                 # Simulate moving in this direction in different speeds/distances until we hopefully find one that gets us to safety
                 how_far_into_the_future_we_are = timesteps_it_takes_to_steer_ship_by_this_angle
@@ -560,15 +564,22 @@ class NeoController(KesslerController):
                         break
             # Enqueue the safe maneuver
             # First rotate the ship
+            still_need_to_turn = safe_maneuver_turn 
             for timestep in range(self.current_timestep, self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle):
-                if safe_maneuver_turn > ship_max_turn_rate*delta_time:
+                #print(f"The total turning we need to do is {safe_maneuver_turn}")
+                #print(f"In one timestep we can turn this many degs {ship_max_turn_rate*delta_time}")
+                if abs(still_need_to_turn) > ship_max_turn_rate*delta_time:
                     # Turn at the max rate by 6 degrees this timestep
                     self.enqueue_action(timestep, 0, ship_max_turn_rate*np.sign(safe_maneuver_turn))
+                    #print(f"Just enqueued turn rate {ship_max_turn_rate*np.sign(safe_maneuver_turn)}")
+                    #print(self.action_queue)
+                    still_need_to_turn -= ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time
                 else:
                     # Turn the remaining bit below 6 degrees
-                    already_turned_degrees = (timesteps_it_takes_to_steer_ship_by_this_angle - 1)*ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time
-                    still_need_to_turn = safe_maneuver_turn - already_turned_degrees
+                    #already_turned_degrees = (timesteps_it_takes_to_steer_ship_by_this_angle - 1)*ship_max_turn_rate*np.sign(safe_maneuver_turn)*delta_time
+                    #print(f"We need to turn {safe_maneuver_turn} in total but we've already turned {already_turned_degrees}")
                     self.enqueue_action(timestep, 0, still_need_to_turn/delta_time)
+                    #print(f"Just enqueued turn rate below max {still_need_to_turn/delta_time}")
             new_start_timestep = self.current_timestep + timesteps_it_takes_to_steer_ship_by_this_angle
             for timestep in range(new_start_timestep, new_start_timestep + safe_maneuver_thrust[1]):
                 self.enqueue_action(timestep, ship_max_thrust*alignment)
@@ -577,7 +588,7 @@ class NeoController(KesslerController):
                 self.enqueue_action(timestep, -ship_max_thrust*alignment)
             self.enqueue_action(timestep, -safe_maneuver_thrust[3]*alignment)
 
-
+            #print(self.action_queue)
             # ISSUES TO FIX:
             # THE SIMULATION DOESN'T WRAP COORDINATES
     '''
@@ -607,13 +618,13 @@ class NeoController(KesslerController):
             #print("We're targetting:")
             #print(closest_asteroid)
             if best_asteroid is not None:
-                bullet_t, shooting_theta, _, _ = calculate_interception(ship_pos_x + ship_vel_x, ship_pos_y + ship_vel_y, best_asteroid["position"][0] + 2 * delta_time * best_asteroid["velocity"][0], best_asteroid["position"][1] + 2 * delta_time * best_asteroid["velocity"][1], best_asteroid["velocity"][0], best_asteroid["velocity"][1], ship_state["heading"])
+                bullet_t, shooting_theta, _, _ = calculate_interception(ship_pos_x + ship_vel_x, ship_pos_y + ship_vel_y, best_asteroid["position"][0] + 2*delta_time*best_asteroid["velocity"][0], best_asteroid["position"][1] + 2*delta_time*best_asteroid["velocity"][1], best_asteroid["velocity"][0], best_asteroid["velocity"][1], ship_state["heading"])
             else:
                 #print('WACKO CASE')
                 bullet_t = 10000
                 shooting_theta = 0
 
-            shooting_theta_deg = shooting_theta * 180.0 / math.pi
+            shooting_theta_deg = shooting_theta*180.0 / math.pi
             #print(f"shooting theta deg {shooting_theta_deg}")
             if shooting_theta_deg < 0:
                 sign = -1
@@ -623,8 +634,8 @@ class NeoController(KesslerController):
             if len(self.fire_on_frames) > 0:
                 # Scheduled to fire. Wait until we're done firing before we turn.
                 turn_rate = 0
-            if shooting_theta_deg > ship_max_turn_rate * delta_time:
-                turn_rate = sign * ship_max_turn_rate
+            if shooting_theta_deg > ship_max_turn_rate*delta_time:
+                turn_rate = sign*ship_max_turn_rate
             elif bullet_t == 10000:
                 turn_rate = 0
             else:
@@ -635,7 +646,7 @@ class NeoController(KesslerController):
                     self.fire_on_frames.add(self.eval_frames + 1)
                 else:
                     self.fire_on_frames.add(self.eval_frames + 1 + 5 - (self.eval_frames - self.last_time_fired))
-                turn_rate = sign * shooting_theta_deg / delta_time
+                turn_rate = sign*shooting_theta_deg / delta_time
                 #print(f'SNAP! Turn rate: {turn_rate}')
             # 0 1 2 3 4 5 6
             if self.eval_frames in self.fire_on_frames and not ship_state['is_respawning']:
@@ -687,8 +698,8 @@ class NeoController(KesslerController):
                 ship_y = ship_state['position'][1]
                 ship_vel_x = ship_state['velocity'][0]
                 ship_vel_y = ship_state['velocity'][1]
-                _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, a['position'][0] + 2 * delta_time * a["velocity"][0], a["position"][1] + 2 * delta_time * a["velocity"][1], a["velocity"][0], a["velocity"][1], ship_heading)
-                shooting_theta_deg = shooting_theta * 180.0 / math.pi
+                _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, a['position'][0] + 2*delta_time*a["velocity"][0], a["position"][1] + 2*delta_time*a["velocity"][1], a["velocity"][0], a["velocity"][1], ship_heading)
+                shooting_theta_deg = shooting_theta*180.0 / math.pi
                 shooting_theta_deg = abs(shooting_theta_deg)
                 if shooting_theta_deg < min_aim_delta:
                     min_aim_delta = shooting_theta_deg
@@ -703,7 +714,7 @@ class NeoController(KesslerController):
                     closest_gap_between_ship_and_closest_asteroid = max(curr_dist - a['radius'] - ship_state['radius'], 0)
                     closest_asteroid = a
 
-            _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, closest_asteroid['position'][0] + 2 * delta_time * closest_asteroid["velocity"][0], closest_asteroid["position"][1] + 2 * delta_time * closest_asteroid["velocity"][1], closest_asteroid["velocity"][0], closest_asteroid["velocity"][1], ship_heading)
+            _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, closest_asteroid['position'][0] + 2*delta_time*closest_asteroid["velocity"][0], closest_asteroid["position"][1] + 2*delta_time*closest_asteroid["velocity"][1], closest_asteroid["velocity"][0], closest_asteroid["velocity"][1], ship_heading)
             
             #thrust = 0
             
