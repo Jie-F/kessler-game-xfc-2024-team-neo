@@ -445,7 +445,7 @@ class NeoShipSim():
         if self.get_instantaneous_asteroid_collision():
             return False
         self.move_sequence.append((self.initial_timestep + self.future_timesteps, thrust, turn_rate))
-        self.state_sequence.append((self.initial_timestep + self.future_timesteps, self.position, self.velocity, self.speed, self.heading))
+        self.state_sequence.append((self.initial_timestep + self.future_timesteps - 1, self.position, self.velocity, self.speed, self.heading))
         return True
 
     def rotate_heading(self, heading_difference_deg):
@@ -544,7 +544,7 @@ class NeoController(KesslerController):
             safe_maneuver_found = False
             best_imminent_collision_time_found = 0
             best_maneuver_move_sequence = None
-            max_search_iterations = 1000
+            max_search_iterations = 2000
             min_search_iterations = 10
             search_iterations_count = 0
             duplicated_asteroids = []
@@ -552,7 +552,8 @@ class NeoController(KesslerController):
                 duplicated_asteroids.extend(duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround'))
             while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
                 search_iterations_count += 1
-                print(f"Search iteration {search_iterations_count}")
+                if search_iterations_count%100==0:
+                    print(f"Search iteration {search_iterations_count}")
                 random_ship_heading_angle = random.uniform(-90.0, 90.0)
                 random_ship_cruise_speed = random.uniform(-ship_max_speed, ship_max_speed)
                 random_ship_cruise_turn_rate = random.uniform(-ship_max_turn_rate/2, ship_max_turn_rate/2)
@@ -578,7 +579,10 @@ class NeoController(KesslerController):
                     print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
                     print(f"Maneuver takes this many seconds: {len(best_maneuver_move_sequence)*delta_time}")
                     #print(f"Projected location to move will be to: {ship_sim_pos_x}, {ship_sim_pos_y} with heading {current_ship_heading + heading_difference_deg}")
-                    break
+                    if search_iterations_count >= min_search_iterations:
+                        break
+                    else:
+                        continue
                 else:
                     # Try the next thrust amount just in case we can dodge it by going more
                     continue
