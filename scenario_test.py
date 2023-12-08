@@ -5,7 +5,8 @@
 
 import time
 import random
-from neo_controller import NeoController
+from neo_controller import Neo
+from baby_neo_controller import NeoController
 
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
@@ -28,28 +29,28 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-random.seed(22)
+#random.seed(22)
 asteroids_random = generate_asteroids(
-                                num_asteroids=20,
+                                num_asteroids=50,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
-                                speed_range=(1, 500),
+                                speed_range=(1, 300),
                                 angle_range=(-180, 180),
-                                size_range=(1, 3)
+                                size_range=(1, 4)
                             )
 
 # Define game scenario
 my_test_scenario = Scenario(name='Test Scenario',
                             #num_asteroids=200,
                             asteroid_states=asteroids_random,
-                            #asteroid_states=[{'position': (0, 0), 'speed': 20, 'angle': -24, 'size': 4}],
+                            #asteroid_states=[{'position': (width*54//100, height*54//100), 'speed': 1000, 'angle': -180, 'size': 2}],
                             ship_states=[
-                                {'position': (width//2, height//2), 'angle': 90, 'lives': 30, 'team': 1, "mines_remaining": 30},
-                                # {'position': (400, 600), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
+                                {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
                             #seed=2,
-                            time_limit=120,
+                            time_limit=300,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
 
@@ -65,7 +66,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[NeoController()])#, TestController()])GamepadController NeoController
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])#, TestController()])GamepadController NeoController
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))

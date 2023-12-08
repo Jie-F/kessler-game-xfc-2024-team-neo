@@ -228,7 +228,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
         shot_heading_tolerance_rad = math.asin((asteroid_r - asteroid_aim_buffer_pixels)/asteroid_dist)
     else:
         shot_heading_tolerance_rad = math.pi/4
-    shot_heading_tolerance_rad = 0
+    
     asteroid_dist_during_interception = math.sqrt((ship_pos_x - intercept_x)**2 + (ship_pos_y - intercept_y)**2)
     return True, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s + future_shooting_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception
 
@@ -330,7 +330,7 @@ class NeoShipSim():
                 drag -= adjust_drag_by*np.sign(drag)
             delta_speed_to_target = target_speed - self.speed
             thrust_amount = delta_speed_to_target/delta_time - drag
-            print(thrust_amount, self.speed, target_speed, delta_speed_to_target)
+            #print(thrust_amount, self.speed, target_speed, delta_speed_to_target)
             thrust_amount = min(max(-ship_max_thrust, thrust_amount), ship_max_thrust)
             if not self.update(thrust_amount, turn_rate):
                 return False
@@ -361,7 +361,7 @@ class NeoShipSim():
     def get_heading(self):
         return self.heading
 
-class NeoController(KesslerController):
+class Neo(KesslerController):
     @property
     def name(self) -> str:
         return "Neo"
@@ -374,10 +374,20 @@ class NeoController(KesslerController):
         self.shot_at_asteroids = {} # Dict of tuples, with the values corresponding to the timesteps we need to wait until they can be shot at again
         self.last_time_fired = -4 # Set it to -4, so that we think the cooldown is gone at the start of the game lul
         self.action_queue = []  # This will become our heap
+        self.ship_id = None
         heapq.heapify(self.action_queue) # Transform list into a heap
 
-    def finish_init(self, game_state):
-        pass
+    def finish_init(self, game_state, ship_state):
+        # If we need the game state or ship state to finish init, we can use this function to do that
+        if self.ship_id is None:
+            self.ship_id = ship_state['id']
+
+    def find_other_ship_positions(self, game_state):
+        other_positions = []
+        for ship in game_state['ships']:
+            if ship['id'] != self.ship_id:
+                other_positions.append(ship['position'])
+        return other_positions
 
     def enqueue_action(self, timestep, thrust=None, turn_rate=None, fire=None, drop_mine=None):
         if thrust is not None:
@@ -530,7 +540,7 @@ class NeoController(KesslerController):
         feasible = True
         converged = False
         aiming_timesteps_required = 0
-        shot_heading_error_rad = 0
+        shot_heading_error_rad = math.inf
         shot_heading_tolerance_rad = 0
         shooting_angle_error_rad = math.nan
         # TODO: USE BINARY SEARCH INSTEAD OF LINEAR SEARCH
@@ -543,6 +553,7 @@ class NeoController(KesslerController):
             # For each asteroid, because the asteroid has a size, there is a range in angles in which we can shoot it.
             # We don't have to hit the very center, just close enough to it so that it's still the thick part of the circle and it won't skim the tangent
             # TODO: If we can aim at the center of the asteroid with no additional timesteps required, then just might as well do it cuz yeah
+            #print(f"Shot heading error {shot_heading_error_rad}, shot heading tol: {shot_heading_tolerance_rad}, whether it's within: {abs(shot_heading_error_rad) <= shot_heading_tolerance_rad}")
             if abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
                 shooting_angle_error_rad = 0
             else:
@@ -552,9 +563,9 @@ class NeoController(KesslerController):
                     shooting_angle_error_rad = shot_heading_error_rad + shot_heading_tolerance_rad
             # shooting_angle_error is the amount we need to move our heading by, in radians
             # If there's some timesteps until we can fire, then we can get a head start on the aiming
-            new_aiming_timesteps_required = max(0, math.ceil(math.degrees(shooting_angle_error_rad)/(ship_max_turn_rate*delta_time) - eps) - timesteps_until_can_fire)
+            new_aiming_timesteps_required = max(0, math.ceil(math.degrees(abs(shooting_angle_error_rad))/(ship_max_turn_rate*delta_time) - eps) - timesteps_until_can_fire)
             if aiming_timesteps_required == new_aiming_timesteps_required:
-                print(f"Converged. Aiming timesteps required is {aiming_timesteps_required}")
+                #print(f"Converged. Aiming timesteps required is {aiming_timesteps_required}")
                 converged = True
             elif aiming_timesteps_required > new_aiming_timesteps_required:
                 # Wacky oscillation case, IGNORE FOR NOW
@@ -563,6 +574,9 @@ class NeoController(KesslerController):
                 aiming_timesteps_required += 1
         shooting_angle_error_deg = math.degrees(shooting_angle_error_rad)
         # TODO: OPPOSITNG CASE SHOOTING OTHER WAY IT'S MORE COMPLICATED TO CONSIDER
+        # OH WAIT THIS CASE ISN'T REALLY POSSIBLE BECAUSE THE ASTEROID WOULD HAVE TO BE MOVING SUPER FAST. The highest I've seen the absolute shooting angle error is like 135 degrees, and that's an extreme made up scenario
+        if abs(shooting_angle_error_deg) >= 180:
+            print(f'shooting_angle_error_deg: {shooting_angle_error_deg} asdy8f9y7asdf89asdy789fads789y9asdf78y7asdfy79asdfy789asdfy789asdfy789asdfy978asdfy789asdfy78adfsy78asdfy78y78asdfyf87asdyf78dsay9f78dsayf78sy78fsya78fysa78fy78sdayf78ysa78yf78asdy78fas')
         if not feasible:
             return False, None, None, None, None, None, None
         return feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception
@@ -573,7 +587,7 @@ class NeoController(KesslerController):
         feasible_to_hit_next_timestep = []
         #print(self.last_time_fired, self.current_timestep)
         timesteps_until_can_fire = max(0, 5 - (self.current_timestep - self.last_time_fired))
-        print(f"Timesteps until we can fire: {timesteps_until_can_fire}")
+        #print(f"Timesteps until we can fire: {timesteps_until_can_fire}")
         for real_asteroid in game_state['asteroids']:
             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'surround')
             for a in duplicated_asteroids:
@@ -593,9 +607,9 @@ class NeoController(KesslerController):
                         feasible_next_timestep, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = self.get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire + 1)
                         if feasible_next_timestep:
                             feasible_to_hit_next_timestep.append((a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y))
-        print("Feasible to hit list:")
-        print(feasible_to_hit_current_timestep)
-        print(feasible_to_hit_next_timestep)
+        #print("Feasible to hit list:")
+        #print(feasible_to_hit_current_timestep)
+        #print(feasible_to_hit_next_timestep)
 
         # Iterate through the feasible asteroids and figure out which one we're actually probably going to hit if we shoot (since some asteroids can cover up other asteroids and you may not hit your intended target)
         min_abs_shooting_angle_error_deg = math.inf
@@ -612,7 +626,7 @@ class NeoController(KesslerController):
                 min_abs_shooting_angle_error_deg = shooting_angle_error_deg
                 min_turn_waiting_timesteps = feasible[4]
             elif feasible[4] < min_turn_waiting_timesteps or (feasible[4] == min_turn_waiting_timesteps and abs(shooting_angle_error_deg) < abs(min_abs_shooting_angle_error_deg)):
-                print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
+                #print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
                 # New best target that requires the least movement to hit
                 most_direct_asteroid_shot_tuple = feasible
                 min_abs_shooting_angle_error_deg = shooting_angle_error_deg
@@ -639,7 +653,7 @@ class NeoController(KesslerController):
                         min_abs_shooting_angle_error_deg = shooting_angle_error_deg
                         min_turn_waiting_timesteps = feasible[4]
                     elif feasible[4] < min_turn_waiting_timesteps or (feasible[4] == min_turn_waiting_timesteps and abs(shooting_angle_error_deg) < abs(min_abs_shooting_angle_error_deg)):
-                        print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
+                        #print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
                         # New best target that requires the least movement to hit
                         second_most_direct_asteroid_shot_tuple = feasible
                         min_abs_shooting_angle_error_deg = shooting_angle_error_deg
@@ -652,18 +666,18 @@ class NeoController(KesslerController):
         if most_direct_asteroid_shot_tuple is not None:
             # We have a #1 target
             min_abs_shooting_angle_error_deg = most_direct_asteroid_shot_tuple[1]
-            print(f"Our #1 target is angularlly away in degrees: {min_abs_shooting_angle_error_deg}")
+            #print(f"Our #1 target is angularlly away in degrees: {min_abs_shooting_angle_error_deg} and in num timesteps required for aiming: {most_direct_asteroid_shot_tuple[4]}")
             fired_on_this_timestep = False
             if abs(min_abs_shooting_angle_error_deg) < eps and ship_state['can_fire']:
                 print("Locked and loaded. We're firing on this timestep, and probably gonna move too")
                 fired_on_this_timestep = True
                 self.enqueue_action(self.current_timestep, None, None, True)
-                print(f"Time it takes to intercept asteroid with bullet: {most_direct_asteroid_shot_tuple[2]}")
+                #print(f"Time it takes to intercept asteroid with bullet: {most_direct_asteroid_shot_tuple[2]}")
                 self.shot_at_asteroids[(most_direct_asteroid_shot_tuple[0]['velocity'][0], most_direct_asteroid_shot_tuple[0]['velocity'][1], most_direct_asteroid_shot_tuple[0]['radius'], most_direct_asteroid_shot_tuple[0]['dy'], most_direct_asteroid_shot_tuple[0]['dx'])] = math.ceil(most_direct_asteroid_shot_tuple[2]/delta_time)
                 # The way the game works is at this timestep, I can fire a bullet and begin turning toward my second target
                 # Aim at the second best target right now, since we're already shooting our best target and want something to do
                 if second_most_direct_asteroid_shot_tuple is not None:
-                    print("Aiming at second best target on the same timestep, so we might be able to shoot it at the next timestep")
+                    #print("Aiming at second best target on the same timestep, so we might be able to shoot it at the next timestep")
                     min_abs_shooting_angle_error_deg = second_most_direct_asteroid_shot_tuple[1]
             elif abs(min_abs_shooting_angle_error_deg) < eps:
                 print("DANG IT we're locked and loaded, but we can't fire right now!")
@@ -675,7 +689,7 @@ class NeoController(KesslerController):
                     turn_rate = ship_max_turn_rate*np.sign(min_abs_shooting_angle_error_deg)
                 else:
                     turn_rate = min_abs_shooting_angle_error_deg/delta_time
-                print(f"Aiming to prep to shoot! We just enqueued the turn rate {turn_rate}")
+                #print(f"Aiming to prep to shoot! We just enqueued the turn rate {turn_rate}")
                 self.enqueue_action(self.current_timestep, None, turn_rate)
         #self.shot_at_asteroids[(best_asteroid["velocity"][0], best_asteroid["velocity"][1], best_asteroid["radius"], dy, dx)] = math.ceil(bullet_t / delta_time)
 
@@ -684,7 +698,7 @@ class NeoController(KesslerController):
         self.current_timestep += 1
         print(f"Timestep {self.current_timestep}")
         if not self.init_done:
-            self.finish_init(game_state)
+            self.finish_init(game_state, ship_state)
             self.init_done = True
         
         #print("thrust is " + str(thrust) + "\n" + "turn rate is " + str(turn_rate) + "\n" + "fire is " + str(fire) + "\n")
@@ -750,5 +764,6 @@ class NeoController(KesslerController):
         if drop_mine_combined and not ship_state['can_deploy_mine']:
             print("You can't deploy mines dude!")
         print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust_combined}, turn_rate: {turn_rate_combined}, fire: {fire_combined}, drop_mine: {drop_mine_combined}")
-        time.sleep(0.2)
+        #time.sleep(0.2)
+        #print(game_state, ship_state)
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
