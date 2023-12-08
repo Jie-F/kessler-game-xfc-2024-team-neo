@@ -8,7 +8,7 @@ import random
 from neo_controller import NeoController
 
 from ctypes import windll
-windll.shcore.SetProcessDpiAwareness(1)
+windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
 
 
@@ -28,12 +28,12 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-random.seed(9)
+random.seed(22)
 asteroids_random = generate_asteroids(
-                                num_asteroids=10,
+                                num_asteroids=20,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
-                                speed_range=(1, 400),
+                                speed_range=(1, 500),
                                 angle_range=(-180, 180),
                                 size_range=(1, 3)
                             )
