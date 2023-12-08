@@ -10,7 +10,7 @@ from neo_controller import NeoController
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1)
 
-#random.seed(8)
+
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
@@ -28,7 +28,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-
+random.seed(8)
 asteroids_random = generate_asteroids(
                                 num_asteroids=2,
                                 position_range_x=(0, width),

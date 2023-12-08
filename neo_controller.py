@@ -355,12 +355,12 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     #print(f"intercept 1: {intercept1}, intercept2: {intercept2}")
     # Take the smaller intercept time, as long as it is positive AFTER ADDING LOOKAHEAD TIME; if not, take the larger one.
     if intercept1 > intercept2:
-        if intercept2 + lookahead_timesteps >= 0:
+        if intercept2 + lookahead_timesteps*delta_time >= 0:
             interception_time = intercept2
         else:
             interception_time = intercept1
     else:
-        if intercept1 + lookahead_timesteps >= 0:
+        if intercept1 + lookahead_timesteps*delta_time >= 0:
             interception_time = intercept1
         else:
             interception_time = intercept2
@@ -647,142 +647,6 @@ class NeoController(KesslerController):
                 return False
                 #self.enqueue_action(self.current_timestep)
             #print(self.action_queue)
-        
-        '''
-        #print('Self:')
-                #print(self)
-                #print('Game state:')
-                #print(game_state)
-                #print('Ship state:')
-                #print(ship_state)
-                #print(f"Frame {self.eval_frames}")
-
-                # Find the closest asteroid (disregards asteroid velocity)
-                ship_pos_x = ship_state["position"][0]     # See src/kesslergame/ship.py in the KesslerGame Github
-                ship_pos_y = ship_state["position"][1]       
-                ship_vel_x = ship_state["velocity"][0]     # See src/kesslergame/ship.py in the KesslerGame Github
-                ship_vel_y = ship_state["velocity"][1]
-                best_asteroid = None
-                
-                map_size_x = game_state['map_size'][0]
-                map_size_y = game_state['map_size'][1]
-                #print(map_size_x, map_size_y)
-                
-                #if self.eval_frames % 30 == 0 or self.previously_targetted_asteroid is None:
-                best_asteroid = find_closest_asteroid(game_state, ship_state, self.shot_at_asteroids)
-                #    self.previously_targetted_asteroid = closest_asteroid
-                # closest_asteroid now contains the nearest asteroid considering wraparound
-                #print("We're targetting:")
-                #print(closest_asteroid)
-                if best_asteroid is not None:
-                    bullet_t, shooting_theta, _, _ = calculate_interception(ship_pos_x + ship_vel_x, ship_pos_y + ship_vel_y, best_asteroid["position"][0] + 2*delta_time*best_asteroid["velocity"][0], best_asteroid["position"][1] + 2*delta_time*best_asteroid["velocity"][1], best_asteroid["velocity"][0], best_asteroid["velocity"][1], ship_state["heading"])
-                else:
-                    #print('WACKO CASE')
-                    bullet_t = 10000
-                    shooting_theta = 0
-
-                shooting_theta_deg = shooting_theta*180.0 / math.pi
-                #print(f"shooting theta deg {shooting_theta_deg}")
-                if shooting_theta_deg < 0:
-                    sign = -1
-                else:
-                    sign = +1
-                shooting_theta_deg = abs(shooting_theta_deg)
-                if len(self.fire_on_frames) > 0:
-                    # Scheduled to fire. Wait until we're done firing before we turn.
-                    turn_rate = 0
-                if shooting_theta_deg > ship_max_turn_rate*delta_time:
-                    turn_rate = sign*ship_max_turn_rate
-                elif bullet_t == 10000:
-                    turn_rate = 0
-                else:
-                    #print(f"Locked in. Scheduled to fire. shooting_theta_deg: {shooting_theta_deg}")
-                    #print(f'Scheduled to fire at asteroid at:')
-                    #print(closest_asteroid)
-                    if self.eval_frames - self.last_time_fired >= 5:
-                        self.fire_on_frames.add(self.eval_frames + 1)
-                    else:
-                        self.fire_on_frames.add(self.eval_frames + 1 + 5 - (self.eval_frames - self.last_time_fired))
-                    turn_rate = sign*shooting_theta_deg / delta_time
-                    #print(f'SNAP! Turn rate: {turn_rate}')
-                # 0 1 2 3 4 5 6
-                if self.eval_frames in self.fire_on_frames and not ship_state['is_respawning']:
-                    # We are scheduled to fire on this frame, and we aren't invincible so we can fire without losing that
-                    if self.eval_frames - self.last_time_fired >= 5 and best_asteroid is not None:
-                        # Our firing cooldown has ran out, and we can fire. We can only shoot once every 5 frames.
-                        fire = True
-                        self.fire_on_frames.remove(self.eval_frames)
-                        if 'dx' in best_asteroid and 'dy' in best_asteroid:
-                            dx = best_asteroid['dx']
-                            dy = best_asteroid['dy']
-                        else:
-                            dx = 0
-                            dy = 0
-                        if (best_asteroid["velocity"][0], best_asteroid["velocity"][1], best_asteroid["radius"], dx, dy) not in self.shot_at_asteroids:
-                            self.shot_at_asteroids[(best_asteroid["velocity"][0], best_asteroid["velocity"][1], best_asteroid["radius"], dy, dx)] = math.ceil(bullet_t / delta_time)
-                    elif best_asteroid is not None:
-                        fire = False
-                        # Try to fire on the next frame
-                        self.fire_on_frames.add(self.eval_frames + 1)
-                        #print('WAITING UNTIL I CAN FIRE')
-                    else:
-                        fire = False
-                elif self.eval_frames in self.fire_on_frames and ship_state['is_respawning']:
-                    self.fire_on_frames.add(self.eval_frames + 1)
-                    fire = False
-                else:
-                    fire = False
-                
-                # List to hold keys to be removed
-                keys_to_remove = []
-                # Iterate through the dictionary items
-                for key, value in self.shot_at_asteroids.items():
-                    # Decrease each value by 1
-                    self.shot_at_asteroids[key] = value - 1
-                    # If the value hits 0, add the key to the list of keys to be removed
-                    if self.shot_at_asteroids[key] <= 0:
-                        keys_to_remove.append(key)
-                # Remove the keys from the dictionary
-                for key in keys_to_remove:
-                    del self.shot_at_asteroids[key]
-                
-                # Iterate through all asteroids, and calculate the minimum angular distance to any intercept with them
-                asteroids = game_state['asteroids']
-                min_aim_delta = 1000
-                for a in asteroids:
-                    ship_heading = ship_state["heading"]
-                    ship_x = ship_state['position'][0]
-                    ship_y = ship_state['position'][1]
-                    ship_vel_x = ship_state['velocity'][0]
-                    ship_vel_y = ship_state['velocity'][1]
-                    _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, a['position'][0] + 2*delta_time*a["velocity"][0], a["position"][1] + 2*delta_time*a["velocity"][1], a["velocity"][0], a["velocity"][1], ship_heading)
-                    shooting_theta_deg = shooting_theta*180.0 / math.pi
-                    shooting_theta_deg = abs(shooting_theta_deg)
-                    if shooting_theta_deg < min_aim_delta:
-                        min_aim_delta = shooting_theta_deg
-
-                # Find physically closest asteroid
-                closest_asteroid = None
-                closest_gap_between_ship_and_closest_asteroid = 1000000000
-                for a in game_state["asteroids"]:
-                    curr_dist_square = (a["position"][0] - ship_x)**2 + (a["position"][1] - ship_y)**2
-                    curr_dist = math.sqrt(curr_dist_square)
-                    if max(curr_dist - a['radius'] - ship_state['radius'], 0) < closest_gap_between_ship_and_closest_asteroid:
-                        closest_gap_between_ship_and_closest_asteroid = max(curr_dist - a['radius'] - ship_state['radius'], 0)
-                        closest_asteroid = a
-
-                _, shooting_theta, _, _ = calculate_interception(ship_x + ship_vel_x, ship_y + ship_vel_y, closest_asteroid['position'][0] + 2*delta_time*closest_asteroid["velocity"][0], closest_asteroid["position"][1] + 2*delta_time*closest_asteroid["velocity"][1], closest_asteroid["velocity"][0], closest_asteroid["velocity"][1], ship_heading)
-                
-                #thrust = 0
-                
-                #DEBUG
-                #print(thrust, bullet_t, shooting_theta, turn_rate, fire)
-                
-                if fire == True:
-                    self.last_time_fired = self.eval_frames
-
-                turn_rate = 0
-        '''
 
     def check_convenient_shots(self, ship_state, game_state):
         # Iterate over all asteroids including duplicated ones, and check whether we're perfectly in line to hit any
@@ -804,7 +668,7 @@ class NeoController(KesslerController):
                     if most_direct_asteroid_shot_tuple == None or asteroid_dist < most_direct_asteroid_shot_tuple[4]:
                         most_direct_asteroid_shot_tuple = feasible
             if most_direct_asteroid_shot_tuple is not None:
-                print("Shooting!")
+                print("Shooting the convenient shot!")
                 self.enqueue_action(self.current_timestep, None, None, True)
                 self.shot_at_asteroids[(most_direct_asteroid_shot_tuple[0]['velocity'][0], most_direct_asteroid_shot_tuple[0]['velocity'][1], most_direct_asteroid_shot_tuple[0]['radius'], most_direct_asteroid_shot_tuple[0]['dy'], most_direct_asteroid_shot_tuple[0]['dx'])] = math.ceil(most_direct_asteroid_shot_tuple[3] / delta_time)
 
@@ -813,14 +677,31 @@ class NeoController(KesslerController):
         feasible_to_hit = []
         #print(self.last_time_fired, self.current_timestep)
         timesteps_until_can_fire = max(0, 5 - (self.current_timestep - self.last_time_fired))
+        print(f"Timesteps until we can fire: {timesteps_until_can_fire}")
         for real_asteroid in game_state['asteroids']:
             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
             for a in duplicated_asteroids:
                 if (a["velocity"][0], a["velocity"][1], a["radius"], a['dx'], a['dy']) not in self.shot_at_asteroids:
-                    feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, timesteps_until_can_fire)
-                    if feasible:
+                    # Alright so what the heck is this convergence stuff all about?
+                    # So let's say at this timestep we calculate that if we want to shoot an asteroid, we have to shoot at X degrees from our heading.
+                    # But the thing is, we can only hit the asteroid if we were already looking there and we shoot at this exact instant.
+                    # By the time we can turn our ship to the correct heading, the future correct heading will have moved even farther! We have Zeno's paradox.
+                    # So what we need to find, is a future timestep at which between now and then, we have enough time to turn our ship, to achieve the future correct heading to shoot at the bullet
+                    # There may be a way to solve this algebraically, but since we're working with discrete numbers, we can hone in on this value within a few iterations.
+                    feasible = True
+                    converged = False
+                    extra_timesteps_to_achieve_convergence = 0
+                    while feasible and not converged:
+                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, timesteps_until_can_fire + 1 + extra_timesteps_to_achieve_convergence)
+                        if not feasible:
+                            break
+                        if extra_timesteps_to_achieve_convergence == math.ceil(math.degrees(shot_heading_error_rad)/(ship_max_turn_rate*delta_time)):
+                            converged = True
+                        else:
+                            extra_timesteps_to_achieve_convergence = math.ceil(math.degrees(shot_heading_error_rad)/(ship_max_turn_rate*delta_time))
+                    if feasible: # This will always be true
                         # In the case that on this timestep we can fire at this and move onto the second target, we will calculate the headings for the next timestep as well
-                        feasible_next_timestep, shot_heading_error_rad_next_timestep, shot_heading_tolerance_rad_next_timestep, interception_time_next_timestep, intercept_x, intercept_y, asteroid_dist_next_timestep = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, 1 + timesteps_until_can_fire)
+                        feasible_next_timestep, shot_heading_error_rad_next_timestep, shot_heading_tolerance_rad_next_timestep, interception_time_next_timestep, intercept_x, intercept_y, asteroid_dist_next_timestep = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, 2 + timesteps_until_can_fire)
                         # THIS NEW ONE MAY NOT BE FEASIBLE, BUT 99% SHOULD BE. THE 100% CORRECT WAY IS TO SCAN THROUGH TWICE AND CHECK FEASIBILITY SETS. BUT THE SETS OF FEASIBILITY SHOULD BE 99% OVERLAPPED AT THE LEAST.
                         if not feasible_next_timestep:
                             print("DANG IT ONE TIMESTEP THIS SHOT WAS FEASIBLE AND THE NEXT TIMESTEP IT WASN'T BUT BECAUSE THE CODE IS DUMB WE MAY TRY TO SHOOT IT ANYWAY.")
@@ -868,6 +749,7 @@ class NeoController(KesslerController):
 
         if most_direct_asteroid_shot_tuple is not None:
             # We have a #1 target
+            print(f"Our #1 target is angularlly away in degrees: {min_abs_shooting_angle_error_deg}")
             fired_on_this_timestep = False
             if abs(min_abs_shooting_angle_error_deg) < eps and ship_state['can_fire']:
                 print("Locked and loaded. We're firing on this timestep, and probably gonna move too")
