@@ -8,6 +8,7 @@ import numpy as np
 from collections import deque
 import heapq
 import sys
+import time
 
 
 delta_time = 1/30 # s/ts
@@ -20,7 +21,7 @@ eps = 0.00000001
 ship_radius = 20.0 # px
 timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time)
 collision_check_pad = 1
-asteroid_aim_tolerance_pixels = 3
+asteroid_aim_buffer_pixels = 7
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -355,11 +356,13 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     #print(f"intercept 1: {intercept1}, intercept2: {intercept2}")
     # Take the smaller intercept time, as long as it is positive AFTER ADDING LOOKAHEAD TIME; if not, take the larger one.
     if intercept1 > intercept2:
+        #print('first case')
         if intercept2 + lookahead_timesteps*delta_time >= 0:
             interception_time = intercept2
         else:
             interception_time = intercept1
     else:
+        #print(f'second case, intercept1: {intercept1}, intercept2: {intercept2}, lookahead_timesteps: {lookahead_timesteps}, intercept1 + lookahead_timesteps*delta_time: {intercept1 + lookahead_timesteps*delta_time}')
         if intercept1 + lookahead_timesteps*delta_time >= 0:
             interception_time = intercept1
         else:
@@ -378,17 +381,17 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     # Lastly, find the difference between firing angle and the ship's current orientation.
     shot_heading = my_theta1 - ((math.pi/180)*ship_heading)
 
-    # Wrap all angles to (0, 2*pi)
-    shot_heading = shot_heading % (2*math.pi)
+    # Wrap all angles to (-pi, pi)
+    shot_heading = (shot_heading + math.pi) % (2*math.pi) - math.pi
 
     # Calculate the amount off of the shot heading I can be and still hit the asteroid
     #print(f"Asteroid radius {asteroid_r} asteroid distance {asteroid_dist}")
     if asteroid_r < asteroid_dist:
-        shot_heading_tolerance = math.asin((asteroid_r - asteroid_aim_tolerance_pixels)/asteroid_dist)
+        shot_heading_tolerance = math.asin((asteroid_r - asteroid_aim_buffer_pixels)/asteroid_dist)
     else:
         shot_heading_tolerance = math.pi/4
-
-    return True, shot_heading, shot_heading_tolerance, interception_time, intercept_x, intercept_y, asteroid_dist
+    shot_heading_tolerance = 0
+    return True, shot_heading, shot_heading_tolerance, interception_time + lookahead_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist
 
 
 
@@ -691,15 +694,35 @@ class NeoController(KesslerController):
                     feasible = True
                     converged = False
                     extra_timesteps_to_achieve_convergence = 0
+                    shot_heading_error_rad = 0
+                    shot_heading_tolerance_rad = 0
+                    shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = None, None, None, None, None, None
                     while feasible and not converged:
-                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, timesteps_until_can_fire + 1 + extra_timesteps_to_achieve_convergence)
+                        print(f'Still not converged, extra timesteps: {extra_timesteps_to_achieve_convergence}, shot_heading_error_rad: {shot_heading_error_rad}, tol: {shot_heading_tolerance_rad}')
+                        shot_heading_error_rad_old, shot_heading_tolerance_rad_old, interception_time_old, intercept_x_old, intercept_y_old, asteroid_dist_old = shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist
+                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, timesteps_until_can_fire + extra_timesteps_to_achieve_convergence)
                         if not feasible:
                             break
-                        if extra_timesteps_to_achieve_convergence == math.ceil(math.degrees(shot_heading_error_rad)/(ship_max_turn_rate*delta_time)):
-                            converged = True
+                        if abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
+                            shooting_angle_error = 0
                         else:
-                            extra_timesteps_to_achieve_convergence = math.ceil(math.degrees(shot_heading_error_rad)/(ship_max_turn_rate*delta_time))
-                    if feasible: # This will always be true
+                            if shot_heading_error_rad > 0:
+                                shooting_angle_error = shot_heading_error_rad - shot_heading_tolerance_rad
+                            else:
+                                shooting_angle_error = shot_heading_error_rad + shot_heading_tolerance_rad
+                        new_extra_timesteps_to_achieve_convergence = math.ceil(math.degrees(shooting_angle_error)/(ship_max_turn_rate*delta_time) - eps)
+                        if extra_timesteps_to_achieve_convergence == new_extra_timesteps_to_achieve_convergence:
+                            converged = True
+                        elif extra_timesteps_to_achieve_convergence > new_extra_timesteps_to_achieve_convergence:
+                            # Wacky oscillation case
+                            converged = True
+                            if shot_heading_error_rad_old is not None:
+                                shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist = shot_heading_error_rad_old, shot_heading_tolerance_rad_old, interception_time_old, intercept_x_old, intercept_y_old, asteroid_dist_old
+                        else:
+                            extra_timesteps_to_achieve_convergence = new_extra_timesteps_to_achieve_convergence
+                    print(f"Converged. Need extra timesteps: {extra_timesteps_to_achieve_convergence}")
+                    # Maybe use a while-else statement here to break (if not feasible)
+                    if feasible:
                         # In the case that on this timestep we can fire at this and move onto the second target, we will calculate the headings for the next timestep as well
                         feasible_next_timestep, shot_heading_error_rad_next_timestep, shot_heading_tolerance_rad_next_timestep, interception_time_next_timestep, intercept_x, intercept_y, asteroid_dist_next_timestep = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, 2 + timesteps_until_can_fire)
                         # THIS NEW ONE MAY NOT BE FEASIBLE, BUT 99% SHOULD BE. THE 100% CORRECT WAY IS TO SCAN THROUGH TWICE AND CHECK FEASIBILITY SETS. BUT THE SETS OF FEASIBILITY SHOULD BE 99% OVERLAPPED AT THE LEAST.
@@ -720,6 +743,7 @@ class NeoController(KesslerController):
         most_direct_asteroid_shot_tuple = None
         almost_most_direct_asteroid_shot_tuple = None
         for feasible in feasible_to_hit:
+            print(shot_heading_error_rad)
             a, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, asteroid_dist, _ = feasible
             if abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
                 shooting_angle_error = 0
@@ -845,4 +869,5 @@ class NeoController(KesslerController):
         if drop_mine_combined and not ship_state['can_deploy_mine']:
             print("You can't deploy mines dude!")
         print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust_combined}, turn_rate: {turn_rate_combined}, fire: {fire_combined}, drop_mine: {drop_mine_combined}")
+        #time.sleep(0.2)
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined

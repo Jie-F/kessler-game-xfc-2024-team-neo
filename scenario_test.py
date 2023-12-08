@@ -28,9 +28,9 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-random.seed(8)
+random.seed(9)
 asteroids_random = generate_asteroids(
-                                num_asteroids=2,
+                                num_asteroids=10,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
                                 speed_range=(1, 400),
