@@ -1,3 +1,8 @@
+# XFC 2024, "Neo" Kessler controller
+# Jie Fan 2023-2024
+# jie.f@pm.me
+# Feel free to reach out if you have questions, suggestions, or find a bug :)
+
 import random
 import math
 from src.kesslergame import KesslerController
@@ -9,6 +14,12 @@ from collections import deque
 import heapq
 import sys
 import time
+import os
+
+# TODO: Use better identity detection of asteroids. Currently if two asteroids have the same velocity, they're treated as the same, which isn't good. Position matters. If position and velocity are the same, still treat them as two asteroids instead of the same one.
+
+# TODO: Once we get hit, use the 3 seconds of invincibility and do a global search to find a spot on the map that we can stay for a long time, and then beeline it over there.
+# Bonus points if we can also do a search and find a good spot to lay a mine and lay the mine as well as get to the safe spot all within 3 seconds
 
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
@@ -20,7 +31,7 @@ ship_max_speed = 240.0 # px/s
 eps = 0.00000001
 ship_radius = 20.0 # px
 timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # 18 timesteps
-collision_check_pad = 1 # px
+collision_check_pad = 2 # px
 asteroid_aim_buffer_pixels = 7 # px
 coordinate_bound_check_padding = 1 # px
 
@@ -105,7 +116,7 @@ def predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, s
         next_imminent_collision_time = min(t2, next_imminent_collision_time)
     return next_imminent_collision_time
 
-def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='half_surround'):
+def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='half_surround', directional_culling=True):
     duplicates = []
 
     # Original X and Y coordinates
@@ -149,16 +160,18 @@ def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='half_sur
                 # This pattern multiplies the number of asteroids by 1
                 if (dx, dy) != (0, 0):
                     continue
-            # Check to make sure the asteroids are headed in the direction of the main game bounds
-            # This optimization multiplies the amount of duplicates asteroids by 0.375 approximately, for the surround/half_surround pattern
-            if (dx, dy) != (0, 0):
-                if (dx != 0 and np.sign(dx) == np.sign(asteroid['velocity'][0])) or (dy != 0 and np.sign(dy) == np.sign(asteroid['velocity'][1])):
-                    # This imaginary asteroid's heading out into space
-                    continue
+            if directional_culling:
+                # Check to make sure the asteroids are headed in the direction of the main game bounds
+                # This optimization multiplies the amount of duplicates asteroids by 0.375 approximately, for the surround/half_surround pattern
+                # TODO: THIS DOESN'T CONSIDER the case where we want to duplicate for searching for a safe spot to move, since I want to have a bubble around me that extends beyond the bounds, and I don't want to cull those away
+                if (dx, dy) != (0, 0):
+                    if (dx != 0 and np.sign(dx) == np.sign(asteroid['velocity'][0])) or (dy != 0 and np.sign(dy) == np.sign(asteroid['velocity'][1])):
+                        # This imaginary asteroid's heading out into space
+                        continue
             #print(f"It: col{col} row{row}")
-            duplicate = asteroid.copy()
-            duplicate['dx'] = dx
-            duplicate['dy'] = dy
+            duplicate = asteroid.copy() # TODO: Check whether this copy is necessary
+            #duplicate['dx'] = dx
+            #duplicate['dy'] = dy
             duplicate['position'] = (orig_x + dx, orig_y + dy)
             
             duplicates.append(duplicate)
@@ -254,6 +267,7 @@ class NeoShipSim():
         self.state_sequence = [(self.initial_timestep, self.position, self.velocity, self.speed, self.heading)]
         self.asteroids = asteroids
         self.game_state = game_state
+        os.system('color 2')
 
     def get_instantaneous_asteroid_collision(self):
         collision = False
@@ -375,14 +389,14 @@ class Neo(KesslerController):
 
     def __init__(self):
         self.init_done = False
+        self.ship_id = None
         self.current_timestep = 0
         self.previously_targetted_asteroid = None
         self.fire_on_frames = set()
-        self.shot_at_asteroids = {} # Dict of tuples, with the values corresponding to the timesteps we need to wait until they can be shot at again
-        self.last_time_fired = -4 # Set it to -4, so that we think the cooldown is gone at the start of the game lul
+        self.last_time_fired = -math.inf
         self.action_queue = []  # This will become our heap
-        self.ship_id = None
         heapq.heapify(self.action_queue) # Transform list into a heap
+        self.asteroids_pending_death = {} # Keys are timesteps, and the values are the asteroids that still have midair bullets travelling toward them, so we don't want to shoot at them again
 
     def finish_init(self, game_state, ship_state):
         # If we need the game state or ship state to finish init, we can use this function to do that
@@ -395,6 +409,34 @@ class Neo(KesslerController):
             if ship['id'] != self.ship_id:
                 other_positions.append(ship['position'])
         return other_positions
+
+    def track_asteroid_we_shot_at(self, game_state, future_hit_timesteps, asteroid):
+        #print('track asteroid')
+        # Project the asteroid into the future, to where it would be on the timestep of its death
+        for future_timesteps in range(0, future_hit_timesteps + 1):
+            #print(asteroid)
+            timestep = self.current_timestep + future_timesteps
+            if timestep not in self.asteroids_pending_death:
+                self.asteroids_pending_death[timestep] = [asteroid.copy()]
+            else:
+                self.asteroids_pending_death[timestep].append(asteroid.copy())
+            # Advance the asteroid to the next position
+            # TODO: Remove this redundant operation on the last iteration
+            asteroid['position'] = ((asteroid['position'][0] + delta_time*asteroid['velocity'][0])%game_state['map_size'][0], (asteroid['position'][1] + delta_time*asteroid['velocity'][1])%game_state['map_size'][1])
+        #print('done tracking asteroid')
+    
+    def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self, asteroid):
+        # Check whether the asteroid has already been shot at, or if we can shoot at it again
+        if self.current_timestep not in self.asteroids_pending_death:
+            return True
+        elif asteroid in self.asteroids_pending_death[self.current_timestep]:
+            #print('NOPE WE CANT SHOOT AT THIS AGANI')
+            return False
+        else:
+            #print(asteroid)
+            #print('IS NOT IN THE LIST')
+            #print(self.asteroids_pending_death)
+            return True
 
     def enqueue_action(self, timestep, thrust=None, turn_rate=None, fire=None, drop_mine=None):
         if thrust is not None:
@@ -414,16 +456,33 @@ class Neo(KesslerController):
         # Simulate and look for a good move
         #print(f"Checking for imminent danger. We're currently at position {ship_state['position'][0]} {ship_state['position'][1]}")
         #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
+
         # Check for danger
+        max_search_iterations = 100
+        min_search_iterations = 20
+        max_cruise_seconds = 1.2
+        dummy_ship_state = {'speed': 0, 'position': (0, 0), 'velocity': (0, 0), 'heading': 0}
+        max_ship_range_test = NeoShipSim(game_state, dummy_ship_state, self.current_timestep)
+        max_ship_range_test.accelerate(ship_max_speed)
+        max_ship_range_test.cruise(round(1/delta_time))
+        max_ship_range_test.accelerate(0)
+        state_sequence = max_ship_range_test.get_state_sequence()
+        ship_random_range = math.dist(state_sequence[0][1], state_sequence[-1][1])
+        ship_random_max_maneuver_length = len(state_sequence)
         next_imminent_collision_time_stationary = math.inf
         next_imminent_collision_time = None
-        duplicated_asteroids = []
+        relevant_asteroids = []
         for real_asteroid in game_state['asteroids']:
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='surround', directional_culling=False)
             for a in duplicated_asteroids:
                 next_imminent_collision_time_stationary = min(predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_state['radius'], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time_stationary)
-                duplicated_asteroids.append(a)
+                # Check whether this asteroid will get inside the "bubble" that the ship could possibly move in, and if not, cull it
+                #asteroid_gets_inside_range = check_collision(ship_state['position'][0], ship_state['position'][1], ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['radius'])
+                t1, t2 = collision_prediction(ship_state['position'][0], ship_state['position'][1], 0, 0, ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
+                if not math.isnan(t1) and not math.isnan(t2) and not ((t1 < 0 and t2 < 0) or (t1 > ship_random_max_maneuver_length*delta_time and t2 > ship_random_max_maneuver_length*delta_time)):
+                    relevant_asteroids.append(a)
         print(f"Next imminent collision is in {next_imminent_collision_time_stationary}s if we don't move")
+        #print(f"Amount of asteroids before culling: {len(game_state['asteroids'])} and after culling, but including duplicates: {len(relevant_asteroids)}")
         safe_time_threshold = 2
         very_dangerous_time = 0.5
         moving_multiplies_safe_time_by_at_least = 1.5
@@ -439,25 +498,8 @@ class Neo(KesslerController):
             safe_maneuver_found = False
             best_imminent_collision_time_found = 0
             best_maneuver_move_sequence = []
-            max_search_iterations = 100
-            min_search_iterations = 20
             search_iterations_count = 0
-            max_cruise_seconds = 1.5
-            dummy_ship_state = {'speed': 0, 'position': (0, 0), 'velocity': (0, 0), 'heading': 0}
-            max_ship_range_test = NeoShipSim(game_state, dummy_ship_state, self.current_timestep)
-            max_ship_range_test.accelerate(ship_max_speed)
-            max_ship_range_test.cruise(round(1/delta_time))
-            max_ship_range_test.accelerate(0)
-            state_sequence = max_ship_range_test.get_state_sequence()
-            ship_random_range = math.dist(state_sequence[0][1], state_sequence[-1][1])
-            ship_random_max_maneuver_length = len(state_sequence)
-
-            for a in duplicated_asteroids:
-                #asteroid_gets_inside_range = check_collision(ship_state['position'][0], ship_state['position'][1], ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['radius'])
-                t1, t2 = collision_prediction(ship_state['position'][0], ship_state['position'][1], 0, 0, ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
-                if not math.isnan(t1) and not math.isnan(t2) and not ((t1 < 0 and t2 < 0) or (t1 > ship_random_max_maneuver_length*delta_time and t2 > ship_random_max_maneuver_length*delta_time)):
-                    duplicated_asteroids.append(a)
-            print(f"Amount of asteroids after culling: {len(duplicated_asteroids)}")
+            
             while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
                 search_iterations_count += 1
                 if search_iterations_count % 10 == 0:
@@ -469,7 +511,7 @@ class Neo(KesslerController):
                 random_ship_cruise_turn_rate = random.uniform(-ship_max_turn_rate, ship_max_turn_rate)
                 random_ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/delta_time))
 
-                sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, duplicated_asteroids)
+                sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, relevant_asteroids)
                 if not sim_ship.rotate_heading(random_ship_heading_angle):
                     continue
                 if not sim_ship.accelerate(random_ship_cruise_speed, random_ship_accel_turn_rate):
@@ -525,7 +567,7 @@ class Neo(KesslerController):
         # Iterate over all asteroids including duplicated ones, and check whether we're perfectly in line to hit any
         feasible_to_hit = []
         for real_asteroid in game_state['asteroids']:
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'surround')
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='half_surround')
             for a in duplicated_asteroids:
                 feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state)
                 if feasible:
@@ -536,7 +578,7 @@ class Neo(KesslerController):
             most_direct_asteroid_shot_tuple = None
             for feasible in feasible_to_hit:
                 a, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, asteroid_dist_during_interception = feasible
-                if (a["velocity"][0], a["velocity"][1], a["radius"], a['dx'], a['dy']) not in self.shot_at_asteroids:
+                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(a):
                     #print(f"Shot tolerance is and the ship's heading is {math.radians(ship_state['heading'])}")
                     if abs(shot_heading_error_rad) < shot_heading_tolerance_rad:
                         if most_direct_asteroid_shot_tuple == None or asteroid_dist_during_interception < most_direct_asteroid_shot_tuple[4]:
@@ -544,7 +586,7 @@ class Neo(KesslerController):
             if most_direct_asteroid_shot_tuple is not None:
                 print("Shooting the convenient shot!")
                 self.enqueue_action(self.current_timestep, None, None, True)
-                self.shot_at_asteroids[(most_direct_asteroid_shot_tuple[0]['velocity'][0], most_direct_asteroid_shot_tuple[0]['velocity'][1], most_direct_asteroid_shot_tuple[0]['radius'], most_direct_asteroid_shot_tuple[0]['dy'], most_direct_asteroid_shot_tuple[0]['dx'])] = math.ceil(most_direct_asteroid_shot_tuple[3] / delta_time)
+                self.track_asteroid_we_shot_at(game_state, math.ceil(most_direct_asteroid_shot_tuple[3] / delta_time), most_direct_asteroid_shot_tuple[0])
 
     def get_feasible_intercept_angle_and_turn_time(self, a, ship_state, game_state, timesteps_until_can_fire=0):
         # a could be a virtual asteroid, and we'll bounds check it for feasibility
@@ -624,9 +666,9 @@ class Neo(KesslerController):
         timesteps_until_can_fire = max(0, 5 - (self.current_timestep - self.last_time_fired))
         #print(f"Timesteps until we can fire: {timesteps_until_can_fire}")
         for real_asteroid in game_state['asteroids']:
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'surround')
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'none')
             for a in duplicated_asteroids:
-                if (a["velocity"][0], a["velocity"][1], a["radius"], a['dx'], a['dy']) not in self.shot_at_asteroids:
+                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(a):
                     imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
 
                     feasible_current_timestep, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = self.get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire)
@@ -669,7 +711,7 @@ class Neo(KesslerController):
                 #print(shot_heading_error_rad)
                 # Shooting_angle_deg already considers that we don't have to aim at the center of the asteroid. It shoots the side of the asteroid that requires us to aim less
                 a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s = feasible
-                if most_direct_asteroid_shot_tuple[0]['velocity'][0] != a['velocity'][0] and most_direct_asteroid_shot_tuple[0]['velocity'][1] != a['velocity'][1] and most_direct_asteroid_shot_tuple[0]['dx'] != a['dx'] and most_direct_asteroid_shot_tuple[0]['dy'] != a['dy']:
+                if most_direct_asteroid_shot_tuple[0]['velocity'][0] != a['velocity'][0] and most_direct_asteroid_shot_tuple[0]['velocity'][1] != a['velocity'][1] and most_direct_asteroid_shot_tuple[0]['position'][0] != a['position'][0] and most_direct_asteroid_shot_tuple[0]['position'][1] != a['position'][1]:
                     # As long as the second one isn't the same as the first asteroid lmao
                     # TODO: Clean up the if statements below and perhaps combine redundant cases
                     if second_most_direct_asteroid_shot_tuple is None:
@@ -691,7 +733,7 @@ class Neo(KesslerController):
                 fired_on_this_timestep = True
                 self.enqueue_action(self.current_timestep, None, None, True)
                 #print(f"Time it takes to intercept asteroid with bullet: {most_direct_asteroid_shot_tuple[2]}")
-                self.shot_at_asteroids[(most_direct_asteroid_shot_tuple[0]['velocity'][0], most_direct_asteroid_shot_tuple[0]['velocity'][1], most_direct_asteroid_shot_tuple[0]['radius'], most_direct_asteroid_shot_tuple[0]['dy'], most_direct_asteroid_shot_tuple[0]['dx'])] = math.ceil(most_direct_asteroid_shot_tuple[2]/delta_time)
+                self.track_asteroid_we_shot_at(game_state, math.ceil(most_direct_asteroid_shot_tuple[2]/delta_time), most_direct_asteroid_shot_tuple[0])
                 # The way the game works is at this timestep, I can fire a bullet and begin turning toward my second target
                 # Aim at the second best target right now, since we're already shooting our best target and want something to do
                 if second_most_direct_asteroid_shot_tuple is not None:
@@ -709,7 +751,6 @@ class Neo(KesslerController):
                     turn_rate = min_abs_shooting_angle_error_deg/delta_time
                 #print(f"Aiming to prep to shoot! We just enqueued the turn rate {turn_rate}")
                 self.enqueue_action(self.current_timestep, None, turn_rate)
-        #self.shot_at_asteroids[(best_asteroid["velocity"][0], best_asteroid["velocity"][1], best_asteroid["radius"], dy, dx)] = math.ceil(bullet_t / delta_time)
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
         # Method processed each time step by this controller.
@@ -742,19 +783,9 @@ class Neo(KesslerController):
             print("We can chill at this spot for a bit. Entering targetting mode.")
             self.plan_targetting(ship_state, game_state)
         
-        # Maintain the list of already shot at asteroids
-        keys_to_remove = []
-        # Iterate through the dictionary items
-        for key, value in self.shot_at_asteroids.items():
-            # Decrease each value by 1 (the outstanding number of frames the bullet has until it would hit or miss its target decreases by 1 each timestep)
-            self.shot_at_asteroids[key] = value - 1
-            # If the value hits 0, add the key to the list of keys to be removed
-            if self.shot_at_asteroids[key] <= -1:
-                keys_to_remove.append(key)
-        # Remove the keys from the dictionary
-        for key in keys_to_remove:
-            del self.shot_at_asteroids[key]
-
+        # Prune out the list of asteroids we shot at if the timestep (key) is in the past
+        self.asteroids_pending_death = {timestep: asteroids for timestep, asteroids in self.asteroids_pending_death.items() if timestep > self.current_timestep}
+        print(self.asteroids_pending_death)
         # Execute the actions already in the queue for this timestep
 
         # Initialize defaults. If a component of the action is missing, then the default value will be returned
@@ -784,6 +815,6 @@ class Neo(KesslerController):
         print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust_combined}, turn_rate: {turn_rate_combined}, fire: {fire_combined}, drop_mine: {drop_mine_combined}")
         #time.sleep(0.2)
         #print(game_state, ship_state)
-        drop_mine_combined = random.random() < 0.1
+        drop_mine_combined = random.random() < 0.01
         #print(game_state)
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined

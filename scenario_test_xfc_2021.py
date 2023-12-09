@@ -32,16 +32,16 @@ portfolio = [
     #wall_right_easy,
     #wall_top_easy,
     #wall_bottom_easy,
-    ring_closing,
+    #ring_closing,
     #ring_static_left,
-    #ring_static_right,
+    ring_static_right,
     #ring_static_top,
     #ring_static_bottom,
 
     #wall_right_wrap_1,
     #wall_right_wrap_2,
     #wall_right_wrap_3,
-    wall_right_wrap_4,
+    #wall_right_wrap_4,
     #wall_left_wrap_1,
     #wall_left_wrap_2,
     #wall_left_wrap_3,
@@ -104,7 +104,7 @@ alternate_scenarios = [
 
     #scenario_small_box,
     #scenario_big_box,
-    #scenario_2_still_corridors,
+    scenario_2_still_corridors,
 ]
 
 portfolio_dict = {scenario.name: scenario for scenario in portfolio}
@@ -134,7 +134,7 @@ asteroids_random = generate_asteroids(
                                 position_range_y=(0, height),
                                 speed_range=(1, 300),
                                 angle_range=(-180, 180),
-                                size_range=(1, 2)
+                                size_range=(1, 3)
                             )
 
 # Define game scenario
@@ -162,7 +162,7 @@ game_settings = {'perf_tracker': True,
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
-for scene in [scenario_apocalypse_1]:
+for scene in portfolio:
     # Evaluate the game
     pre = time.perf_counter()
     print(f"Running scenario: {scene.name}")

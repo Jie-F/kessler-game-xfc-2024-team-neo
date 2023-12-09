@@ -31,12 +31,12 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
 width, height = (1920, 1080)
 #random.seed(22)
 asteroids_random = generate_asteroids(
-                                num_asteroids=100,
+                                num_asteroids=10,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
-                                speed_range=(1, 300),
+                                speed_range=(1, 600),
                                 angle_range=(-180, 180),
-                                size_range=(1, 2)
+                                size_range=(1, 1)
                             )
 
 # Define game scenario
@@ -45,12 +45,24 @@ my_test_scenario = Scenario(name='Test Scenario',
                             asteroid_states=asteroids_random,
                             #asteroid_states=[{'position': (width*54//100, height*54//100), 'speed': 1000, 'angle': -180, 'size': 2}],
                             ship_states=[
-                                {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
+                                {'position': (width//2, height//2), 'angle': 90, 'lives': 50, 'team': 1, "mines_remaining": 3},
+                                #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 20, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
                             #seed=2,
                             time_limit=300,
+                            ammo_limit_multiplier=0,
+                            stop_if_no_ammo=False)
+
+target_priority_optimization1 = Scenario(name='Target priority optimization 1',
+                            asteroid_states=[{'position': (width*5//100, height*51//100), 'speed': 200, 'angle': 180, 'size': 1},
+                                             {'position': (width*5//100, height*49//100), 'speed': 100, 'angle': 0, 'size': 1}],
+                            ship_states=[
+                                {'position': (width//2, height//2), 'angle': 0, 'lives': 1, 'team': 1, "mines_remaining": 3},
+                            ],
+                            map_size=(width, height),
+                            #seed=2,
+                            time_limit=30,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
 
@@ -66,7 +78,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])#, TestController()])GamepadController NeoController
+score, perf_data = game.run(scenario=target_priority_optimization1, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))
