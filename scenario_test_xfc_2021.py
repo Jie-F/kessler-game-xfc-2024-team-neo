@@ -11,6 +11,104 @@ from baby_neo_controller import NeoController
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
+from scenarios import *
+
+portfolio = [
+    #threat_test_1,
+    #threat_test_2,
+    #threat_test_3,
+    #threat_test_4,
+    #accuracy_test_1,
+    #accuracy_test_2,
+    #accuracy_test_3,
+    #accuracy_test_4,
+    #accuracy_test_5,
+    #accuracy_test_6,
+    #accuracy_test_7,
+    #accuracy_test_8,
+    #accuracy_test_9,
+    #accuracy_test_10,
+    #wall_left_easy,
+    #wall_right_easy,
+    #wall_top_easy,
+    #wall_bottom_easy,
+    ring_closing,
+    #ring_static_left,
+    #ring_static_right,
+    #ring_static_top,
+    #ring_static_bottom,
+
+    #wall_right_wrap_1,
+    #wall_right_wrap_2,
+    #wall_right_wrap_3,
+    wall_right_wrap_4,
+    #wall_left_wrap_1,
+    #wall_left_wrap_2,
+    #wall_left_wrap_3,
+    #wall_left_wrap_4,
+    #wall_top_wrap_1,
+    #wall_top_wrap_2,
+    #wall_top_wrap_3,
+    #wall_top_wrap_4,
+    #wall_bottom_wrap_1,
+    #wall_bottom_wrap_2,
+    #wall_bottom_wrap_3,
+    #wall_bottom_wrap_4,
+]
+
+show_portfolio = [
+    threat_test_1,
+    threat_test_2,
+    threat_test_3,
+    threat_test_4,
+    accuracy_test_5,
+    accuracy_test_6,
+    accuracy_test_7,
+    accuracy_test_8,
+    accuracy_test_9,
+    accuracy_test_10,
+    wall_left_easy,
+    wall_right_easy,
+    wall_top_easy,
+    wall_bottom_easy,
+    ring_closing,
+    ring_static_left,
+    ring_static_right,
+    ring_static_top,
+    ring_static_bottom,
+    wall_right_wrap_3,
+    wall_right_wrap_4,
+    wall_left_wrap_3,
+    wall_left_wrap_4,
+    wall_top_wrap_3,
+    wall_top_wrap_4,
+    wall_bottom_wrap_3,
+    wall_bottom_wrap_4,
+]
+
+alternate_scenarios = [
+    #corridor_left,
+    #corridor_right,
+    #corridor_top,
+    #corridor_bottom,
+
+    # May have to cut these
+    #moving_corridor_1,
+    #moving_corridor_2,
+    #moving_corridor_3,
+    #moving_corridor_4,
+    #moving_corridor_angled_1,
+    #moving_corridor_angled_2,
+    #moving_corridor_curve_1,
+    #moving_corridor_curve_2,
+
+    #scenario_small_box,
+    #scenario_big_box,
+    #scenario_2_still_corridors,
+]
+
+portfolio_dict = {scenario.name: scenario for scenario in portfolio}
+show_portfolio_dict = {scenario.name: scenario for scenario in show_portfolio}
 
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
@@ -28,7 +126,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-width, height = (1920, 1080)
+width, height = (1000, 800)
 #random.seed(22)
 asteroids_random = generate_asteroids(
                                 num_asteroids=100,
@@ -64,14 +162,16 @@ game_settings = {'perf_tracker': True,
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
-# Evaluate the game
-pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])#, TestController()])GamepadController NeoController
+for scene in [scenario_apocalypse_1]:
+    # Evaluate the game
+    pre = time.perf_counter()
+    print(f"Running scenario: {scene.name}")
+    score, perf_data = game.run(scenario=scene, controllers=[Neo(), NeoController()])#, TestController()])GamepadController NeoController
 
-# Print out some general info about the result
-print('Scenario eval time: '+str(time.perf_counter()-pre))
-print(score.stop_reason)
-print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
-print('Deaths: ' + str([team.deaths for team in score.teams]))
-print('Accuracy: ' + str([team.accuracy for team in score.teams]))
-print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
+    # Print out some general info about the result
+    print('Scenario eval time: '+str(time.perf_counter()-pre))
+    print(score.stop_reason)
+    print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
+    print('Deaths: ' + str([team.deaths for team in score.teams]))
+    print('Accuracy: ' + str([team.accuracy for team in score.teams]))
+    print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
