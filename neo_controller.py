@@ -34,6 +34,7 @@ timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - 
 collision_check_pad = 2 # px
 asteroid_aim_buffer_pixels = 7 # px
 coordinate_bound_check_padding = 1 # px
+mine_blast_radius = 150 # px
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -83,14 +84,21 @@ def check_collision(a_x, a_y, a_r, b_x, b_y, b_r):
 
 def collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_radius, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius):
     # https://stackoverflow.com/questions/11369616/circle-circle-collision-prediction/
-    # Note that if an asteroid is inside the ship, the predicted collision time will correspond to the time the asteroid LEAVES the ship, not hits
-    #print(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_radius, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
     Oax, Oay = ship_pos_x, ship_pos_y
     Dax, Day = ship_vel_x, ship_vel_y
     Obx, Oby = ast_pos_x, ast_pos_y
     Dbx, Dby = ast_vel_x, ast_vel_y
     ra = ship_radius
     rb = ast_radius
+    # If both objects are stationary, then we only have to check the collision right now and not do any fancy math
+    # This should speed up scenarios where most asteroids are stationary
+    if Dax == 0 and Day == 0 and Dbx == 0 and Dby == 0:
+        if check_collision(Oax, Oay, ra, Obx, Oby, rb):
+            t1 = -math.inf
+            t2 = math.inf
+        else:
+            t1 = math.nan
+            t2 = math.nan
     a = Dax**2 + Dbx**2 + Day**2 + Dby**2 - (2*Dax*Dbx) - (2*Day*Dby)
     b = (2*Oax*Dax) - (2*Oax*Dbx) - (2*Obx*Dax) + (2*Obx*Dbx) + (2*Oay*Day) - (2*Oay*Dby) - (2*Oby*Day) + (2*Oby*Dby)
     c = Oax**2 + Obx**2 + Oay**2 + Oby**2 - (2*Oax*Obx) - (2*Oay*Oby) - (ra + rb)**2
@@ -100,20 +108,28 @@ def collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_ra
         t2 = (-b - math.sqrt(d)) / (2*a)
     else:
         if a == 0:
-            #print("Uhh yeah nuh uh")
-            pass
+            print("WARNING: This should never have happened, especially since we're already checking the case where all velocities are 0!")
         t1 = math.nan
         t2 = math.nan
     return t1, t2
 
 def predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius):
-    next_imminent_collision_time = math.inf
     t1, t2 = collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
     #print(f"Quadratic equation gave t1 {t1} t2: {t2} and chatgpt got me {t3} and {t4}")
-    if not math.isnan(t1) and t1 >= 0:
-        next_imminent_collision_time = min(t1, next_imminent_collision_time)
-    if not math.isnan(t2) and t2 >= 0:
-        next_imminent_collision_time = min(t2, next_imminent_collision_time)
+    # If we're already colliding with something, then return 0 as the next imminent collision time
+    if math.isnan(t1) or math.isnan(t2):
+        next_imminent_collision_time = math.inf
+    else:
+        start_collision_time = min(t1, t2)
+        end_collision_time = max(t1, t2)
+        if end_collision_time < 0:
+            next_imminent_collision_time = math.inf
+        elif start_collision_time <= 0 <= end_collision_time:
+            # 0 <= end_collision_time is for a given, but included in the statement for clarity
+            next_imminent_collision_time = 0
+        else:
+            # start_collision_time > 0 and 0 <= end_collision_time
+            next_imminent_collision_time = start_collision_time
     return next_imminent_collision_time
 
 def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='half_surround', directional_culling=True):
@@ -261,9 +277,36 @@ def is_asteroid_in_list(list_of_asteroids, a, tolerance=1e-9):
             return True
     return False
 
+def count_asteroids_in_mine_blast_radius(game_state, asteroids_list, mine_x, mine_y, future_check_timesteps):
+    count = 0
+    for a in asteroids_list:
+        # Extrapolate the asteroid position into the time of the mine detonation to check its bounds
+        asteroid_future_x = a['position'][0] + future_check_timesteps*delta_time*a['velocity'][0]
+        asteroid_future_y = a['position'][1] + future_check_timesteps*delta_time*a['velocity'][1]
+        if check_coordinate_bounds(game_state, asteroid_future_x, asteroid_future_y):
+            # Use the same collision prediction function as we use with the ship
+            t1, t2 = collision_prediction(mine_x, mine_y, 0, 0, mine_blast_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
+            #print(t1, t2)
+            # Assuming the two times exist, the first time is when the collision starts, and the second time is when the collision ends
+            # All in between times is where the circles are inside of each other (intersects)
+            # We want to check whether the mine's blast radius is intersecting with the asteroid at the future time
+            if not math.isnan(t1) and not math.isnan(t2) and min(t1, t2) < future_check_timesteps*delta_time < max(t1, t2):
+                # A collision exists, and it'll happen when the mine is detonating
+                count += 1
+    return count
+
+def predict_ship_mine_collision(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, mine):
+    # Project the ship to its future location when the mine is blowing up
+    ship_pos_x += mine['remaining_time']*ship_vel_x
+    ship_pos_y += mine['remaining_time']*ship_vel_y
+    if check_collision(ship_pos_x, ship_pos_y, ship_radius, mine['position'][0], mine['position'][1], mine_blast_radius):
+        return mine['remaining_time']
+    else:
+        return math.inf
+
 class NeoShipSim():
     # This was totally just taken from the Kessler game code lul
-    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[]):
+    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], mines=[], timesteps_to_not_check_collision_for=0):
         self.speed = ship_state['speed']
         self.position = ship_state['position']
         self.velocity = ship_state['velocity']
@@ -273,16 +316,22 @@ class NeoShipSim():
         self.move_sequence = []
         self.state_sequence = [(self.initial_timestep, self.position, self.velocity, self.speed, self.heading)]
         self.asteroids = asteroids
+        self.mines = mines
         self.game_state = game_state
-        os.system('color 2')
+        self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
 
     def get_instantaneous_asteroid_collision(self):
-        collision = False
         for a in self.asteroids:
             if check_collision(self.position[0], self.position[1], ship_radius, a['position'][0] + self.future_timesteps*delta_time*a['velocity'][0], a['position'][1] + self.future_timesteps*delta_time*a['velocity'][1], a['radius']):
-                collision = True
-                break
-        return collision
+                return True
+        return False
+
+    def get_instantaneous_mine_collision(self):
+        # TODO: MIGHT HAVE OFF BY ONE ERROR WHERE THE MINE EXPLODES ONE FRAME BEFORE OR AFTER THE ONE I EXPECT, VALIDATE THE MINE EXPLOSION TIME LATER
+        for m in self.mines:
+            if math.isclose(self.future_timesteps*delta_time, m['remaining_time'], abs_tol=eps):
+                return True
+        return False
 
     def get_next_extrapolated_collision_time(self):
         # Assume constant velocity from here
@@ -290,6 +339,8 @@ class NeoShipSim():
         #print('Extrapolating stuff at rest in end')
         for a in self.asteroids:
             next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0] + self.future_timesteps*delta_time*a['velocity'][0], a['position'][1] + self.future_timesteps*delta_time*a['velocity'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+        for m in self.mines:
+            next_imminent_collision_time = min(predict_ship_mine_collision(self.position[0], self.position[1], self.velocity[0], self.velocity[1], m), next_imminent_collision_time)
         return next_imminent_collision_time
 
     def update(self, thrust=0, turn_rate=0):
@@ -328,8 +379,9 @@ class NeoShipSim():
             offset = bound - pos
             if offset < 0 or offset > bound:
                 self.position[idx] += bound * np.sign(offset)
-        if self.get_instantaneous_asteroid_collision():
-            return False
+        if self.future_timesteps > self.timesteps_to_not_check_collision_for:
+            if self.get_instantaneous_asteroid_collision() or self.get_instantaneous_mine_collision():
+                return False
         self.move_sequence.append((self.initial_timestep + self.future_timesteps, thrust, turn_rate))
         self.state_sequence.append((self.initial_timestep + self.future_timesteps, self.position, self.velocity, self.speed, self.heading))
         return True
@@ -404,6 +456,7 @@ class Neo(KesslerController):
         self.action_queue = []  # This will become our heap
         heapq.heapify(self.action_queue) # Transform list into a heap
         self.asteroids_pending_death = {} # Keys are timesteps, and the values are the asteroids that still have midair bullets travelling toward them, so we don't want to shoot at them again
+        os.system('color 2') # REMOVE THIS LATER, THIS IS JUST FOR FUN
 
     def finish_init(self, game_state, ship_state):
         # If we need the game state or ship state to finish init, we can use this function to do that
@@ -505,7 +558,8 @@ class Neo(KesslerController):
         ship_random_range = math.dist(state_sequence[0][1], state_sequence[-1][1])
         ship_random_max_maneuver_length = len(state_sequence)
         next_imminent_collision_time_stationary = math.inf
-        next_imminent_collision_time = None
+        next_imminent_collision_time = math.inf
+        # Check ship-asteroid imminent collisions
         relevant_asteroids = []
         for real_asteroid in game_state['asteroids']:
             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='surround', directional_culling=False)
@@ -513,13 +567,16 @@ class Neo(KesslerController):
                 next_imminent_collision_time_stationary = min(predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_state['radius'], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time_stationary)
                 # Check whether this asteroid will get inside the "bubble" that the ship could possibly move in, and if not, cull it
                 #asteroid_gets_inside_range = check_collision(ship_state['position'][0], ship_state['position'][1], ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['radius'])
-                t1, t2 = collision_prediction(ship_state['position'][0], ship_state['position'][1], 0, 0, ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
+                t1, t2 = collision_prediction(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_state['radius'] + ship_random_range, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
                 if not math.isnan(t1) and not math.isnan(t2) and not ((t1 < 0 and t2 < 0) or (t1 > ship_random_max_maneuver_length*delta_time and t2 > ship_random_max_maneuver_length*delta_time)):
                     relevant_asteroids.append(a)
+        # Check ship-mine imminent collisions
+        for mine in game_state['mines']:
+            next_imminent_collision_time_stationary = min(predict_ship_mine_collision(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], mine), next_imminent_collision_time_stationary)
         print(f"Next imminent collision is in {next_imminent_collision_time_stationary}s if we don't move")
         #print(f"Amount of asteroids before culling: {len(game_state['asteroids'])} and after culling, but including duplicates: {len(relevant_asteroids)}")
-        safe_time_threshold = 2
-        very_dangerous_time = 0.5
+        safe_time_threshold = 2.5
+        very_dangerous_time = 0.8
         moving_multiplies_safe_time_by_at_least = 1.5
         if next_imminent_collision_time_stationary > safe_time_threshold:
             # Nothing's gonna hit us for a long time
@@ -546,7 +603,7 @@ class Neo(KesslerController):
                 random_ship_cruise_turn_rate = random.uniform(-ship_max_turn_rate, ship_max_turn_rate)
                 random_ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/delta_time))
 
-                sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, relevant_asteroids)
+                sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, relevant_asteroids, game_state['mines'])
                 if not sim_ship.rotate_heading(random_ship_heading_angle):
                     continue
                 if not sim_ship.accelerate(random_ship_cruise_speed, random_ship_accel_turn_rate):
@@ -578,7 +635,7 @@ class Neo(KesslerController):
             else:
                 print(f"Did {search_iterations_count} search iterations to find something good")
             #end_state = sim_ship.get_state_sequence()[-1]
-            if next_imminent_collision_time is not None and (next_imminent_collision_time > next_imminent_collision_time_stationary*moving_multiplies_safe_time_by_at_least or (next_imminent_collision_time_stationary < very_dangerous_time and next_imminent_collision_time > next_imminent_collision_time_stationary)):
+            if next_imminent_collision_time > next_imminent_collision_time_stationary*moving_multiplies_safe_time_by_at_least or (next_imminent_collision_time_stationary < very_dangerous_time and next_imminent_collision_time > next_imminent_collision_time_stationary) or (len(game_state['mines']) > 0 and next_imminent_collision_time > next_imminent_collision_time_stationary):
                 # K yeah it's worth moving
                 print("K yeah it's worth moving")
                 #print(f"We're gonna end up at {end_state[1][0]}, {end_state[1][1]}")
@@ -851,6 +908,12 @@ class Neo(KesslerController):
         #print(game_state, ship_state)
         #drop_mine_combined = random.random() < 0.01
         #print(game_state)
-        print(game_state['asteroids'])
+        #print(game_state['asteroids'])
         #print(self.asteroids_pending_death)
+        mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(3/delta_time))
+        print(mine_ast_count)
+        if mine_ast_count > 10 and len(game_state['mines']) == 0:
+            drop_mine_combined = True
+        if len(game_state['mines']) > 0:
+            print(game_state['mines'])
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
