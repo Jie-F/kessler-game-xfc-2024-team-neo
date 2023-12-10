@@ -422,20 +422,44 @@ class Neo(KesslerController):
                 self.asteroids_pending_death[timestep].append(asteroid.copy())
             # Advance the asteroid to the next position
             # TODO: Remove this redundant operation on the last iteration
-            asteroid['position'] = ((asteroid['position'][0] + delta_time*asteroid['velocity'][0])%game_state['map_size'][0], (asteroid['position'][1] + delta_time*asteroid['velocity'][1])%game_state['map_size'][1])
+            asteroid_new_x = asteroid['position'][0] + delta_time*asteroid['velocity'][0]
+            asteroid_new_y = asteroid['position'][1] + delta_time*asteroid['velocity'][1]
+            # Wrap the exact same way the game does it (can't use %, it's inaccurate)
+            asteroid_wrapped_x = asteroid_new_x
+            offset = game_state['map_size'][0] - asteroid_new_x
+            if offset < 0 or offset > game_state['map_size'][0]:
+                asteroid_wrapped_x += game_state['map_size'][0] * np.sign(offset)
+            asteroid_wrapped_y = asteroid_new_y
+            offset = game_state['map_size'][1] - asteroid_new_y
+
+            if offset < 0 or offset > game_state['map_size'][1]:
+                asteroid_wrapped_y += game_state['map_size'][1] * np.sign(offset)
+            asteroid['position'] = (asteroid_wrapped_x, asteroid_wrapped_y)
         #print('done tracking asteroid')
     
-    def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self, asteroid):
+    def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self, game_state, asteroid):
         # Check whether the asteroid has already been shot at, or if we can shoot at it again
+        asteroid = asteroid.copy()
+        # Wrap the exact same way the game does it (can't use %, it's inaccurate)
+        asteroid_wrapped_x = asteroid['position'][0]
+        offset = game_state['map_size'][0] - asteroid['position'][0]
+        if offset < 0 or offset > game_state['map_size'][0]:
+            asteroid_wrapped_x += game_state['map_size'][0] * np.sign(offset)
+        asteroid_wrapped_y = asteroid['position'][1]
+        offset = game_state['map_size'][1] - asteroid['position'][1]
+        if offset < 0 or offset > game_state['map_size'][1]:
+            asteroid_wrapped_y += game_state['map_size'][1] * np.sign(offset)
+        #asteroid['position'] = (asteroid['position'][0]%game_state['map_size'][0], asteroid['position'][1]%game_state['map_size'][1]) Dangit this wrapping code isn't as precise I think
+        asteroid['position'] = (asteroid_wrapped_x, asteroid_wrapped_y)
         if self.current_timestep not in self.asteroids_pending_death:
             return True
         elif asteroid in self.asteroids_pending_death[self.current_timestep]:
             #print('NOPE WE CANT SHOOT AT THIS AGANI')
             return False
         else:
-            #print(asteroid)
-            #print('IS NOT IN THE LIST')
-            #print(self.asteroids_pending_death)
+            print(asteroid)
+            print('IS NOT IN THE LIST')
+            print(self.asteroids_pending_death)
             return True
 
     def enqueue_action(self, timestep, thrust=None, turn_rate=None, fire=None, drop_mine=None):
@@ -578,7 +602,7 @@ class Neo(KesslerController):
             most_direct_asteroid_shot_tuple = None
             for feasible in feasible_to_hit:
                 a, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, asteroid_dist_during_interception = feasible
-                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(a):
+                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(game_state, a):
                     #print(f"Shot tolerance is and the ship's heading is {math.radians(ship_state['heading'])}")
                     if abs(shot_heading_error_rad) < shot_heading_tolerance_rad:
                         if most_direct_asteroid_shot_tuple == None or asteroid_dist_during_interception < most_direct_asteroid_shot_tuple[4]:
@@ -666,9 +690,9 @@ class Neo(KesslerController):
         timesteps_until_can_fire = max(0, 5 - (self.current_timestep - self.last_time_fired))
         #print(f"Timesteps until we can fire: {timesteps_until_can_fire}")
         for real_asteroid in game_state['asteroids']:
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'none')
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], 'half_surround')
             for a in duplicated_asteroids:
-                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(a):
+                if self.check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(game_state, a):
                     imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
 
                     feasible_current_timestep, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = self.get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire)
@@ -785,7 +809,6 @@ class Neo(KesslerController):
         
         # Prune out the list of asteroids we shot at if the timestep (key) is in the past
         self.asteroids_pending_death = {timestep: asteroids for timestep, asteroids in self.asteroids_pending_death.items() if timestep > self.current_timestep}
-        print(self.asteroids_pending_death)
         # Execute the actions already in the queue for this timestep
 
         # Initialize defaults. If a component of the action is missing, then the default value will be returned
