@@ -254,6 +254,13 @@ def target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_d
     #print(f"aiming_timesteps_required: {aiming_timesteps_required/5:0.2f} shooting_angle_error_deg: {abs(shooting_angle_error_deg)/10:0.2f} interception_time_s: {interception_time_s:0.2f} imminent_collision_time_s: {imminent_collision_time_s:0.2f} asteroid_dist_during_interception: {asteroid_dist_during_interception/500:0.2f}")
     return aiming_timesteps_required/5 + abs(shooting_angle_error_deg)/10 + interception_time_s + imminent_collision_time_s + asteroid_dist_during_interception/500
 
+def is_asteroid_in_list(list_of_asteroids, a, tolerance=1e-9):
+    # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
+    for asteroid in list_of_asteroids:
+        if math.isclose(a['position'][0], asteroid['position'][0], abs_tol=tolerance) and math.isclose(a['position'][1], asteroid['position'][1], abs_tol=tolerance) and math.isclose(a['velocity'][0], asteroid['velocity'][0], abs_tol=tolerance) and math.isclose(a['velocity'][1], asteroid['velocity'][1], abs_tol=tolerance) and math.isclose(a['size'], asteroid['size'], abs_tol=tolerance) and math.isclose(a['mass'], asteroid['mass'], abs_tol=tolerance) and math.isclose(a['radius'], asteroid['radius'], abs_tol=tolerance):
+            return True
+    return False
+
 class NeoShipSim():
     # This was totally just taken from the Kessler game code lul
     def __init__(self, game_state, ship_state, initial_timestep, asteroids=[]):
@@ -411,6 +418,7 @@ class Neo(KesslerController):
         return other_positions
 
     def track_asteroid_we_shot_at(self, game_state, future_hit_timesteps, asteroid):
+        asteroid = asteroid.copy()
         #print('track asteroid')
         # Project the asteroid into the future, to where it would be on the timestep of its death
         for future_timesteps in range(0, future_hit_timesteps + 1):
@@ -422,8 +430,9 @@ class Neo(KesslerController):
                 self.asteroids_pending_death[timestep].append(asteroid.copy())
             # Advance the asteroid to the next position
             # TODO: Remove this redundant operation on the last iteration
-            asteroid_new_x = asteroid['position'][0] + delta_time*asteroid['velocity'][0]
-            asteroid_new_y = asteroid['position'][1] + delta_time*asteroid['velocity'][1]
+            '''
+            asteroid_new_x = asteroid['position'][0] + asteroid['velocity'][0]*delta_time
+            asteroid_new_y = asteroid['position'][1] + asteroid['velocity'][1]*delta_time
             # Wrap the exact same way the game does it (can't use %, it's inaccurate)
             asteroid_wrapped_x = asteroid_new_x
             offset = game_state['map_size'][0] - asteroid_new_x
@@ -431,16 +440,17 @@ class Neo(KesslerController):
                 asteroid_wrapped_x += game_state['map_size'][0] * np.sign(offset)
             asteroid_wrapped_y = asteroid_new_y
             offset = game_state['map_size'][1] - asteroid_new_y
-
-            if offset < 0 or offset > game_state['map_size'][1]:
-                asteroid_wrapped_y += game_state['map_size'][1] * np.sign(offset)
-            asteroid['position'] = (asteroid_wrapped_x, asteroid_wrapped_y)
+            '''
+            #if offset < 0 or offset > game_state['map_size'][1]:
+            #    asteroid_wrapped_y += game_state['map_size'][1] * np.sign(offset)
+            asteroid['position'] = ((asteroid['position'][0] + asteroid['velocity'][0]*delta_time)%game_state['map_size'][0], (asteroid['position'][1] + asteroid['velocity'][1]*delta_time)%game_state['map_size'][1])
         #print('done tracking asteroid')
-    
+
     def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self, game_state, asteroid):
         # Check whether the asteroid has already been shot at, or if we can shoot at it again
         asteroid = asteroid.copy()
         # Wrap the exact same way the game does it (can't use %, it's inaccurate)
+        '''
         asteroid_wrapped_x = asteroid['position'][0]
         offset = game_state['map_size'][0] - asteroid['position'][0]
         if offset < 0 or offset > game_state['map_size'][0]:
@@ -449,17 +459,18 @@ class Neo(KesslerController):
         offset = game_state['map_size'][1] - asteroid['position'][1]
         if offset < 0 or offset > game_state['map_size'][1]:
             asteroid_wrapped_y += game_state['map_size'][1] * np.sign(offset)
-        #asteroid['position'] = (asteroid['position'][0]%game_state['map_size'][0], asteroid['position'][1]%game_state['map_size'][1]) Dangit this wrapping code isn't as precise I think
-        asteroid['position'] = (asteroid_wrapped_x, asteroid_wrapped_y)
+        '''
+        asteroid['position'] = (asteroid['position'][0]%game_state['map_size'][0], asteroid['position'][1]%game_state['map_size'][1]) #Dangit this wrapping code isn't as precise I think
+        #asteroid['position'] = (asteroid_wrapped_x, asteroid_wrapped_y)
         if self.current_timestep not in self.asteroids_pending_death:
             return True
-        elif asteroid in self.asteroids_pending_death[self.current_timestep]:
+        elif is_asteroid_in_list(self.asteroids_pending_death[self.current_timestep], asteroid):
             #print('NOPE WE CANT SHOOT AT THIS AGANI')
             return False
         else:
-            print(asteroid)
-            print('IS NOT IN THE LIST')
-            print(self.asteroids_pending_death)
+            #print(asteroid)
+            #print('IS NOT IN THE LIST')
+            #print(self.asteroids_pending_death)
             return True
 
     def enqueue_action(self, timestep, thrust=None, turn_rate=None, fire=None, drop_mine=None):
@@ -838,6 +849,8 @@ class Neo(KesslerController):
         print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust_combined}, turn_rate: {turn_rate_combined}, fire: {fire_combined}, drop_mine: {drop_mine_combined}")
         #time.sleep(0.2)
         #print(game_state, ship_state)
-        drop_mine_combined = random.random() < 0.01
+        #drop_mine_combined = random.random() < 0.01
         #print(game_state)
+        print(game_state['asteroids'])
+        #print(self.asteroids_pending_death)
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
