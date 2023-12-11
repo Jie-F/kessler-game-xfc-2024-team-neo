@@ -1,4 +1,4 @@
-# XFC 2024, "Neo" Kessler controller
+# XFC 2024 - "Neo" Kessler controller
 # Jie Fan 2023-2024
 # jie.f@pm.me
 # Feel free to reach out if you have questions, suggestions, or find a bug :)
@@ -35,6 +35,7 @@ collision_check_pad = 3 # px
 asteroid_aim_buffer_pixels = 7 # px
 coordinate_bound_check_padding = 1 # px
 mine_blast_radius = 150 # px
+mine_fuse_time = 3 # s
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -264,12 +265,98 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     asteroid_dist_during_interception = math.sqrt((ship_pos_x - intercept_x)**2 + (ship_pos_y - intercept_y)**2)
     return True, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s + future_shooting_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception
 
-def target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s):
-    # Use a fuzzy system to optimize this using rules and stuff
-    # The lower, the better the priority
-    imminent_collision_time_s = min(15, imminent_collision_time_s)
+def target_priority(game_state, ship_state, a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s):
+    # TODO: Use a fuzzy system to optimize this using rules and stuff
+    # The lower the score, the better the priority!
+
+    asteroid_aiming_score = min(6, aiming_timesteps_required/5 + abs(shooting_angle_error_deg)/10 + interception_time_s)
+
     #print(f"aiming_timesteps_required: {aiming_timesteps_required/5:0.2f} shooting_angle_error_deg: {abs(shooting_angle_error_deg)/10:0.2f} interception_time_s: {interception_time_s:0.2f} imminent_collision_time_s: {imminent_collision_time_s:0.2f} asteroid_dist_during_interception: {asteroid_dist_during_interception/500:0.2f}")
-    return aiming_timesteps_required/5 + abs(shooting_angle_error_deg)/10 + interception_time_s + imminent_collision_time_s + asteroid_dist_during_interception/500
+    # Target selection works differently depending on whether we have mines left, and whether this asteroid will get hit by a mine
+    mines_list = game_state['mines']
+
+    asteroid_mine_score = 0
+    if len(mines_list) > 0:
+        # There are currently mines on the board
+        asteroid_in_mine_blast = False
+        mine_is_mine = False
+        for m in mines_list:
+            if count_asteroids_in_mine_blast_radius(game_state, [a], m['position'][0], m['position'][1], 0) == 1:
+                asteroid_in_mine_blast = True
+                mine_is_mine = True # TEMPORARY, DETERMINE THIS BY TRACKING THE MINES I LAID
+                break # Don't care about the other mines, since this asteroid is inside at least one mine
+        # Might be smart to differentiate between asteroids that are within one mine blast, and asteroids within two.
+        # But this makes things super complicate so yeah let's not worry about that. This is already considering a lot of factors.
+        if asteroid_in_mine_blast:
+            if mine_is_mine:
+                # I want to maximize my score by splitting up asteroids within my mine's blast radius
+                if a['size'] == 1:
+                    asteroid_mine_score += 3
+                elif a['size'] == 2:
+                    asteroid_mine_score += 0
+                elif a['size'] == 3:
+                    asteroid_mine_score += 1
+                elif a['size'] == 4:
+                    asteroid_mine_score += 2
+            else:
+                # I want to minimize my opponent's score by shooting individual asteroids within their blast radius, so their mine is less effective
+                if a['size'] == 1:
+                    asteroid_mine_score += 0
+                elif a['size'] == 2:
+                    asteroid_mine_score += 3
+                elif a['size'] == 3:
+                    asteroid_mine_score += 2
+                elif a['size'] == 4:
+                    asteroid_mine_score += 1
+        else:
+            # Penalize the asteroid for not being in a mine blast, since shooting large asteroids in my own mine blast is better for my score than shooting ones outside
+            asteroid_mine_score += 2
+    else:
+        # There are no active mines on the board
+        if ship_state['mines_remaining'] > 0:
+            # If I have mines left, I want to create more mining opportunities by shooting asteroids of size >1, and leave asteroids of size 1
+            if a['size'] == 1:
+                asteroid_mine_score += 3
+            elif a['size'] == 2:
+                asteroid_mine_score += 0
+            elif a['size'] == 3:
+                asteroid_mine_score += 1
+            elif a['size'] == 4:
+                asteroid_mine_score += 2
+        else:
+            # I don't have mines left. Shoot asteroids of size 1. Don't shoot larger ones.
+            if a['size'] == 1:
+                asteroid_mine_score += 0
+            elif a['size'] == 2:
+                asteroid_mine_score += 3
+            elif a['size'] == 3:
+                asteroid_mine_score += 2
+            elif a['size'] == 4:
+                asteroid_mine_score += 1
+    
+    if imminent_collision_time_s <= 2:
+        imminent_collision_score = 0
+    elif imminent_collision_time_s >= 10:
+        imminent_collision_score = 4
+    else:
+        imminent_collision_score = (imminent_collision_time_s - 2)/2
+
+    close_asteroid_threshold = 150
+    if a['size'] == 1:
+        # If the asteroid is small, I prefer to shoot small asteroids close to me to make a safe personal bubble around me
+        if asteroid_dist_during_interception < close_asteroid_threshold:
+            asteroid_distance_score = 0
+        else:
+            asteroid_distance_score = (asteroid_dist_during_interception - close_asteroid_threshold)/500
+    else:
+        # If this asteroid is close to me, shooting it could unleash debris in my face, so try not to shoot large asteroids which are super close
+        if asteroid_dist_during_interception < close_asteroid_threshold:
+            asteroid_distance_score = 2
+        else:
+            # Asteroid is far
+            asteroid_distance_score = (asteroid_dist_during_interception - close_asteroid_threshold)/500
+    print(f"Target priority scores. Aiming: {asteroid_aiming_score}, Mines: {asteroid_mine_score}, Imminent Collision: {imminent_collision_score}, Distance: {asteroid_distance_score}")
+    return asteroid_aiming_score + asteroid_mine_score + imminent_collision_score + asteroid_distance_score
 
 def is_asteroid_in_list(list_of_asteroids, a, tolerance=1e-9):
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
@@ -331,7 +418,7 @@ class NeoShipSim():
         # TODO: MIGHT HAVE OFF BY ONE ERROR WHERE THE MINE EXPLODES ONE FRAME BEFORE OR AFTER THE ONE I EXPECT, VALIDATE THE MINE EXPLOSION TIME LATER
         for m in self.mines:
             if math.isclose(self.future_timesteps*delta_time, m['remaining_time'], abs_tol=eps):
-                return True
+                return check_collision(self.position[0], self.position[1], ship_radius, m['position'][0], m['position'][1], mine_blast_radius)
         return False
 
     def get_next_extrapolated_collision_time(self):
@@ -789,14 +876,15 @@ class Neo(KesslerController):
             # Shooting_angle_deg already considers that we don't have to aim at the center of the asteroid. It shoots the side of the asteroid that requires us to aim less
             a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s = feasible
             # TODO: Clean up the if statements below and perhaps combine redundant cases
+            current_target_priority = target_priority(game_state, ship_state, a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
             if most_direct_asteroid_shot_tuple is None:
                 most_direct_asteroid_shot_tuple = feasible
-                best_target_priority = target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
-            elif target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s) < best_target_priority:
+                best_target_priority = current_target_priority
+            elif current_target_priority < best_target_priority:
                 #print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
                 # New best target that requires the least movement to hit
                 most_direct_asteroid_shot_tuple = feasible
-                best_target_priority = target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
+                best_target_priority = current_target_priority
         #print(timesteps_until_can_fire)
         #assert((timesteps_until_can_fire == 0) == ship_state['can_fire'])
 
@@ -810,14 +898,15 @@ class Neo(KesslerController):
                 if most_direct_asteroid_shot_tuple[0]['velocity'][0] != a['velocity'][0] and most_direct_asteroid_shot_tuple[0]['velocity'][1] != a['velocity'][1] and most_direct_asteroid_shot_tuple[0]['position'][0] != a['position'][0] and most_direct_asteroid_shot_tuple[0]['position'][1] != a['position'][1]:
                     # As long as the second one isn't the same as the first asteroid lmao
                     # TODO: Clean up the if statements below and perhaps combine redundant cases
+                    current_target_priority = target_priority(game_state, ship_state, a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
                     if second_most_direct_asteroid_shot_tuple is None:
                         second_most_direct_asteroid_shot_tuple = feasible
-                        best_target_priority = target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
-                    elif target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s) < best_target_priority:
+                        best_target_priority = current_target_priority
+                    elif current_target_priority < best_target_priority:
                         #print(f"{shooting_angle_error_deg} is better than {min_abs_shooting_angle_error_deg}")
                         # New best target that requires the least movement to hit
                         second_most_direct_asteroid_shot_tuple = feasible
-                        best_target_priority = target_priority(a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s)
+                        best_target_priority = current_target_priority
 
         if most_direct_asteroid_shot_tuple is not None:
             # We have a #1 target
@@ -914,10 +1003,11 @@ class Neo(KesslerController):
         #print(game_state)
         #print(game_state['asteroids'])
         #print(self.asteroids_pending_death)
-        mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(3/delta_time))
+        mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(mine_fuse_time/delta_time))
         print(mine_ast_count)
         if mine_ast_count > 20:# and len(game_state['mines']) == 0:
             drop_mine_combined = True
         if len(game_state['mines']) > 0:
             print(game_state['mines'])
+            print(ship_state)
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined

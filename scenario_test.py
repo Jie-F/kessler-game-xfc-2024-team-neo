@@ -32,7 +32,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
 width, height = (1920, 1080)
 #random.seed(22)
 asteroids_random = generate_asteroids(
-                                num_asteroids=500,
+                                num_asteroids=800,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
                                 speed_range=(1, 100),
@@ -314,7 +314,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=zigzag_motion_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))
