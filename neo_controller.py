@@ -21,6 +21,11 @@ import os
 
 # TODO: Line of sight analysis, and use it to see which shots are feasible, before target selection/prioritization.
 
+# TODO: Circular path ship cruising, constant time collision prediction?
+
+# TODO: Dynamic culling for sim? Different radii, or maybe direction?
+
+
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
 bullet_speed = 800.0 # px/s
@@ -355,8 +360,30 @@ def target_priority(game_state, ship_state, a, shooting_angle_error_deg, interce
         else:
             # Asteroid is far
             asteroid_distance_score = (asteroid_dist_during_interception - close_asteroid_threshold)/500
-    print(f"Target priority scores. Aiming: {asteroid_aiming_score}, Mines: {asteroid_mine_score}, Imminent Collision: {imminent_collision_score}, Distance: {asteroid_distance_score}")
+    #print(f"Target priority scores. Aiming: {asteroid_aiming_score}, Mines: {asteroid_mine_score}, Imminent Collision: {imminent_collision_score}, Distance: {asteroid_distance_score}")
     return asteroid_aiming_score + asteroid_mine_score + imminent_collision_score + asteroid_distance_score
+
+bullet_mass = 1
+
+def forecast_asteroid_splits(game_state, ship_state, a, timesteps_until_appearance, bullet_heading_deg):
+    if a['size'] == 1:
+        # Asteroids of size 1 don't split
+        return []
+    # Look at asteroid.py in the Kessler game's code
+    bullet_vel_x = math.cos(math.radians(bullet_heading_deg))*bullet_speed
+    bullet_vel_y = math.sin(math.radians(bullet_heading_deg))*bullet_speed
+    vfx = (1/(bullet_mass + a['mass']))*(bullet_mass*bullet_vel_x + a['mass']*a['velocity'][0])
+    vfy = (1/(bullet_mass + a['mass']))*(bullet_mass*bullet_vel_y + a['mass']*a['velocity'][1])
+    # Calculate speed of resultant asteroid(s) based on velocity vector
+    v = np.sqrt(vfx**2 + vfy**2)
+    # Calculate angle of center asteroid for split (degrees)
+    theta = math.degrees(np.arctan2(vfy, vfx))
+    # Split angle is the angle off of the new velocity vector for the two asteroids to the sides, the center child
+    # asteroid continues on the new velocity path
+    split_angle = 15
+    angles = [(theta + split_angle)%360, theta, (theta - split_angle)%360]
+    # This is wacky because we're back-extrapolation the position of the asteroid BEFORE IT WAS BORN!!!!11!
+    return [{'position': (a['position'][0] + a['velocity'][0]*delta_time*timesteps_until_appearance - timesteps_until_appearance*math.cos(math.radians(angle))*v*delta_time, a['position'][1] + a['velocity'][1]*delta_time*timesteps_until_appearance - timesteps_until_appearance*math.sin(math.radians(angle))*v*delta_time), 'size': a['size'] - 1, 'velocity': (math.cos(math.radians(angle))*v, math.sin(math.radians(angle))*v), 'timesteps_until_appearance': timesteps_until_appearance} for angle in angles]
 
 def is_asteroid_in_list(list_of_asteroids, a, tolerance=1e-9):
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
@@ -546,6 +573,7 @@ class Neo(KesslerController):
         self.action_queue = []  # This will become our heap
         heapq.heapify(self.action_queue) # Transform list into a heap
         self.asteroids_pending_death = {} # Keys are timesteps, and the values are the asteroids that still have midair bullets travelling toward them, so we don't want to shoot at them again
+        self.forecasted_asteroid_splits = [] # List of asteroids that are forecasted to appear, but aren't guaranteed to
         os.system('color 2') # REMOVE THIS LATER, THIS IS JUST FOR FUN
 
     def finish_init(self, game_state, ship_state):
@@ -746,7 +774,6 @@ class Neo(KesslerController):
             #print(self.action_queue)
 
     def check_convenient_shots(self, ship_state, game_state):
-        return
         # Iterate over all asteroids including duplicated ones, and check whether we're perfectly in line to hit any
         feasible_to_hit = []
         for real_asteroid in game_state['asteroids']:
@@ -770,6 +797,7 @@ class Neo(KesslerController):
                 print("Shooting the convenient shot!")
                 self.enqueue_action(self.current_timestep, None, None, True)
                 self.track_asteroid_we_shot_at(game_state, math.ceil(most_direct_asteroid_shot_tuple[3] / delta_time), most_direct_asteroid_shot_tuple[0])
+                self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(game_state, ship_state, most_direct_asteroid_shot_tuple[0], math.ceil((most_direct_asteroid_shot_tuple[3]*bullet_speed - most_direct_asteroid_shot_tuple[0]['radius'])/bullet_speed/delta_time) + 1, ship_state['heading'] + math.degrees(shot_heading_error_rad)))
 
     def get_feasible_intercept_angle_and_turn_time(self, a, ship_state, game_state, timesteps_until_can_fire=0):
         # a could be a virtual asteroid, and we'll bounds check it for feasibility
@@ -919,6 +947,7 @@ class Neo(KesslerController):
                 self.enqueue_action(self.current_timestep, None, None, True)
                 #print(f"Time it takes to intercept asteroid with bullet: {most_direct_asteroid_shot_tuple[2]}")
                 self.track_asteroid_we_shot_at(game_state, math.ceil(most_direct_asteroid_shot_tuple[2]/delta_time), most_direct_asteroid_shot_tuple[0])
+                self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(game_state, ship_state, most_direct_asteroid_shot_tuple[0], math.ceil((most_direct_asteroid_shot_tuple[2]*bullet_speed - most_direct_asteroid_shot_tuple[0]['radius'])/bullet_speed/delta_time) + 1, ship_state['heading'] + min_abs_shooting_angle_error_deg))
                 # The way the game works is at this timestep, I can fire a bullet and begin turning toward my second target
                 # Aim at the second best target right now, since we're already shooting our best target and want something to do
                 if second_most_direct_asteroid_shot_tuple is not None:
@@ -970,8 +999,24 @@ class Neo(KesslerController):
         
         # Prune out the list of asteroids we shot at if the timestep (key) is in the past
         self.asteroids_pending_death = {timestep: asteroids for timestep, asteroids in self.asteroids_pending_death.items() if timestep > self.current_timestep}
-        # Execute the actions already in the queue for this timestep
 
+        # Maintain the list of projected split asteroids by advancing the position, decreasing the timestep, and facilitate removal
+        new_forecasted_asteroids = []
+        for forecasted_asteroid in self.forecasted_asteroid_splits:
+            if forecasted_asteroid['timesteps_until_appearance'] > 0:
+                new_a = {
+                    'position': (forecasted_asteroid['position'][0] + forecasted_asteroid['velocity'][0]*delta_time, forecasted_asteroid['position'][1] + forecasted_asteroid['velocity'][1]*delta_time),
+                    'velocity': forecasted_asteroid['velocity'],
+                    'size': forecasted_asteroid['size'],
+                    'timesteps_until_appearance': forecasted_asteroid['timesteps_until_appearance'] - 1,
+                }
+                new_forecasted_asteroids.append(new_a)
+        self.forecasted_asteroid_splits = new_forecasted_asteroids
+        # Execute the actions already in the queue for this timestep
+        print("Forecasted splits:")
+        print(self.forecasted_asteroid_splits)
+        print("Actual asteroids:")
+        print(game_state['asteroids'])
         # Initialize defaults. If a component of the action is missing, then the default value will be returned
         thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined = thrust_default, turn_rate_default, fire_default, drop_mine_default
 

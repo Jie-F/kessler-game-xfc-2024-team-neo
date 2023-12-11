@@ -32,12 +32,12 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
 width, height = (1920, 1080)
 #random.seed(22)
 asteroids_random = generate_asteroids(
-                                num_asteroids=800,
+                                num_asteroids=1,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
                                 speed_range=(1, 100),
                                 angle_range=(-180, 180),
-                                size_range=(1, 1)
+                                size_range=(1, 4)
                             )
 
 # Define game scenario
