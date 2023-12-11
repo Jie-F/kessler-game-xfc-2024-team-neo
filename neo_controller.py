@@ -16,10 +16,10 @@ import sys
 import time
 import os
 
-# TODO: Use better identity detection of asteroids. Currently if two asteroids have the same velocity, they're treated as the same, which isn't good. Position matters. If position and velocity are the same, still treat them as two asteroids instead of the same one.
-
 # TODO: Once we get hit, use the 3 seconds of invincibility and do a global search to find a spot on the map that we can stay for a long time, and then beeline it over there.
 # Bonus points if we can also do a search and find a good spot to lay a mine and lay the mine as well as get to the safe spot all within 3 seconds
+
+# TODO: Line of sight analysis, and use it to see which shots are feasible, before target selection/prioritization.
 
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
@@ -30,8 +30,8 @@ ship_drag = 80.0 # px/s^2
 ship_max_speed = 240.0 # px/s
 eps = 0.00000001
 ship_radius = 20.0 # px
-timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # 18 timesteps
-collision_check_pad = 2 # px
+timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # Should be 18 timesteps
+collision_check_pad = 3 # px
 asteroid_aim_buffer_pixels = 7 # px
 coordinate_bound_check_padding = 1 # px
 mine_blast_radius = 150 # px
@@ -92,16 +92,17 @@ def collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_ra
     rb = ast_radius
     # If both objects are stationary, then we only have to check the collision right now and not do any fancy math
     # This should speed up scenarios where most asteroids are stationary
-    if Dax == 0 and Day == 0 and Dbx == 0 and Dby == 0:
+    if math.isclose(Dax, 0, abs_tol=eps) and math.isclose(Day, 0, abs_tol=eps) and math.isclose(Dbx, 0, abs_tol=eps) and math.isclose(Dby, 0, abs_tol=eps) == 0:
         if check_collision(Oax, Oay, ra, Obx, Oby, rb):
             t1 = -math.inf
             t2 = math.inf
         else:
             t1 = math.nan
             t2 = math.nan
-    a = Dax**2 + Dbx**2 + Day**2 + Dby**2 - (2*Dax*Dbx) - (2*Day*Dby)
-    b = (2*Oax*Dax) - (2*Oax*Dbx) - (2*Obx*Dax) + (2*Obx*Dbx) + (2*Oay*Day) - (2*Oay*Dby) - (2*Oby*Day) + (2*Oby*Dby)
-    c = Oax**2 + Obx**2 + Oay**2 + Oby**2 - (2*Oax*Obx) - (2*Oay*Oby) - (ra + rb)**2
+        return t1, t2
+    a = Dax**2 + Dbx**2 + Day**2 + Dby**2 - 2*Dax*Dbx - 2*Day*Dby
+    b = 2*(Oax*Dax - Oax*Dbx - Obx*Dax + Obx*Dbx + Oay*Day - Oay*Dby - Oby*Day + Oby*Dby)
+    c = Oax**2 + Obx**2 + Oay**2 + Oby**2 - 2*(Oax*Obx + Oay*Oby) - (ra + rb)**2
     d = b**2 - 4*a*c
     if (a != 0) and (d >= 0):
         t1 = (-b + math.sqrt(d)) / (2*a)
@@ -374,11 +375,13 @@ class NeoShipSim():
         # Update the position based off the velocities
         self.position = [pos + vel*delta_time for pos, vel in zip(self.position, self.velocity)]
         # Wrap position
+        '''
         for idx, pos in enumerate(self.position):
             bound = self.game_state['map_size'][idx]
             offset = bound - pos
             if offset < 0 or offset > bound:
                 self.position[idx] += bound * np.sign(offset)
+        '''
         if self.future_timesteps > self.timesteps_to_not_check_collision_for:
             if self.get_instantaneous_asteroid_collision() or self.get_instantaneous_mine_collision():
                 return False
@@ -548,11 +551,11 @@ class Neo(KesslerController):
         # Check for danger
         max_search_iterations = 100
         min_search_iterations = 20
-        max_cruise_seconds = 1.2
+        max_cruise_seconds = 1
         dummy_ship_state = {'speed': 0, 'position': (0, 0), 'velocity': (0, 0), 'heading': 0}
         max_ship_range_test = NeoShipSim(game_state, dummy_ship_state, self.current_timestep)
         max_ship_range_test.accelerate(ship_max_speed)
-        max_ship_range_test.cruise(round(1/delta_time))
+        max_ship_range_test.cruise(round(max_cruise_seconds/delta_time))
         max_ship_range_test.accelerate(0)
         state_sequence = max_ship_range_test.get_state_sequence()
         ship_random_range = math.dist(state_sequence[0][1], state_sequence[-1][1])
@@ -656,6 +659,7 @@ class Neo(KesslerController):
             #print(self.action_queue)
 
     def check_convenient_shots(self, ship_state, game_state):
+        return
         # Iterate over all asteroids including duplicated ones, and check whether we're perfectly in line to hit any
         feasible_to_hit = []
         for real_asteroid in game_state['asteroids']:
@@ -912,7 +916,7 @@ class Neo(KesslerController):
         #print(self.asteroids_pending_death)
         mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(3/delta_time))
         print(mine_ast_count)
-        if mine_ast_count > 10 and len(game_state['mines']) == 0:
+        if mine_ast_count > 20:# and len(game_state['mines']) == 0:
             drop_mine_combined = True
         if len(game_state['mines']) > 0:
             print(game_state['mines'])
