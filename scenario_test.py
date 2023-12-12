@@ -30,14 +30,14 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-random.seed(3)
+random.seed(9)
 asteroids_random = generate_asteroids(
-                                num_asteroids=25,
+                                num_asteroids=10,
                                 position_range_x=(0, width),
                                 position_range_y=(0, height),
-                                speed_range=(1, 400),
+                                speed_range=(1, 350),
                                 angle_range=(-180, 180),
-                                size_range=(1, 4)
+                                size_range=(4, 4)
                             )
 
 # Define game scenario
@@ -51,7 +51,7 @@ my_test_scenario = Scenario(name='Test Scenario',
                             ],
                             map_size=(width, height),
                             #seed=2,
-                            time_limit=300,
+                            time_limit=45,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
 
@@ -292,7 +292,7 @@ for y_position in range(0, screen_height, vertical_spacing):
 shearing_pattern_scenario = Scenario(
     name="shearing_pattern_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": (500, 400), "lives": 50, "mines_remaining": 3}],
+    ship_states=[{"position": (500, 400), "lives": 3, "mines_remaining": 3}],
     seed=0
 )
 
@@ -314,7 +314,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+score, perf_data = game.run(scenario=shearing_pattern_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))

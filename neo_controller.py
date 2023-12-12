@@ -47,6 +47,8 @@ asteroid_radii_lookup = [8*size for size in range(5)] # asteroid.py
 asteroid_mass_lookup = [0.25*math.pi*(8*size)**2 for size in range(5)] # asteroid.py
 respawn_invincibility_time = 3 # s
 bullet_mass = 1
+ship_avoidance_padding = 25
+ship_avoidance_speed_padding_ratio = 1/100
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -357,7 +359,7 @@ def target_priority(game_state, ship_state, a, shooting_angle_error_deg, interce
 
     close_asteroid_threshold = 200
     # Special case for if we're in survival mode, no mine, no lives to spare, and we want to clear out small asteroids around us to make a bubble so we have more evasion options
-    if next_imminent_collision_time_stationary_s < 5 and ship_state['mines_remaining'] == 0 and close_proximity_asteroid_count > 6 and asteroid_dist_during_interception < close_asteroid_threshold:
+    if next_imminent_collision_time_stationary_s < 5 and ship_state['mines_remaining'] == 0 and (close_proximity_asteroid_count > 6 or len(game_state['asteroids']) > 50) and asteroid_dist_during_interception < close_asteroid_threshold:
         if a['size'] == 1:
             high_density_survival_score = -7
         elif a['size'] == 2:
@@ -368,7 +370,6 @@ def target_priority(game_state, ship_state, a, shooting_angle_error_deg, interce
             high_density_survival_score = 3
     else:
         high_density_survival_score = 0
-
     
     if a['size'] == 1:
         # If the asteroid is small, I prefer to shoot small asteroids close to me to make a safe personal bubble around me
@@ -465,7 +466,7 @@ def calculate_timesteps_until_bullet_hits_asteroid(time_until_asteroid_center_s,
 
 class NeoShipSim():
     # Simulates kessler_game.py and ship.py and other game mechanics
-    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], mines=[], timesteps_to_not_check_collision_for=0):
+    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], mines=[], other_ships=[], timesteps_to_not_check_collision_for=0):
         self.speed = ship_state['speed']
         self.position = ship_state['position']
         self.velocity = ship_state['velocity']
@@ -476,6 +477,7 @@ class NeoShipSim():
         self.state_sequence = [(self.initial_timestep, self.position, self.velocity, self.speed, self.heading)]
         self.asteroids = asteroids
         self.mines = mines
+        self.other_ships = other_ships
         self.game_state = game_state
         self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
 
@@ -485,12 +487,20 @@ class NeoShipSim():
                 return True
         return False
 
+    def get_instantaneous_ship_collision(self):
+        ship_avoidance_padding
+        for ship in self.other_ships:
+            # The faster the other ship is going, the bigger of a bubble around it I'm going to draw, since they can deviate from their path very quickly and run into me even though I thought I was in the clear
+            if check_collision(self.position[0], self.position[1], ship_radius, ship['position'][0] + self.future_timesteps*delta_time*ship['velocity'][0], ship['position'][1] + self.future_timesteps*delta_time*ship['velocity'][1], ship['radius'] + ship_avoidance_padding + math.sqrt(ship['velocity'][0]**2 + ship['velocity'][1]**2)*ship_avoidance_speed_padding_ratio):
+                return True
+        return False
+
     def get_instantaneous_mine_collision(self):
         # TODO: MIGHT HAVE OFF BY ONE ERROR WHERE THE MINE EXPLODES ONE FRAME BEFORE OR AFTER THE ONE I EXPECT, VALIDATE THE MINE EXPLOSION TIME LATER
         # TODO: MAKE SURE THE MINES HAVE WRAPPING LOGIC
         mine_collision = False
         for m in self.mines:
-            if math.isclose((self.future_timesteps)*delta_time, m['remaining_time'], abs_tol=delta_time*3): # Off by 1 error?
+            if math.isclose(self.future_timesteps*delta_time, m['remaining_time'], abs_tol=delta_time*3): # Off by 1 error?
                 if check_collision(self.position[0], self.position[1], ship_radius, m['position'][0], m['position'][1], mine_blast_radius):
                     mine_collision = True
         return mine_collision
@@ -535,18 +545,11 @@ class NeoShipSim():
         self.velocity = [math.cos(math.radians(self.heading))*self.speed, math.sin(math.radians(self.heading))*self.speed]
         # Update the position based off the velocities
         self.position = [pos + vel*delta_time for pos, vel in zip(self.position, self.velocity)]
-        # Wrap position
-        '''
-        for idx, pos in enumerate(self.position):
-            bound = self.game_state['map_size'][idx]
-            offset = bound - pos
-            if offset < 0 or offset > bound:
-                self.position[idx] += bound * np.sign(offset)
-        '''
+        # We don't wrap the position of the ship! We duplicate the asteroids around it, and collide with out of bounds asteroids to handle wrapping
         if self.get_instantaneous_mine_collision():
             return False
         if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
-            if self.get_instantaneous_asteroid_collision():
+            if self.get_instantaneous_asteroid_collision() or self.get_instantaneous_ship_collision():
                 return False
         self.move_sequence.append((self.initial_timestep + self.future_timesteps, thrust, turn_rate))
         self.state_sequence.append((self.initial_timestep + self.future_timesteps, self.position, self.velocity, self.speed, self.heading))
@@ -711,7 +714,7 @@ class Neo(KesslerController):
         heapq.heappush(self.action_queue, (timestep, first_nonnone_index, thrust, turn_rate, fire, drop_mine))
 
     def simulate_maneuver(self, ship_state, game_state, asteroids, safe_time_threshold, initial_turn_angle, accel_turn_rate, cruise_speed, cruise_turn_rate, cruise_timesteps, safe_timesteps=0):
-        sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, asteroids, game_state['mines'], safe_timesteps)
+        sim_ship = NeoShipSim(game_state, ship_state, self.current_timestep, asteroids, game_state['mines'], self.find_other_ship_positions(game_state), safe_timesteps)
         # This if statement is a doozy. Keep in mind that we evaluate the and clauses left to right, and the moment we find one that's false, we stop.
         # While evaluating, the simulation is advancing, and if it crashes, then it'll evaluate to false and stop the sim.
         if sim_ship.rotate_heading(initial_turn_angle) and sim_ship.accelerate(cruise_speed, accel_turn_rate) and sim_ship.cruise(cruise_timesteps, cruise_turn_rate) and sim_ship.accelerate(0):
@@ -736,7 +739,7 @@ class Neo(KesslerController):
         #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
         # Check for danger
-        max_search_iterations = 100
+        max_search_iterations = 80
         min_search_iterations = 20
         max_cruise_seconds = 1
         dummy_ship_state = {'speed': 0, 'position': (0, 0), 'velocity': (0, 0), 'heading': 0}
@@ -767,7 +770,7 @@ class Neo(KesslerController):
         #print(f"Next imminent collision is in {next_imminent_collision_time_stationary}s if we don't move")
         #print(f"Amount of asteroids before culling: {len(game_state['asteroids'])} and after culling, but including duplicates: {len(relevant_asteroids)}")
         
-        very_dangerous_time = 0.8
+        very_dangerous_time = 1.2
         moving_multiplies_safe_time_by_at_least = 1.5
         if next_imminent_collision_time_stationary > safe_time_threshold:
             # Nothing's gonna hit us for a long time
@@ -816,7 +819,7 @@ class Neo(KesslerController):
                 pass
             print(f"Did {search_iterations_count} search iterations to find a maneuver that buys us another {best_imminent_collision_time_found}s of life, and we're safe for {best_safe_time_after_maneuver}s after we come to a stop at coordinates {best_maneuver_state_sequence[-1][1][0]} {best_maneuver_state_sequence[-1][1][1]} at timestep {best_maneuver_state_sequence[-1][0]}")
             #end_state = sim_ship.get_state_sequence()[-1]
-            if best_safe_time_after_maneuver > next_imminent_collision_time_stationary or (best_safe_time_after_maneuver > very_dangerous_time and len(game_state['mines']) > 0) or (next_imminent_collision_time_stationary < very_dangerous_time and best_imminent_collision_time_found > next_imminent_collision_time_stationary):
+            if best_safe_time_after_maneuver > next_imminent_collision_time_stationary or (best_safe_time_after_maneuver > very_dangerous_time and len(game_state['mines']) > 0) or (next_imminent_collision_time_stationary < very_dangerous_time and best_imminent_collision_time_found > next_imminent_collision_time_stationary and best_safe_time_after_maneuver > 0):
                 # K yeah it's worth moving, this will keep us alive for at least as long as we'll live if we stay here
                 #print("K yeah it's worth moving")
                 #print(f"We're gonna end up at {end_state[1][0]}, {end_state[1][1]}")
@@ -843,7 +846,7 @@ class Neo(KesslerController):
             duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='half_surround')
             for a in duplicated_asteroids:
                 feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state)
-                if feasible:
+                if feasible and a['size'] == 1:
                     feasible_to_hit.append((a, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, asteroid_dist_during_interception))
         #print(feasible_to_hit)
         # Iterate through the feasible ones and figure out which one we're actually going to hit if we shoot
@@ -1013,8 +1016,8 @@ class Neo(KesslerController):
             #print(f"Our #1 target is angularlly away in degrees: {min_abs_shooting_angle_error_deg} and in num timesteps required for aiming: {most_direct_asteroid_shot_tuple[4]}")
             fired_on_this_timestep = False
             if abs(min_abs_shooting_angle_error_deg) < eps and ship_state['can_fire']:
-                print("Locked and loaded. We're firing on this timestep, and probably gonna move too")
-                print(most_direct_asteroid_shot_tuple[0])
+                print("Locked and loaded. We're firing on this timestep")
+                #print(most_direct_asteroid_shot_tuple[0])
                 #time.sleep(0.4)
                 fired_on_this_timestep = True
                 self.enqueue_action(self.current_timestep, None, None, True)
@@ -1124,7 +1127,7 @@ class Neo(KesslerController):
         average_asteroids_inside_blast_radius = average_asteroid_density*math.pi*mine_blast_radius**2
         mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(mine_fuse_time/delta_time))
         print(f"Mine count inside: {mine_ast_count} compared to average density amount inside: {average_asteroids_inside_blast_radius}")
-        if mine_ast_count > 3*average_asteroids_inside_blast_radius and len(game_state['mines']) == 0:
+        if (len(game_state['asteroids']) > 50 and mine_ast_count > 1.25*average_asteroids_inside_blast_radius or mine_ast_count > 20 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
             self.enqueue_action(self.current_timestep, None, None, None, True)
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
@@ -1145,12 +1148,13 @@ class Neo(KesslerController):
             pass
         if ship_state['is_respawning'] and not (self.last_respawn_invincible_timestep_range[0] <= self.current_timestep <= self.last_respawn_invincible_timestep_range[1]):
             print("OUCH WE LOST A LIFE!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(ship_state)
+            #print(ship_state)
             # Clear the move queue, since previous moves have been invalidated by us taking damage
             self.action_queue = []
             self.plan_respawn_maneuver_to_safety(ship_state, game_state)
         else:
-            print(ship_state)
+            pass
+            #print(ship_state)
         if not (self.last_respawn_maneuver_timestep_range[0] <= self.current_timestep <= self.last_respawn_maneuver_timestep_range[1]):
             # We're not in the process of doing our respawn maneuver
             # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
