@@ -162,7 +162,7 @@ game_settings = {'perf_tracker': True,
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
-for scene in alternate_scenarios:
+for scene in portfolio:
     # Evaluate the game
     pre = time.perf_counter()
     print(f"Running scenario: {scene.name}")
