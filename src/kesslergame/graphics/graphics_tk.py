@@ -53,7 +53,6 @@ class GraphicsTK(KesslerGraphics):
                             "images/playerShip2_orange.png",
                             "images/playerShip3_orange.png"]
         self.num_images = len(self.image_paths)
-        print(ship_radius)
         self.ship_images = [(Image.open(os.path.join(script_dir, image))).resize((ship_radius, ship_radius)) for image in self.image_paths]
         self.ship_sprites = [ImageTk.PhotoImage(img) for img in self.ship_images]
         self.ship_icons = [ImageTk.PhotoImage((Image.open(os.path.join(script_dir, image))).resize((ship_radius, ship_radius))) for image in self.image_paths]
