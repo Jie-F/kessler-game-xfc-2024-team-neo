@@ -30,30 +30,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
     return asteroids
 
 width, height = (1920, 1080)
-random.seed(9)
-asteroids_random = generate_asteroids(
-                                num_asteroids=10,
-                                position_range_x=(0, width),
-                                position_range_y=(0, height),
-                                speed_range=(1, 350),
-                                angle_range=(-180, 180),
-                                size_range=(4, 4)
-                            )
 
-# Define game scenario
-my_test_scenario = Scenario(name='Test Scenario',
-                            #num_asteroids=200,
-                            asteroid_states=asteroids_random,
-                            #asteroid_states=[{'position': (width*54//100, height*54//100), 'speed': 1000, 'angle': -180, 'size': 2}],
-                            ship_states=[
-                                {'position': (width//2, height//2), 'angle': 90, 'lives': 50, 'team': 1, "mines_remaining": 3},
-                                #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 20, 'team': 2, "mines_remaining": 3},
-                            ],
-                            map_size=(width, height),
-                            #seed=2,
-                            time_limit=45,
-                            ammo_limit_multiplier=0,
-                            stop_if_no_ammo=False)
 
 target_priority_optimization1 = Scenario(name='Target priority optimization 1',
                             asteroid_states=[{'position': (width*5//100, height*51//100), 'speed': 200, 'angle': 180, 'size': 1},
@@ -273,7 +250,7 @@ def calculate_speed_and_angle(y_position, base_speed, speed_increment, center_y)
 screen_width, screen_height = 1000, 800
 center_y = screen_height / 2
 base_speed = 0  # Base speed for asteroids closest to the center
-speed_increment = 20  # Additional speed for each row away from the center
+speed_increment = 18  # Additional speed for each row away from the center
 vertical_spacing = 180  # Vertical spacing between rows
 horizontal_spacing = 100  # Horizontal spacing within each row
 
@@ -313,13 +290,39 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
 # Evaluate the game
-pre = time.perf_counter()
-score, perf_data = game.run(scenario=shearing_pattern_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+for _ in range(100):
+    #random.seed(12)
+    asteroids_random = generate_asteroids(
+                                    num_asteroids=150,
+                                    position_range_x=(0, width),
+                                    position_range_y=(0, height),
+                                    speed_range=(1, 100),
+                                    angle_range=(-180, 180),
+                                    size_range=(2, 4)
+                                )
 
-# Print out some general info about the result
-print('Scenario eval time: '+str(time.perf_counter()-pre))
-print(score.stop_reason)
-print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
-print('Deaths: ' + str([team.deaths for team in score.teams]))
-print('Accuracy: ' + str([team.accuracy for team in score.teams]))
-print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
+    # Define game scenario
+    my_test_scenario = Scenario(name='Test Scenario',
+                                #num_asteroids=200,
+                                asteroid_states=asteroids_random,
+                                #asteroid_states=[{'position': (width*54//100, height*54//100), 'speed': 1000, 'angle': -180, 'size': 2}],
+                                ship_states=[
+                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 10, 'team': 1, "mines_remaining": 3},
+                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 20, 'team': 2, "mines_remaining": 3},
+                                ],
+                                map_size=(width, height),
+                                #seed=2,
+                                time_limit=500,
+                                ammo_limit_multiplier=0,
+                                stop_if_no_ammo=False)
+
+    pre = time.perf_counter()
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+
+    # Print out some general info about the result
+    print('Scenario eval time: '+str(time.perf_counter()-pre))
+    print(score.stop_reason)
+    print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
+    print('Deaths: ' + str([team.deaths for team in score.teams]))
+    print('Accuracy: ' + str([team.accuracy for team in score.teams]))
+    print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))

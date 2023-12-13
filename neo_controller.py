@@ -50,6 +50,19 @@ bullet_mass = 1
 ship_avoidance_padding = 25
 ship_avoidance_speed_padding_ratio = 1/100
 
+def log_tuple_to_file(tuple_of_numbers, file_path):
+    """
+    Logs a tuple of numbers to a text file, appending to the file.
+    Each tuple is logged on a new line, with its elements separated by commas.
+
+    :param tuple_of_numbers: Tuple containing numbers to be logged.
+    :param file_path: Path of the file to which the data will be logged.
+    """
+    with open(file_path, 'a') as file:
+        # Joining the tuple elements with commas and appending a newline
+        file.write(','.join(map(str, tuple_of_numbers)) + '\n')
+
+
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
     raw_diff = angle1 - angle2
@@ -786,7 +799,7 @@ class Neo(KesslerController):
             best_maneuver_state_sequence = []
             best_safe_time_after_maneuver = -math.inf
             search_iterations_count = 0
-            
+            best_maneuver_tuple = None
             while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
                 search_iterations_count += 1
                 if search_iterations_count % 10 == 0:
@@ -805,6 +818,7 @@ class Neo(KesslerController):
                     best_maneuver_move_sequence = move_sequence
                     best_maneuver_state_sequence = state_sequence
                     best_safe_time_after_maneuver = safe_time_after_maneuver
+                    best_maneuver_tuple = (random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, next_imminent_collision_time, safe_time_after_maneuver)
                 if safe_time_after_maneuver >= safe_time_threshold:
                     safe_maneuver_found = True
                     #print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
@@ -826,6 +840,9 @@ class Neo(KesslerController):
                 # Enqueue the safe maneuver
                 for move in best_maneuver_move_sequence:
                     self.enqueue_action(move[0], move[1], move[2])
+                # Record the maneuver for statistical analysis
+                if best_maneuver_tuple:
+                    log_tuple_to_file(best_maneuver_tuple, 'Safe Maneuvers.txt')
                 if not best_maneuver_move_sequence:
                     # Null action, just so I can take damage and the sim doesn't crash
                     #self.enqueue_action(self.current_timestep)
@@ -1127,7 +1144,7 @@ class Neo(KesslerController):
         average_asteroids_inside_blast_radius = average_asteroid_density*math.pi*mine_blast_radius**2
         mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, game_state['asteroids'], ship_state['position'][0], ship_state['position'][1], round(mine_fuse_time/delta_time))
         print(f"Mine count inside: {mine_ast_count} compared to average density amount inside: {average_asteroids_inside_blast_radius}")
-        if (len(game_state['asteroids']) > 50 and mine_ast_count > 1.25*average_asteroids_inside_blast_radius or mine_ast_count > 20 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
+        if (len(game_state['asteroids']) > 50 and mine_ast_count > 1.5*average_asteroids_inside_blast_radius or mine_ast_count > 25 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
             self.enqueue_action(self.current_timestep, None, None, None, True)
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
