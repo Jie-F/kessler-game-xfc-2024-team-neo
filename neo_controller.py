@@ -56,6 +56,22 @@ def debug_print(message):
     if debug_mode:
         print(message)
 
+def append_dict_to_file(dict_data, file_path):
+    """
+    This function takes a dictionary and appends it as a string in a JSON-like format to a text file.
+
+    :param dict_data: Dictionary to be converted to a string and appended.
+    :param file_path: Path of the text file to append the data to.
+    """
+    import json
+
+    # Convert the dictionary to a JSON-like string
+    dict_string = json.dumps(dict_data, indent=4)
+
+    # Append the string to the file
+    with open(file_path, 'a') as file:
+        file.write(dict_string + "\n")
+
 def log_tuple_to_file(tuple_of_numbers, file_path):
     """
     Logs a tuple of numbers to a text file, appending to the file.
@@ -517,7 +533,8 @@ def get_simulated_ship_max_range(max_cruise_seconds):
     max_ship_range_test.cruise(round(max_cruise_seconds/delta_time))
     max_ship_range_test.accelerate(0)
     state_sequence = max_ship_range_test.get_state_sequence()
-    ship_random_range = math.dist(state_sequence[0][1], state_sequence[-1][1])
+    #print(state_sequence[0])
+    ship_random_range = math.dist(state_sequence[0]['position'], state_sequence[-1]['position'])
     ship_random_max_maneuver_length = len(state_sequence)
     return ship_random_range, ship_random_max_maneuver_length
 
@@ -532,14 +549,14 @@ class Simulation():
         self.initial_timestep = initial_timestep
         self.future_timesteps = 0
         self.last_timestep_fired = last_timestep_fired
-        self.ship_move_sequence = []
-        self.ship_state_sequence = [(self.initial_timestep, self.position, self.velocity, self.speed, self.heading)]
         self.asteroids = copy.deepcopy(asteroids)
         self.mines = copy.deepcopy(mines)
         self.other_ships = copy.deepcopy(other_ships)
         self.bullets = copy.deepcopy(bullets)
         self.bullets_remaining = math.inf if ship_state['bullets_remaining'] == -1 else ship_state['bullets_remaining']
         self.game_state = game_state
+        self.ship_move_sequence = []
+        self.state_sequence = [{'timestep': self.initial_timestep, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': copy.deepcopy(self.asteroids), 'bullets': copy.deepcopy(self.bullets)}]
         self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
 
     def get_instantaneous_asteroid_collision(self):
@@ -726,8 +743,8 @@ class Simulation():
         # Update mine-asteroid collisions
         # TODO
 
-        self.ship_move_sequence.append((self.initial_timestep + self.future_timesteps, thrust, turn_rate, fire_this_timestep))
-        self.ship_state_sequence.append((self.initial_timestep + self.future_timesteps, self.position, self.velocity, self.speed, self.heading))
+        self.ship_move_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire_this_timestep})
+        self.state_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': self.asteroids, 'bullets': self.bullets})
 
         self.future_timesteps += 1
         return True
@@ -773,7 +790,7 @@ class Simulation():
         return self.ship_move_sequence
     
     def get_state_sequence(self):
-        return self.ship_state_sequence
+        return self.state_sequence
 
     def get_future_timesteps(self):
         return self.future_timesteps
@@ -974,7 +991,7 @@ class Neo(KesslerController):
                     best_maneuver_move_sequence = move_sequence
                     best_maneuver_state_sequence = state_sequence
                     best_safe_time_after_maneuver = safe_time_after_maneuver
-                    best_maneuver_tuple = (random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, next_imminent_collision_time, safe_time_after_maneuver)
+                    best_maneuver_tuple = (random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, next_imminent_collision_time, safe_time_after_maneuver, best_maneuver_move_sequence, best_maneuver_state_sequence)
                 if safe_time_after_maneuver >= safe_time_threshold:
                     safe_maneuver_found = True
                     #print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
@@ -987,7 +1004,8 @@ class Neo(KesslerController):
             if search_iterations_count == max_search_iterations:
                 #print("Hit the max iteration count")
                 pass
-            debug_print(f"Did {search_iterations_count} search iterations to find a maneuver that buys us another {best_imminent_collision_time_found}s of life, and we're safe for {best_safe_time_after_maneuver}s after we come to a stop at coordinates {best_maneuver_state_sequence[-1][1][0]} {best_maneuver_state_sequence[-1][1][1]} at timestep {best_maneuver_state_sequence[-1][0]}")
+            debug_print(f"Did {search_iterations_count} search iterations to find a maneuver that buys us another {best_imminent_collision_time_found}s of life, and we're safe for {best_safe_time_after_maneuver}s after we come to a stop at coordinates {best_maneuver_state_sequence[-1]['position'][0]} {best_maneuver_state_sequence[-1]['position'][1]} at timestep {best_maneuver_state_sequence[-1]['timestep']}")
+            
             #end_state = sim_ship.get_state_sequence()[-1]
             if best_safe_time_after_maneuver > next_imminent_collision_time_stationary or (best_safe_time_after_maneuver > very_dangerous_time and len(game_state['mines']) > 0) or (next_imminent_collision_time_stationary < very_dangerous_time and best_imminent_collision_time_found > next_imminent_collision_time_stationary and best_safe_time_after_maneuver > 0):
                 # K yeah it's worth moving, this will keep us alive for at least as long as we'll live if we stay here
@@ -995,10 +1013,18 @@ class Neo(KesslerController):
                 #print(f"We're gonna end up at {end_state[1][0]}, {end_state[1][1]}")
                 # Enqueue the safe maneuver
                 for move in best_maneuver_move_sequence:
-                    self.enqueue_action(move[0], move[1], move[2], move[3])
+                    self.enqueue_action(move['timestep'], move['thrust'], move['turn_rate'], move['fire'])
                 # Record the maneuver for statistical analysis
                 if best_maneuver_tuple:
-                    #log_tuple_to_file(best_maneuver_tuple, 'Safe Maneuvers.txt')
+                    #log_tuple_to_file(best_maneuver_tuple, 'Simulation State Dump.txt')
+                    move_seq = best_maneuver_tuple[7]
+                    state_seq = best_maneuver_tuple[8]
+                    state_dump_dict = {
+                        'timestep': self.current_timestep,
+                        'move_sequence': move_seq,
+                        'state_sequence': state_seq,
+                    }
+                    append_dict_to_file(state_dump_dict, 'Simulation State Dump.txt')
                     pass
                 if not best_maneuver_move_sequence:
                     # Null action, just so I can take damage and the sim doesn't crash
@@ -1427,7 +1453,13 @@ class Neo(KesslerController):
         
         #print(missing_elements(self.previous_asteroids_list, game_state['asteroids']))
         self.previous_asteroids_list = game_state['asteroids']
-        
+        state_dump_dict = {
+            'timestep': self.current_timestep,
+            'ship_state': ship_state,
+            'asteroids': game_state['asteroids'],
+            'bullets': game_state['bullets'],
+        }
+        append_dict_to_file(state_dump_dict, 'Reality State Dump.txt')
         #print(mine_ast_count)
         if len(game_state['mines']) > 0:
             pass

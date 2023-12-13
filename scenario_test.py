@@ -290,15 +290,15 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
 # Evaluate the game
-for _ in range(100):
+for _ in range(1):
     #random.seed(12)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=30,
+                                    num_asteroids=2,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(1, 300),
+                                    speed_range=(1, 500),
                                     angle_range=(-180, 180),
-                                    size_range=(2, 4)
+                                    size_range=(2, 2)
                                 )
 
     # Define game scenario
