@@ -293,7 +293,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(100):
     #random.seed(12)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=150,
+                                    num_asteroids=200,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(1, 100),
