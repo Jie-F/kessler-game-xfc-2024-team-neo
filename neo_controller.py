@@ -29,6 +29,8 @@ import copy
 # TODO: Simulate the dynamics of the bullet and asteroids, so we know whether the bullet will hit, and exactly which one it'll hit
 
 debug_mode = True
+reality_state_dump = False
+simulation_state_dump = False
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
 bullet_speed = 800.0 # px/s
@@ -541,7 +543,7 @@ def get_simulated_ship_max_range(max_cruise_seconds):
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
     def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], mines=[], other_ships=[], bullets=[], last_timestep_fired=-math.inf, timesteps_to_not_check_collision_for=0):
-        debug_print("INITIALIZING SIMULATION")
+        #debug_print("INITIALIZING SIMULATION")
         self.speed = ship_state['speed']
         self.position = ship_state['position']
         self.velocity = ship_state['velocity']
@@ -556,7 +558,7 @@ class Simulation():
         self.bullets_remaining = math.inf if ship_state['bullets_remaining'] == -1 else ship_state['bullets_remaining']
         self.game_state = game_state
         self.ship_move_sequence = []
-        self.state_sequence = [{'timestep': self.initial_timestep, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': copy.deepcopy(self.asteroids), 'bullets': copy.deepcopy(self.bullets)}]
+        self.state_sequence = [] #[{'timestep': self.initial_timestep, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': copy.deepcopy(self.asteroids), 'bullets': copy.deepcopy(self.bullets)}]
         self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
 
     def get_instantaneous_asteroid_collision(self):
@@ -609,7 +611,7 @@ class Simulation():
     def update(self, thrust=0, turn_rate=0):
         # This is a highly optimized simulation of what kessler_game.py does, and should match exactly its behavior
         # Being even one timestep off is the difference between life and death!!!
-
+        self.state_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': copy.deepcopy(self.asteroids), 'bullets': copy.deepcopy(self.bullets)})
         # The simulation starts by evaluating actions and dynamics of the current present timestep, and then steps into the future
         # The game state we're given is actually what we had at the end of the previous timestep
         # The game will take the previous state, and apply current actions and then update to get the result of this timestep
@@ -654,30 +656,9 @@ class Simulation():
                 a['position'] = (a['position'][0] + delta_time*a['velocity'][0], a['position'][1] + delta_time*a['velocity'][1])
         #print('after updating asteroids')
         #print(self.asteroids)
-        # Simulate ship dynamics
-        drag_amount = ship_drag*delta_time
-        if drag_amount > abs(self.speed):
-            self.speed = 0
-        else:
-            self.speed -= drag_amount*np.sign(self.speed)
-        # Bounds check the thrust
-        thrust = min(max(-ship_max_thrust, thrust), ship_max_thrust)
-        # Apply thrust
-        self.speed += thrust*delta_time
-        # Bounds check the speed
-        self.speed = min(max(-ship_max_speed, self.speed), ship_max_speed)
-        # Bounds check the turn rate
-        turn_rate = min(max(-ship_max_turn_rate, turn_rate), ship_max_turn_rate)
-        # Update the angle based on turning rate
-        self.heading += turn_rate*delta_time
-        # Keep the angle within (0, 360)
-        self.heading %= 360
-        # Use speed magnitude to get velocity vector
-        self.velocity = [math.cos(math.radians(self.heading))*self.speed, math.sin(math.radians(self.heading))*self.speed]
-        # Update the position based off the velocities
-        self.position = [pos + vel*delta_time for pos, vel in zip(self.position, self.velocity)]
-        # We don't wrap the position of the ship! We duplicate the asteroids around it, and collide with out of bounds asteroids to handle wrapping
 
+        
+        # Bullet firing happens before we turn the ship
         # Check whether we want to shoot a simulated bullet
         timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
         fire_this_timestep = False
@@ -709,6 +690,30 @@ class Simulation():
                                 'mass': bullet_mass,
                 }
                 self.bullets.append(new_bullet)
+
+        # Simulate ship dynamics
+        drag_amount = ship_drag*delta_time
+        if drag_amount > abs(self.speed):
+            self.speed = 0
+        else:
+            self.speed -= drag_amount*np.sign(self.speed)
+        # Bounds check the thrust
+        thrust = min(max(-ship_max_thrust, thrust), ship_max_thrust)
+        # Apply thrust
+        self.speed += thrust*delta_time
+        # Bounds check the speed
+        self.speed = min(max(-ship_max_speed, self.speed), ship_max_speed)
+        # Bounds check the turn rate
+        turn_rate = min(max(-ship_max_turn_rate, turn_rate), ship_max_turn_rate)
+        # Update the angle based on turning rate
+        self.heading += turn_rate*delta_time
+        # Keep the angle within (0, 360)
+        self.heading %= 360
+        # Use speed magnitude to get velocity vector
+        self.velocity = [math.cos(math.radians(self.heading))*self.speed, math.sin(math.radians(self.heading))*self.speed]
+        # Update the position based off the velocities
+        self.position = [pos + vel*delta_time for pos, vel in zip(self.position, self.velocity)]
+        # We don't wrap the position of the ship! We duplicate the asteroids around it, and collide with out of bounds asteroids to handle wrapping
 
         # Check asteroid-bullet collisions
         bullet_remove_idxs = []
@@ -744,8 +749,6 @@ class Simulation():
         # TODO
 
         self.ship_move_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire_this_timestep})
-        self.state_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'position': self.position, 'velocity': self.velocity, 'speed': self.speed, 'heading': self.heading, 'asteroids': self.asteroids, 'bullets': self.bullets})
-
         self.future_timesteps += 1
         return True
 
@@ -932,8 +935,8 @@ class Neo(KesslerController):
         #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
         # Check for danger
-        max_search_iterations = 50
-        min_search_iterations = 20
+        max_search_iterations = 10
+        min_search_iterations = 5
         max_cruise_seconds = 1
         ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
         next_imminent_collision_time_stationary = math.inf
@@ -1024,8 +1027,8 @@ class Neo(KesslerController):
                         'move_sequence': move_seq,
                         'state_sequence': state_seq,
                     }
-                    append_dict_to_file(state_dump_dict, 'Simulation State Dump.txt')
-                    pass
+                    if simulation_state_dump:
+                        append_dict_to_file(state_dump_dict, 'Simulation State Dump.txt')
                 if not best_maneuver_move_sequence:
                     # Null action, just so I can take damage and the sim doesn't crash
                     #self.enqueue_action(self.current_timestep)
@@ -1249,8 +1252,8 @@ class Neo(KesslerController):
         #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
         # Check for danger
-        max_search_iterations = 100
-        min_search_iterations = 20
+        max_search_iterations = 40
+        min_search_iterations = 10
         max_cruise_seconds = 1 + 26*delta_time
         #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
         #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
@@ -1303,12 +1306,12 @@ class Neo(KesslerController):
                     continue
         if search_iterations_count == max_search_iterations:
             debug_print("Hit the max iteration count")
-        debug_print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards. Moving to coordinates {best_maneuver_state_sequence[-1][1][0]} {best_maneuver_state_sequence[-1][1][1]} at timestep {best_maneuver_state_sequence[-1][0]}")
+        debug_print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards. Moving to coordinates {best_maneuver_state_sequence[-1]['position'][0]} {best_maneuver_state_sequence[-1]['position'][1]} at timestep {best_maneuver_state_sequence[-1]['timestep']}")
 
         # Enqueue the respawn maneuver
         #print(best_maneuver_move_sequence)
         for move in best_maneuver_move_sequence:
-            self.enqueue_action(move[0], move[1], move[2])
+            self.enqueue_action(move['timestep'], move['thrust'], move['turn_rate'])
         
         self.last_respawn_maneuver_timestep_range = (self.current_timestep, self.current_timestep + len(best_maneuver_move_sequence)) # TODO: CHECK FOR OFF BY ONE ERROR
         self.last_respawn_invincible_timestep_range = (self.current_timestep, self.current_timestep + 2 + round(respawn_invincibility_time/delta_time))
@@ -1459,7 +1462,8 @@ class Neo(KesslerController):
             'asteroids': game_state['asteroids'],
             'bullets': game_state['bullets'],
         }
-        append_dict_to_file(state_dump_dict, 'Reality State Dump.txt')
+        if reality_state_dump:
+            append_dict_to_file(state_dump_dict, 'Reality State Dump.txt')
         #print(mine_ast_count)
         if len(game_state['mines']) > 0:
             pass
