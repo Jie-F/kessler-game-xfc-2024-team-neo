@@ -295,10 +295,10 @@ for _ in range(1):
     print(f'Using seed {randseed}')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=50,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(1, 400),
+                                    speed_range=(1, 250),
                                     angle_range=(-180, 180),
                                     size_range=(3, 4)
                                 )
