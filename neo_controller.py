@@ -520,6 +520,7 @@ def get_simulated_ship_max_range(max_cruise_seconds):
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
     def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], mines=[], other_ships=[], bullets=[], last_timestep_fired=-math.inf, timesteps_to_not_check_collision_for=0):
+        print("INITIALIZING SIMULATION")
         self.speed = ship_state['speed']
         self.position = ship_state['position']
         self.velocity = ship_state['velocity']
@@ -569,9 +570,13 @@ class Simulation():
         next_imminent_collision_time = math.inf
         #print('Extrapolating stuff at rest in end')
         for a in self.asteroids:
-            next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(self.position[0] + self.timesteps_to_not_check_collision_for*delta_time*self.velocity[0], self.position[1] + self.timesteps_to_not_check_collision_for*delta_time*self.velocity[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+            if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
+                next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
+            else:
+                # The asteroids position was never updated, so we need to extrapolate it right now in one step
+                next_imminent_collision_time = min(predict_next_imminent_collision_time_with_asteroid(self.position[0] + self.future_timesteps*delta_time*self.velocity[0], self.position[1] + self.future_timesteps*delta_time*self.velocity[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius']), next_imminent_collision_time)
         for m in self.mines:
-            next_imminent_collision_time = min(predict_ship_mine_collision(self.position[0], self.position[1], self.velocity[0], self.velocity[1], m, self.future_timesteps), next_imminent_collision_time)
+            next_imminent_collision_time = min(predict_ship_mine_collision(self.position[0], self.position[1], self.velocity[0], self.velocity[1], m, 0), next_imminent_collision_time)
         return next_imminent_collision_time
 
     def update(self, thrust=0, turn_rate=0):
@@ -602,6 +607,8 @@ class Simulation():
             #b['tail'] = (b['tail'][0] + delta_time*b['velocity'][0], b['tail'][1] + delta_time*b['velocity'][1])
 
         # Update mines
+        if self.mines:
+            print(self.mines)
         for m in self.mines:
             m['fuse_time'] -= delta_time
             # If the timer is below eps, it'll detonate this timestep
@@ -646,8 +653,9 @@ class Simulation():
         if timesteps_until_can_fire == 0 and self.bullets_remaining > 0 and self.future_timesteps >= self.timesteps_to_not_check_collision_for:
             for a in self.asteroids:
                 feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(self.position[0], self.position[1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], self.heading, self.game_state)
-                if feasible:
+                if feasible and -shot_heading_tolerance_rad < shot_heading_error_rad < shot_heading_tolerance_rad:
                     fire_this_timestep = True
+                    break
         
         if fire_this_timestep:
             self.last_timestep_fired = self.initial_timestep + self.future_timesteps
@@ -659,8 +667,8 @@ class Simulation():
             bullet_x = self.position[0] + ship_radius*cos_heading
             bullet_y = self.position[1] + ship_radius*sin_heading
             self.tail = [self.position[0] - bullet_length*cos_heading, self.position[1] - bullet_length*sin_heading]
-            vx = self.speed*cos_heading
-            vy = self.speed*sin_heading
+            vx = bullet_speed*cos_heading
+            vy = bullet_speed*sin_heading
             new_bullet = {
                             'position': (bullet_x, bullet_y),
                             'velocity': (vx, vy),
@@ -695,6 +703,7 @@ class Simulation():
                 return False
 
         # Check mine-ship collisions
+        # Even if the player is invincible, we still need to check for these collisions since invincibility is only for asteroids and ship-ship collisions
         if self.get_instantaneous_mine_collision():
             return False
 
@@ -1320,7 +1329,8 @@ class Neo(KesslerController):
                 #print("We can chill at this spot for a bit. Entering targetting mode.")
                 self.plan_targetting(ship_state, game_state)
             if ship_state['mines_remaining'] > 0:
-                self.check_mine_opportunity(ship_state, game_state)
+                pass
+                #self.check_mine_opportunity(ship_state, game_state)
         
         #print("All asteroids")
         #print(game_state['asteroids'])
