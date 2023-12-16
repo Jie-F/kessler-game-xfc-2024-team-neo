@@ -293,14 +293,14 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 1000)
     print(f'Using seed {randseed}')
-    random.seed(randseed)
+    random.seed(2)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=400,
+                                    num_asteroids=1,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(1, 150),
                                     angle_range=(-180, 180),
-                                    size_range=(1, 2)
+                                    size_range=(2, 2)
                                 )
 
     # Define game scenario
@@ -315,11 +315,11 @@ for _ in range(1):
                                 map_size=(width, height),
                                 #seed=2,
                                 time_limit=500,
-                                ammo_limit_multiplier=0.00001,
+                                ammo_limit_multiplier=0,
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    score, perf_data = game.run(scenario=more_intense_closing_ring_scenario, controllers=[GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))

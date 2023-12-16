@@ -40,7 +40,7 @@ ship_drag = 80.0 # px/s^2
 ship_max_speed = 240.0 # px/s
 eps = 0.00000001
 ship_radius = 20.0 # px
-timesteps_until_terminal_velocity = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # Should be 18 timesteps
+timesteps_until_ship_achieves_max_speed = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # Should be 18 timesteps
 collision_check_pad = 3 # px
 asteroid_aim_buffer_pixels = 7 # px
 coordinate_bound_check_padding = 1 # px
@@ -666,6 +666,8 @@ class Simulation():
         self.initial_timestep = initial_timestep
         self.future_timesteps = 0
         self.last_timestep_fired = last_timestep_fired
+        print('Heres the asteroid list when coming in. Nothing should be forecasetd:')
+        print(asteroids)
         self.asteroids = copy.deepcopy(asteroids)
         self.mines = copy.deepcopy(mines)
         self.other_ships = copy.deepcopy(other_ships)
@@ -768,11 +770,13 @@ class Simulation():
         target_asteroids_list = []
         dummy_ship_state = {'position': self.position, 'heading': self.heading}
         timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
-        print(f"Simulation timestep {self.initial_timestep + self.future_timesteps}")
+        print(f"\nSimulation timestep {self.initial_timestep + self.future_timesteps}")
         print('asteroids')
         print(self.asteroids)
         print('Forecasetd splits')
         print(self.forecasted_asteroid_splits)
+        print('bullets')
+        print(self.bullets)
         # TODO: Unsure if we need forecasted, but I can see it being important
         for a_ind, a in enumerate(self.asteroids + self.forecasted_asteroid_splits):
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
@@ -820,9 +824,9 @@ class Simulation():
             timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
             for _ in range(timesteps_until_can_fire):
                 self.update()
-            self.update(0, 0, True)
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(most_imminent_asteroid_interception_time_s, most_imminent_asteroid['radius']), most_imminent_asteroid)
             self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(most_imminent_asteroid, calculate_timesteps_until_bullet_hits_asteroid(most_imminent_asteroid_interception_time_s, most_imminent_asteroid['radius']), self.heading))
+            self.update(0, 0, True)
         elif least_angular_distance_asteroid is not None:
             # Just target the asteroid with the smallest angular distance
             debug_print('Shooting at target with least angular distance')
@@ -835,9 +839,9 @@ class Simulation():
             timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
             for _ in range(timesteps_until_can_fire):
                 self.update()
-            self.update(0, 0, True)
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), least_angular_distance_asteroid)
             self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(least_angular_distance_asteroid, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), self.heading))
+            self.update(0, 0, True)
         else:
             # Nothing to shoot at!
             return
@@ -1134,8 +1138,9 @@ class Neo(KesslerController):
         best_stationary_targetting_move_sequence = []
         best_stationary_targetting_fitness = math.inf # The lower the better
         relevant_asteroids = []
-        for real_asteroid in (game_state['asteroids'] + self.forecasted_asteroid_splits):
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='surround', directional_culling=False)
+        for real_asteroid in (game_state['asteroids']):
+            # TODO: Add back duplication pattern half_surround
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='none', directional_culling=False)
             relevant_asteroids.extend(duplicated_asteroids)
         
         sim = Simulation(game_state, ship_state, self.current_timestep, relevant_asteroids, self.asteroids_pending_death, self.forecasted_asteroid_splits, game_state['mines'], self.find_other_ship_positions(game_state), game_state['bullets'], self.last_timestep_fired)
@@ -1144,6 +1149,10 @@ class Neo(KesslerController):
         #shot_at_asteroids = sim.get_shot_at_asteroids()
         self.asteroids_pending_death = sim.get_asteroids_pending_death()
         self.forecasted_asteroid_splits = sim.get_forecasted_asteroid_splits()
+        print('after sim, printing asteroids pending death:')
+        print(self.asteroids_pending_death)
+        print('also after sim, forecasted splits:')
+        print(self.forecasted_asteroid_splits)
         #for a in shot_at_asteroids:
         #    self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.current_timestep, game_state, a['future_hit_timesteps'], a)
         best_stationary_targetting_fitness = -100 #sim.get_fitness()
