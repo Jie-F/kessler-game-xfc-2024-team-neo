@@ -295,12 +295,12 @@ for _ in range(1):
     print(f'Using seed {randseed}')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=15,
+                                    num_asteroids=400,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(1, 250),
+                                    speed_range=(1, 150),
                                     angle_range=(-180, 180),
-                                    size_range=(3, 4)
+                                    size_range=(1, 2)
                                 )
 
     # Define game scenario
@@ -309,17 +309,17 @@ for _ in range(1):
                                 asteroid_states=asteroids_random,
                                 #asteroid_states=[{'position': (width*54//100, height*54//100), 'speed': 1000, 'angle': -180, 'size': 2}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 10, 'team': 1, "mines_remaining": 3},
+                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 10, 'team': 1, "mines_remaining": 0},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 20, 'team': 2, "mines_remaining": 3},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
                                 time_limit=500,
-                                ammo_limit_multiplier=0,
+                                ammo_limit_multiplier=0.00001,
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=more_intense_closing_ring_scenario, controllers=[GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))
