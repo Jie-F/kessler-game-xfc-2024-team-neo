@@ -295,13 +295,14 @@ for _ in range(1):
     print(f'Using seed {randseed}')
     random.seed(2)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=1,
+                                    num_asteroids=300,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(1, 150),
                                     angle_range=(-180, 180),
-                                    size_range=(2, 2)
-                                )
+                                    size_range=(2, 3)
+                                ) #Hi, Jie's family who is watching this right now...
+    # HI AIDAN
 
     # Define game scenario
     my_test_scenario = Scenario(name='Test Scenario',
