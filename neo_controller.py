@@ -772,10 +772,16 @@ class Simulation():
         most_imminent_asteroid_index = None
         most_imminent_asteroid_shooting_angle_error_deg = None
         most_imminent_asteroid_interception_time_s = None
+
+        least_angular_distance = math.inf
+        least_angular_distance_asteroid = None
         least_angular_distance_asteroid_shooting_angle_error_deg = None
         least_angular_distance_asteroid_interception_time_s = None
-        least_angular_distance_asteroid = None
-        least_angular_distance = math.inf
+        
+        second_least_angular_distance_asteroid = None
+        second_least_angular_distance_asteroid_shooting_angle_error_deg = None
+        second_least_angular_distance_asteroid_interception_time_s = None
+        
         target_asteroids_list = []
         dummy_ship_state = {'position': self.position, 'heading': self.heading}
         timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
@@ -812,7 +818,11 @@ class Simulation():
                     most_imminent_asteroid_index = a_ind
                     most_imminent_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
                     most_imminent_asteroid_interception_time_s = interception_time_s
-                if shooting_angle_error_deg < least_angular_distance:
+                if abs(shooting_angle_error_deg) < least_angular_distance:
+                    second_least_angular_distance_asteroid = least_angular_distance_asteroid
+                    second_least_angular_distance_asteroid_shooting_angle_error_deg = least_angular_distance_asteroid_shooting_angle_error_deg
+                    second_least_angular_distance_asteroid_interception_time_s = least_angular_distance_asteroid_interception_time_s
+
                     least_angular_distance_asteroid = copy.deepcopy(a)
                     least_angular_distance_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
                     least_angular_distance_asteroid_interception_time_s = interception_time_s
@@ -822,6 +832,44 @@ class Simulation():
         sorted_targets = sorted(target_asteroids_list, key=lambda a: a['shooting_angle_error_deg'])
         turn_angle_deg_until_can_fire = timesteps_until_can_fire*ship_max_turn_rate*delta_time # Can be up to 30
         #print(target_asteroids_list)
+        # if there’s an imminent shot coming toward me, I will aim at the asteroid that gets me CLOSEST to the direction of the imminent shot.
+        # So it only plans one shot at a time instead of a series of shots, and it’ll keep things simpler
+        locked_in = False
+        if abs(least_angular_distance_asteroid_shooting_angle_error_deg) < eps:
+            # We're aimed right at an asteroid. Shoot it, and begin aiming to the second target
+            locked_in = True
+        if most_imminent_asteroid is not None:
+            # Find the asteroid I can shoot at that gets me closest to the imminent shot, if I can't reach the imminent shot in time until I can shoot
+            # TODO: ACTUALLY IMPLEMENT THIS PROPERLY INSTEAD OF PLACEHOLDER
+            target_asteroid = least_angular_distance_asteroid
+            target_asteroid_shooting_angle_error_deg = least_angular_distance_asteroid_shooting_angle_error_deg
+            target_asteroid_interception_time_s = least_angular_distance_asteroid_interception_time_s
+        elif least_angular_distance_asteroid is not None:
+            if locked_in:
+                target_asteroid = second_least_angular_distance_asteroid
+                target_asteroid_shooting_angle_error_deg = second_least_angular_distance_asteroid_shooting_angle_error_deg
+                target_asteroid_interception_time_s = second_least_angular_distance_asteroid_interception_time_s
+            else:
+                target_asteroid = least_angular_distance_asteroid
+                target_asteroid_shooting_angle_error_deg = least_angular_distance_asteroid_shooting_angle_error_deg
+                target_asteroid_interception_time_s = least_angular_distance_asteroid_interception_time_s
+        else:
+            # Ain't nothing to shoot at
+            return
+
+        # Target
+        initial_future_timesteps_before_aiming = self.future_timesteps
+        self.rotate_heading(target_asteroid_shooting_angle_error_deg, locked_in)
+        timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
+        for _ in range(timesteps_until_can_fire):
+            self.update(0, 0, False)
+        
+        asteroid_advance_timesteps = self.future_timesteps - initial_future_timesteps_before_aiming
+        target_asteroid = extrapolate_asteroid_forward(target_asteroid, asteroid_advance_timesteps, False)
+        self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(target_asteroid_interception_time_s, target_asteroid['radius']), target_asteroid)
+        self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(target_asteroid, calculate_timesteps_until_bullet_hits_asteroid(target_asteroid_interception_time_s, target_asteroid['radius']), self.heading))
+        
+        '''
         if most_imminent_asteroid is not None:
             initial_future_timesteps_before_aiming = self.future_timesteps
             #raise NotImplementedError('DONT GO HERE')
@@ -868,12 +916,14 @@ class Simulation():
             #debug_print('Search for the initial timestep in there, and check why going into the future makes it suddenly appear again')
             #debug_print(self.asteroids_pending_death)
             #debug_print(check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, least_angular_distance_asteroid))
+            actually_hit_asteroid = 
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), least_angular_distance_asteroid)
             self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(least_angular_distance_asteroid, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), self.heading))
             self.update(0, 0, True)
         else:
             # Nothing to shoot at!
             return
+        '''
 
     def update(self, thrust=0, turn_rate=0, fire=None):
         # This is a highly optimized simulation of what kessler_game.py does, and should match exactly its behavior
@@ -907,8 +957,8 @@ class Simulation():
         self.bullets = [bullet for idx, bullet in enumerate(self.bullets) if idx not in bullet_remove_idxs]
 
         # Update mines
-        if self.mines:
-            debug_print(self.mines)
+        #if self.mines:
+        #    debug_print(self.mines)
         for m in self.mines:
             m['fuse_time'] -= delta_time
             # If the timer is below eps, it'll detonate this timestep
@@ -1028,14 +1078,15 @@ class Simulation():
         self.forecasted_asteroid_splits = maintain_forecasted_asteroids(self.forecasted_asteroid_splits)
         return True
 
-    def rotate_heading(self, heading_difference_deg):
+    def rotate_heading(self, heading_difference_deg, shoot_on_first_timestep=False):
         target_heading = (self.heading + heading_difference_deg)%360
         still_need_to_turn = heading_difference_deg
         while abs(still_need_to_turn) > ship_max_turn_rate*delta_time + eps:
-            if not self.update(0, ship_max_turn_rate*np.sign(heading_difference_deg), False):
+            if not self.update(0, ship_max_turn_rate*np.sign(heading_difference_deg), shoot_on_first_timestep):
                 return False
+            shoot_on_first_timestep = False
             still_need_to_turn -= ship_max_turn_rate*np.sign(heading_difference_deg)*delta_time
-        if not self.update(0, still_need_to_turn/delta_time, False):
+        if not self.update(0, still_need_to_turn/delta_time, shoot_on_first_timestep):
             return False
         assert(abs(target_heading - self.heading) < eps)
         return True
