@@ -29,8 +29,8 @@ import copy
 # TODO: Simulate the dynamics of the bullet and asteroids, so we know whether the bullet will hit, and exactly which one it'll hit
 
 debug_mode = True
-reality_state_dump = False
-simulation_state_dump = False
+reality_state_dump = True
+simulation_state_dump = True
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
 bullet_speed = 800.0 # px/s
@@ -252,6 +252,8 @@ def check_coordinate_bounds(game_state, x, y):
         return False
 
 def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_y, asteroid_vel_x, asteroid_vel_y, asteroid_r, ship_heading, game_state, future_shooting_timesteps=0):
+    # The interception time returned is the time in seconds from when the bullet is shot to when it hits the center of the asteroid
+
     # Use future shooting time to extrapolate asteroid location to the firing time
     asteroid_pos_x += asteroid_vel_x*future_shooting_timesteps*delta_time
     asteroid_pos_y += asteroid_vel_y*future_shooting_timesteps*delta_time
@@ -313,7 +315,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
         shot_heading_tolerance_rad = math.pi/4
     
     asteroid_dist_during_interception = math.sqrt((ship_pos_x - intercept_x)**2 + (ship_pos_y - intercept_y)**2)
-    return True, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s + future_shooting_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception
+    return True, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s + 0*future_shooting_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception
 
 def target_priority(game_state, ship_state, a, shooting_angle_error_deg, interception_time_s, asteroid_dist_during_interception, aiming_timesteps_required, intercept_x, intercept_y, imminent_collision_time_s, next_imminent_collision_time_stationary_s, close_proximity_asteroid_count):
     # TODO: Use a fuzzy system to optimize this using rules and stuff
@@ -627,12 +629,12 @@ def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timest
         return False, None, None, None, None, None, None
     return feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception
 
-def track_asteroid_we_shot_at(asteroids_pending_death, current_timestep, game_state, future_hit_timesteps, asteroid):
+def track_asteroid_we_shot_at(asteroids_pending_death, current_timestep, game_state, bullet_travel_timesteps, asteroid):
     asteroid = asteroid.copy()
-    future_hit_timesteps += 1 # TODO: Fudge? ahfsdufoisdfoij
+    bullet_travel_timesteps += 1 # TODO: Fudge? ahfsdufoisdfoij
     #print('track asteroid')
     # Project the asteroid into the future, to where it would be on the timestep of its death
-    for future_timesteps in range(0, future_hit_timesteps + 1):
+    for future_timesteps in range(0, bullet_travel_timesteps + 1):
         #print(asteroid)
         timestep = current_timestep + future_timesteps
         if timestep not in asteroids_pending_death:
@@ -642,6 +644,7 @@ def track_asteroid_we_shot_at(asteroids_pending_death, current_timestep, game_st
             asteroids_pending_death[timestep].append(asteroid.copy())
         # Advance the asteroid to the next position
         # TODO: Remove this redundant operation on the last iteration
+        # Also wrap the asteroid's position
         asteroid['position'] = ((asteroid['position'][0] + asteroid['velocity'][0]*delta_time)%game_state['map_size'][0], (asteroid['position'][1] + asteroid['velocity'][1]*delta_time)%game_state['map_size'][1])
     #print('done tracking asteroid')
     return asteroids_pending_death
@@ -672,8 +675,8 @@ class Simulation():
         self.initial_timestep = initial_timestep
         self.future_timesteps = 0
         self.last_timestep_fired = last_timestep_fired
-        print('Heres the asteroid list when coming in. Nothing should be forecasetd:')
-        print(asteroids)
+        #debug_print('Heres the asteroid list when coming in. Nothing should be forecasetd:')
+        #debug_print(asteroids)
         self.asteroids = copy.deepcopy(asteroids)
         self.mines = copy.deepcopy(mines)
         self.other_ships = copy.deepcopy(other_ships)
@@ -776,43 +779,43 @@ class Simulation():
         target_asteroids_list = []
         dummy_ship_state = {'position': self.position, 'heading': self.heading}
         timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
-        print(f"\nSimulation timestep {self.initial_timestep + self.future_timesteps}")
-        print('asteroids')
-        print(self.asteroids)
-        print('Forecasetd splits')
-        print(self.forecasted_asteroid_splits)
-        print('bullets')
-        print(self.bullets)
+        debug_print(f"\nSimulation starting from timestep {self.initial_timestep + self.future_timesteps}")
+        #debug_print('asteroids')
+        #debug_print(self.asteroids)
+        #debug_print('Forecasetd splits')
+        #debug_print(self.forecasted_asteroid_splits)
+        #debug_print('bullets')
+        #debug_print(self.bullets)
         # TODO: Unsure if we need forecasted, but I can see it being important
         for a_ind, a in enumerate(self.asteroids + self.forecasted_asteroid_splits):
-            if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
-                #print('Asteroid we havent shot at  with vel')
-                # Game state is used for coordinates. I'm assuming that my coordinates are within the main wrap, and not out of bounds! This should be the case, since we're stationary and won't meander out of bounds.
-                feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
-                if feasible:
-                    target_asteroids_list.append({
-                        'shooting_angle_error_deg': shooting_angle_error_deg,
-                        'aiming_timesteps_required': aiming_timesteps_required,
-                        'interception_time_s': interception_time_s,
-                        'intercept_x': intercept_x,
-                        'intercept_y': intercept_y,
-                        'asteroid_dist_during_interception': asteroid_dist_during_interception,
-                        'feasible': feasible,
-                        'a_ind': a_ind,
-                    })
-                    # If the shot isn't feasible, it probably won't hit us anyway, so we assume it's a feasible shot
-                    imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
-                    #print(f"Imm coll time: {imminent_collision_time_s}s")
-                    if imminent_collision_time_s < smallest_imminent_collision_time_s:
-                        smallest_imminent_collision_time_s = imminent_collision_time_s
-                        most_imminent_asteroid = a
-                        most_imminent_asteroid_index = a_ind
-                        most_imminent_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
-                        most_imminent_asteroid_interception_time_s = interception_time_s
-                    if shooting_angle_error_deg < least_angular_distance:
-                        least_angular_distance_asteroid = a
-                        least_angular_distance_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
-                        least_angular_distance_asteroid_interception_time_s = interception_time_s
+            
+            #debug_print('Asteroid we havent shot at  with vel')
+            # Game state is used for coordinates. I'm assuming that my coordinates are within the main wrap, and not out of bounds! This should be the case, since we're stationary and won't meander out of bounds.
+            feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
+            if feasible and check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
+                target_asteroids_list.append({
+                    'shooting_angle_error_deg': shooting_angle_error_deg,
+                    'aiming_timesteps_required': aiming_timesteps_required,
+                    'interception_time_s': interception_time_s,
+                    'intercept_x': intercept_x,
+                    'intercept_y': intercept_y,
+                    'asteroid_dist_during_interception': asteroid_dist_during_interception,
+                    'feasible': feasible,
+                    'a_ind': a_ind,
+                })
+                # If the shot isn't feasible, it probably won't hit us anyway, so we assume it's a feasible shot
+                imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
+                #print(f"Imm coll time: {imminent_collision_time_s}s")
+                if imminent_collision_time_s < smallest_imminent_collision_time_s:
+                    smallest_imminent_collision_time_s = imminent_collision_time_s
+                    most_imminent_asteroid = copy.deepcopy(a)
+                    most_imminent_asteroid_index = a_ind
+                    most_imminent_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
+                    most_imminent_asteroid_interception_time_s = interception_time_s
+                if shooting_angle_error_deg < least_angular_distance:
+                    least_angular_distance_asteroid = copy.deepcopy(a)
+                    least_angular_distance_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
+                    least_angular_distance_asteroid_interception_time_s = interception_time_s
         # Check whether we have enough time to aim at it and shoot it down
         # TODO: PROBLEM, what if the asteroid breaks into pieces and I need to shoot those down too? But I have plenty of time, and I still want the fitness function to be good in that case
         # TODO: Make a fake game state where the bounds are with respect to which wrap I'm in!
@@ -820,6 +823,8 @@ class Simulation():
         turn_angle_deg_until_can_fire = timesteps_until_can_fire*ship_max_turn_rate*delta_time # Can be up to 30
         #print(target_asteroids_list)
         if most_imminent_asteroid is not None:
+            initial_future_timesteps_before_aiming = self.future_timesteps
+            #raise NotImplementedError('DONT GO HERE')
             # Shoot at the asteroid that will hit us next if we stayed still
             debug_print('Shooting at most imminent target')
             if abs(most_imminent_asteroid_shooting_angle_error_deg) < turn_angle_deg_until_can_fire + eps:
@@ -830,18 +835,20 @@ class Simulation():
                 self.rotate_heading(most_imminent_asteroid_shooting_angle_error_deg)
             timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
             for _ in range(timesteps_until_can_fire):
-                self.update()
+                self.update(0, 0, False)
+
+            asteroid_advance_timesteps = self.future_timesteps - initial_future_timesteps_before_aiming
+            most_imminent_asteroid = extrapolate_asteroid_forward(most_imminent_asteroid, asteroid_advance_timesteps, False)
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(most_imminent_asteroid_interception_time_s, most_imminent_asteroid['radius']), most_imminent_asteroid)
             self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(most_imminent_asteroid, calculate_timesteps_until_bullet_hits_asteroid(most_imminent_asteroid_interception_time_s, most_imminent_asteroid['radius']), self.heading))
             self.update(0, 0, True)
-            #raise NotImplementedError('DONT GO HERE')
         elif least_angular_distance_asteroid is not None:
-            debug_print(check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, least_angular_distance_asteroid))
+            #debug_print(check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, least_angular_distance_asteroid))
             # Just target the asteroid with the smallest angular distance
             initial_future_timesteps_before_aiming = self.future_timesteps
             debug_print(f'Shooting at target with least angular distance, and currently were {self.future_timesteps} timesteps in the future from reference initial {self.initial_timestep}')
             if abs(least_angular_distance_asteroid_shooting_angle_error_deg) < turn_angle_deg_until_can_fire + eps:
-                # We can directly aim at the target without making a stop in between
+                # We can directly aim at the target without making a shooting stop in between
                 self.rotate_heading(least_angular_distance_asteroid_shooting_angle_error_deg)
             else:
                 # Search for targets to hit along the way
@@ -850,15 +857,17 @@ class Simulation():
             for _ in range(timesteps_until_can_fire):
                 self.update(0, 0, False)
             asteroid_advance_timesteps = self.future_timesteps - initial_future_timesteps_before_aiming
-            debug_print('above to have assertion fail for asteroid BEFORE EXTAPOLATION:')
-            debug_print(least_angular_distance_asteroid)
+            #debug_print('above to have assertion fail for asteroid BEFORE EXTAPOLATION:')
+            #debug_print(least_angular_distance_asteroid)
+            # Advance the asteroid we stored so it's synced up with the current timestep
+            print(f'advancing asteroid forward by {asteroid_advance_timesteps} timesteps')
             least_angular_distance_asteroid = extrapolate_asteroid_forward(least_angular_distance_asteroid, asteroid_advance_timesteps, False)
-            debug_print(f'Were currently {self.future_timesteps} timesteps in the future')
-            debug_print('above to have assertion fail for asteroid:')
-            debug_print(least_angular_distance_asteroid)
-            debug_print('Search for the initial timestep in there, and check why going into the future makes it suddenly appear again')
-            debug_print(self.asteroids_pending_death)
-            debug_print(check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, least_angular_distance_asteroid))
+            #debug_print(f'Were currently {self.future_timesteps} timesteps in the future from initial timestep {self.initial_timestep}')
+            #debug_print(f'above to have assertion fail for asteroid, which was advanced {asteroid_advance_timesteps} timesteps:')
+            #debug_print(least_angular_distance_asteroid)
+            #debug_print('Search for the initial timestep in there, and check why going into the future makes it suddenly appear again')
+            #debug_print(self.asteroids_pending_death)
+            #debug_print(check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, least_angular_distance_asteroid))
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), least_angular_distance_asteroid)
             self.forecasted_asteroid_splits.extend(forecast_asteroid_splits(least_angular_distance_asteroid, calculate_timesteps_until_bullet_hits_asteroid(least_angular_distance_asteroid_interception_time_s, least_angular_distance_asteroid['radius']), self.heading))
             self.update(0, 0, True)
@@ -927,6 +936,7 @@ class Simulation():
                     if feasible and -shot_heading_tolerance_rad < shot_heading_error_rad < shot_heading_tolerance_rad and check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
                         fire_this_timestep = True
                         self.asteroids_shot += 1
+                        raise Exception('SHOULDNT GO HERE WHILE STATIONARY TARGETTING')
                         self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(interception_time, a['radius']), a)
                         break
         else:
@@ -1160,19 +1170,20 @@ class Neo(KesslerController):
         relevant_asteroids = []
         for real_asteroid in (game_state['asteroids']):
             # TODO: Add back duplication pattern half_surround
-            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='none', directional_culling=False)
+            duplicated_asteroids = duplicate_asteroids_for_wraparound(real_asteroid, game_state['map_size'][0], game_state['map_size'][1], pattern='half_surround', directional_culling=False)
             relevant_asteroids.extend(duplicated_asteroids)
         
         sim = Simulation(game_state, ship_state, self.current_timestep, relevant_asteroids, self.asteroids_pending_death, self.forecasted_asteroid_splits, game_state['mines'], self.find_other_ship_positions(game_state), game_state['bullets'], self.last_timestep_fired)
         sim.target_most_imminent_asteroid()
         best_stationary_targetting_move_sequence = sim.get_move_sequence()
-        #shot_at_asteroids = sim.get_shot_at_asteroids()
         self.asteroids_pending_death = sim.get_asteroids_pending_death()
         self.forecasted_asteroid_splits = sim.get_forecasted_asteroid_splits()
-        print('after sim, printing asteroids pending death:')
-        print(self.asteroids_pending_death)
-        print('also after sim, forecasted splits:')
-        print(self.forecasted_asteroid_splits)
+        debug_print('After sim, printing asteroids pending death:')
+        debug_print(self.asteroids_pending_death)
+        #debug_print('also after sim, forecasted splits:')
+        #debug_print(self.forecasted_asteroid_splits)
+        if simulation_state_dump:
+            append_dict_to_file(sim.get_state_sequence(), 'Simulation State Dump.txt')
         #for a in shot_at_asteroids:
         #    self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.current_timestep, game_state, a['future_hit_timesteps'], a)
         best_stationary_targetting_fitness = -100 #sim.get_fitness()
@@ -1559,7 +1570,8 @@ class Neo(KesslerController):
         #time.sleep(0.2)
         #print(game_state, ship_state)
         #drop_mine_combined = random.random() < 0.01
-        #print(game_state)
+        debug_print(f"Asteroids on timestep {self.current_timestep}")
+        debug_print(game_state['asteroids'])
 
         def missing_elements(list1, list2):
             """
