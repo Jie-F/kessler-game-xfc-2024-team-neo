@@ -781,17 +781,14 @@ class Simulation():
             # Adjust the index to get the largest value below the threshold
             if idx > 0:
                 idx -= 1
-                # Check if the largest value below the threshold is negative
-                if shooting_angles[idx] < 25:
-                    return None
             else:
                 return None  # All values are greater than or equal to the threshold
         elif mode == 'smallest_above':
             # Find the index where threshold would be inserted
             idx = bisect.bisect_right(shooting_angles, threshold)
 
-            # Check if all values are smaller than the threshold or the smallest above is positive
-            if idx >= len(shooting_angles) or shooting_angles[idx] > -25:
+            # Check if all values are smaller than the threshold
+            if idx >= len(shooting_angles):
                 return None
         else:
             raise ValueError("Invalid mode. Choose 'largest_below' or 'smallest_above'.")
@@ -884,8 +881,15 @@ class Simulation():
                 print(f"Should be 30: {turn_angle_deg_until_can_fire}")
                 if most_imminent_asteroid_shooting_angle_error_deg > 0:
                     target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'largest_below')
+                    if target['shooting_angle_error_deg'] < 0 or target['shooting_angle_error_deg'] < turn_angle_deg_until_can_fire - 5:
+                        # We're underturning too much, so instead find the next overturn
+                        target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'smallest_above')
+
                 else:
                     target = self.find_extreme_shooting_angle_error(sorted_targets, -turn_angle_deg_until_can_fire, 'smallest_above')
+                    if target['shooting_angle_error_deg'] > 0 or target['shooting_angle_error_deg'] > -turn_angle_deg_until_can_fire + 5:
+                        # We're underturning too much, so instead find the next overturn
+                        target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'largest_below')
                 if target is not None:
                     debug_print('As our target were choosing this one which will be on our way:')
                     debug_print(target)
@@ -1652,7 +1656,7 @@ class Neo(KesslerController):
             """
             return [element for element in list1 if element not in list2 and 'timesteps_until_appearance' not in element]
         #if self.current_timestep > 180:
-            #time.sleep(0.3)
+        time.sleep(0.2)
         #print('Asteroids killed this timestep:')
         for a in self.previous_asteroids_list:
             a['position'] = (a['position'][0] + a['velocity'][0]*delta_time, a['position'][1] + a['velocity'][1]*delta_time)
