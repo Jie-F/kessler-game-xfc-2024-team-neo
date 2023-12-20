@@ -12,7 +12,7 @@ import numpy as np
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
-
+from xfc_2023_replica_scenarios import *
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
@@ -319,7 +319,7 @@ for _ in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=ex_adv_asteroids_down_up_pt2, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))

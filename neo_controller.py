@@ -30,7 +30,7 @@ import bisect
 # TODO: Simulate the dynamics of the bullet and asteroids, so we know whether the bullet will hit, and exactly which one it'll hit
 
 debug_mode = True
-reality_state_dump = True
+reality_state_dump = False
 simulation_state_dump = False
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
