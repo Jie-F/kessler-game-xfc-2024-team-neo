@@ -87,6 +87,8 @@ def log_tuple_to_file(tuple_of_numbers, file_path):
         # Joining the tuple elements with commas and appending a newline
         file.write(','.join(map(str, tuple_of_numbers)) + '\n')
 
+def ast_to_string(a):
+    return f"Pos: ({a['position'][0]:0.2f}, {a['position'][1]:0.2f}), Vel: ({a['velocity'][0]:0.2f}, {a['velocity'][1]:0.2f}), Size: {a['size']}"
 
 def angle_difference_rad(angle1, angle2):
     # Calculate the raw difference
@@ -827,7 +829,7 @@ class Simulation():
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
         # The LOWER the fitness score, the BETTER!
         move_sequence_length_s = self.get_sequence_length()*delta_time
-        safe_time_after_maneuver_s = self.get_next_extrapolated_collision_time()*delta_time
+        safe_time_after_maneuver_s = self.get_next_extrapolated_collision_time()
         asteroids_shot = self.asteroids_shot
 
         if asteroids_shot == 0:
@@ -842,17 +844,14 @@ class Simulation():
             displacement = math.dist(states[0]['position'], states[-1]['position'])
         else:
             displacement = 0
-        displacement_score = displacement/50
+        displacement_score = displacement/1000
 
-        #if safe_time_after_maneuver_s == 0:
-        #    safe_time_score = 10
-        #else:
         if displacement < eps:
             # Stationary
-            safe_time_score = max(0, 4 - 2*safe_time_after_maneuver_s)
+            safe_time_score = max(0, min(5, 5 - 5/3*safe_time_after_maneuver_s))
         else:
             # Maneuvering
-            safe_time_score = max(0, 4 - safe_time_after_maneuver_s)
+            safe_time_score = max(0, min(5, 5 - safe_time_after_maneuver_s))
 
         sequence_length_score = move_sequence_length_s/10
         debug_print(f"Safe time score: {safe_time_score}, asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}")
@@ -953,8 +952,9 @@ class Simulation():
                 imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'] + collision_check_pad)
                 
                 if shoot_at_wrapped_asteroid:
-                    #debug_print(f"Imminent coll time is {imminent_collision_time_s}s, asteroid position is ({a['position'][0]}, {a['position'][1]})")
-                    #print('a', a)
+                    debug_print(f"Imminent coll time is {imminent_collision_time_s}s, asteroid position is ({a['position'][0]}, {a['position'][1]})")
+                    print('a', a)
+                    print(self.position)
                     #print('wrapped a', wrapped_a)
                     pass
                 #print(f"Imm coll time: {imminent_collision_time_s}s")
@@ -990,6 +990,7 @@ class Simulation():
         if most_imminent_asteroid is not None:
             debug_print('YAYAYAYAYAYAYYAYAYAYAYAYYAYAYAYAAYAYAY SHOOOOTING AT IMMIEMNT ASDFOIASDJFOIJWETIJISOERJFIOSDJFIOSJFIODSJFIOSDJFIOSDJFIOJFDSIOIJO')
             debug_print(f"Shooting at most imminent asteroids. Most imminent collision time is {most_imminent_collision_time_s}s with turn angle error {most_imminent_asteroid_shooting_angle_error_deg}")
+            debug_print(most_imminent_asteroid)
             # Find the asteroid I can shoot at that gets me closest to the imminent shot, if I can't reach the imminent shot in time until I can shoot
             if abs(most_imminent_asteroid_shooting_angle_error_deg) <= turn_angle_deg_until_can_fire + eps:
                 # I can reach the imminent shot without wasting a shot opportunity, so do it
@@ -1000,17 +1001,26 @@ class Simulation():
                 # Between now and when I can shoot, I don't have enough time to aim at the imminent asteroid.
                 # Instead, find the closest asteroid along the way to shoot
                 sorted_targets = sorted(target_asteroids_list, key=lambda a: a['shooting_angle_error_deg'])
-                #debug_print(f"Should be 30: {turn_angle_deg_until_can_fire}")
+                print('Sorted targets:')
+                print(sorted_targets)
+                debug_print(f"Turn angle deg until we can fire (max 30 degrees): {turn_angle_deg_until_can_fire}")
                 if most_imminent_asteroid_shooting_angle_error_deg > 0:
+                    debug_print("The imminent shot requires us to turn the ship to the left")
                     target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'largest_below')
                     if target is None or target['shooting_angle_error_deg'] < 0 or target['shooting_angle_error_deg'] < turn_angle_deg_until_can_fire - 5:
                         # We're underturning too much, so instead find the next overturn
+                        debug_print("Underturning too much, so instead find the next overturn to the left")
                         target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'smallest_above')
                 else:
+                    debug_print("The imminent shot requires us to turn the ship to the right")
                     target = self.find_extreme_shooting_angle_error(sorted_targets, -turn_angle_deg_until_can_fire, 'smallest_above')
+                    print("Found the next target to the right:")
+                    print(target)
                     if target is None or target['shooting_angle_error_deg'] > 0 or target['shooting_angle_error_deg'] > -turn_angle_deg_until_can_fire + 5:
                         # We're underturning too much, so instead find the next overturn
-                        target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'largest_below')
+                        debug_print("Underturning too much, so instead find the next overturn to the right")
+                        target = self.find_extreme_shooting_angle_error(sorted_targets, -turn_angle_deg_until_can_fire, 'largest_below')
+                        print(target)
                 if target is not None:
                     #debug_print('As our target were choosing this one which will be on our way:')
                     #debug_print(target)
@@ -1050,6 +1060,7 @@ class Simulation():
         debug_print(f"Asteroid advanced timesteps: {asteroid_advance_timesteps}")
         
         target_asteroid = extrapolate_asteroid_forward(target_asteroid, asteroid_advance_timesteps, False)
+        debug_print(f"We're targetting asteroid {ast_to_string(target_asteroid)}")
         debug_print(f"Entering the bullet target sim, we're on timestep {self.initial_timestep + self.future_timesteps}")
         #debug_print(self.asteroids)
         actual_asteroid_hit, timesteps_until_bullet_hit_asteroid = self.bullet_target_sim()
@@ -1501,7 +1512,7 @@ class Neo(KesslerController):
         elif best_stationary_targetting_fitness > 3:
             max_search_iterations = 30
             min_search_iterations = 5
-        elif best_stationary_targetting_fitness > 2:
+        elif best_stationary_targetting_fitness > 1:
             max_search_iterations = 20
             min_search_iterations = 4
         else:

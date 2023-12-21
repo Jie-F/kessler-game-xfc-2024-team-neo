@@ -297,7 +297,7 @@ for _ in range(1):
     print(f'Using seed {randseed}')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=10,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(50, 350),
@@ -310,7 +310,7 @@ for _ in range(1):
                                 #num_asteroids=200,
                                 asteroid_states=asteroids_random,
                                 #asteroid_states=[{'position': (width//2, height*40//100), 'speed': 100, 'angle': -89, 'size': 4},
-                                #                 {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+                                #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
                                     {'position': (width//2, height//2), 'angle': 90, 'lives': 10, 'team': 1, "mines_remaining": 0},
@@ -323,8 +323,8 @@ for _ in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
-    #score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))
