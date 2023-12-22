@@ -297,12 +297,12 @@ for _ in range(1):
     print(f'Using seed {randseed}')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=15,
+                                    num_asteroids=100,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(50, 350),
+                                    speed_range=(0, 350),
                                     angle_range=(-180, 180),
-                                    size_range=(2, 4)
+                                    size_range=(1, 2)
                                 )
 
     # Define game scenario
@@ -313,8 +313,8 @@ for _ in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 10, 'team': 1, "mines_remaining": 0},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 20, 'team': 2, "mines_remaining": 3},
+                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -324,7 +324,7 @@ for _ in range(1):
 
     pre = time.perf_counter()
     #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=ex_adv_four_corners_pt1, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))

@@ -1071,7 +1071,7 @@ adv_multi_wall_bottom_hard_1 = Scenario(
     asteroid_states=asteroid_states,
     ship_states=[{'position': (width//4, height*9//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 3}],
     map_size=(width, height),
-    time_limit=30,
+    time_limit=300,
 )
 
 

@@ -26,7 +26,7 @@ class GamepadController(KesslerController):
         self.pause_handler()
 
         # deadzones (both left and right using same currently)
-        joystick_deadzone = 0.05
+        joystick_deadzone = 0.1
         trigger_deadzone = 0.05
 
         # Set thrust control
