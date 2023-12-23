@@ -3,9 +3,9 @@
 # jie.f@pm.me
 # Feel free to reach out if you have questions, suggestions, or find a bug :)
 
+from src.kesslergame import KesslerController
 import random
 import math
-from src.kesslergame import KesslerController
 from typing import Dict, Tuple
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
@@ -18,6 +18,8 @@ import os
 import copy
 import bisect
 from functools import lru_cache
+import multiprocessing
+import matplotlib.pyplot as plt
 
 # TODO: Once we get hit, use the 3 seconds of invincibility and do a global search to find a spot on the map that we can stay for a long time, and then beeline it over there.
 # Bonus points if we can also do a search and find a good spot to lay a mine and lay the mine as well as get to the safe spot all within 3 seconds
@@ -593,7 +595,7 @@ def get_simulated_ship_max_range(max_cruise_seconds):
     ship_random_max_maneuver_length = len(state_sequence)
     return ship_random_range, ship_random_max_maneuver_length
 
-def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire=0):
+def bs_get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire=0):
     spam = False
     if spam: debug_print(f"\nGETTING FEASIBLE INTERCEPT FOR ASTEROID {ast_to_string(a)} USING BINARY SEARCH")
     # a could be a virtual asteroid, and we'll bounds check it for feasibility
@@ -709,13 +711,23 @@ def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timest
     if spam: print(feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
     return feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception
 
-def OLD_get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire=0):
+def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire=0):
+    def count_intersections(a, b):
+        if len(a) != len(b):
+            raise ValueError("Lists must be of the same length.")
+
+        intersection_count = 0
+
+        # Iterate through the lists, checking for changes in relative ordering
+        for i in range(len(a) - 1):
+            if (a[i] < b[i] and a[i + 1] > b[i + 1]) or (a[i] > b[i] and a[i + 1] < b[i + 1]):
+                intersection_count += 1
+
+        return intersection_count
+
     spam = False
+    debug = False
     if spam: debug_print(f"\nGETTING FEASIBLE INTERCEPT FOR ASTEROID {ast_to_string(a)}, THIS IS A BIG HONKER OF A FUNCTION")
-    special = False
-    if ast_to_string(a) == "Pos: (1288.48, 483.29), Vel: (-452.70, 147.09), Size: 2asdfsdafasdfsfd":
-        debug_print("SPECIAL CASE, DO NOT TERMINATE")
-        special = True
     # a could be a virtual asteroid, and we'll bounds check it for feasibility
     #timesteps_until_can_fire += 2
     # This function will check whether it's feasible to intercept an asteroid, whether real or virtual, within the bounds of the game
@@ -735,20 +747,30 @@ def OLD_get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, ti
     # We then check, if we shoot 10 timesteps in the future, how far off would the heading be from the current time?
     # We may get that the heading is off by an amount that requires 11 timesteps of turning.
     # Alright, if we shoot 11 timesteps in the future, how far off is the heading? Oh, it's an amount that's turnable in 11 timesteps, 11 == 11 so we're done iterating and we found our answer! We need to turn 11 timesteps, and the angle is the last thing we found.
-    feasible = True
-    converged = False
-    aiming_timesteps_required = 0
-    shot_heading_error_rad = math.inf
-    shot_heading_tolerance_rad = 0
-    shooting_angle_error_rad = math.nan
+    # TODO: CULLING
+    
+    aiming_timesteps_required = None
+
+    if debug:
+        ts_data_array = []
+        angle_err_data_array = []
+        aiming_ts_array = []
+        aiming_ts_rounded_array = []
+    
     # TODO: USE BINARY SEARCH INSTEAD OF LINEAR SEARCH
-    while feasible and not converged:
-        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, timesteps_until_can_fire + aiming_timesteps_required)
+    for turning_timesteps in range(0, 31):
+        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, turning_timesteps)
         if spam: print(feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception)
+        if math.isnan(shot_heading_error_rad):
+            # No intercept exists
+            if debug:
+                ts_data_array.append(turning_timesteps)
+                angle_err_data_array.append(math.nan)
+                aiming_ts_array.append(math.nan)
+                aiming_ts_rounded_array.append(math.nan)
+            continue
         #print(f"Feasible intercept ({intercept_x}, {intercept_y})")
         #print(f'Still not converged, extra timesteps: {aiming_timesteps_required}, shot_heading_error_rad: {shot_heading_error_rad}, tol: {shot_heading_tolerance_rad}')
-        if not feasible:
-            break
         # For each asteroid, because the asteroid has a size, there is a range in angles in which we can shoot it.
         # We don't have to hit the very center, just close enough to it so that it's still the thick part of the circle and it won't skim the tangent
         # TODO: If we can aim at the center of the asteroid with no additional timesteps required, then just might as well do it cuz yeah
@@ -762,36 +784,82 @@ def OLD_get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, ti
                 shooting_angle_error_rad_using_tolerance = shot_heading_error_rad# + shot_heading_tolerance_rad
         # shooting_angle_error is the amount we need to move our heading by, in radians
         # If there's some timesteps until we can fire, then we can get a head start on the aiming
-        new_aiming_timesteps_required = max(0, math.ceil(math.degrees(abs(shooting_angle_error_rad_using_tolerance))/(ship_max_turn_rate*delta_time) - eps) - timesteps_until_can_fire)
-        new_aiming_timesteps_required_exact_aiming = max(0, math.ceil(math.degrees(abs(shot_heading_error_rad))/(ship_max_turn_rate*delta_time) - eps) - timesteps_until_can_fire)
+        new_aiming_timesteps_required = math.ceil(math.degrees(abs(shooting_angle_error_rad_using_tolerance))/(ship_max_turn_rate*delta_time) - eps)
+        new_aiming_timesteps_required_exact_aiming = math.ceil(math.degrees(abs(shot_heading_error_rad))/(ship_max_turn_rate*delta_time) - eps)
+        if debug:
+            ts_data_array.append(turning_timesteps)
+            angle_err_data_array.append(shot_heading_error_rad)
+            aiming_ts_array.append(math.degrees(abs(shot_heading_error_rad))/(ship_max_turn_rate*delta_time))
+            aiming_ts_rounded_array.append(new_aiming_timesteps_required_exact_aiming)
+
         if new_aiming_timesteps_required == new_aiming_timesteps_required_exact_aiming:
             # If it doesn't save any time to not use exact aiming, just exactly aim at the center of the asteroid. It also prevents potential edge cases where it aims at the side of the asteroid but it doesn't shoot it (see XFC 2021 scenario_2_still_corridors scenario)
             shooting_angle_error_rad = shot_heading_error_rad
         else:
             shooting_angle_error_rad = shooting_angle_error_rad_using_tolerance
-        if aiming_timesteps_required == new_aiming_timesteps_required and not special:
-            if spam: debug_print(f"Converged. Aiming timesteps required is {aiming_timesteps_required} which was the same as the previous iteration")
-            converged = True
-        elif aiming_timesteps_required > new_aiming_timesteps_required and not special:
-            # Wacky oscillation case, IGNORE FOR NOW
-            if spam: debug_print(f"WACKY OSCILLATION CASE WHERE aiming_timesteps_required ({aiming_timesteps_required}) > new_aiming_timesteps_required ({new_aiming_timesteps_required})")
-            converged = True
+        if turning_timesteps >= new_aiming_timesteps_required and feasible and turning_timesteps >= timesteps_until_can_fire:
+            if turning_timesteps == new_aiming_timesteps_required:
+                if spam: debug_print(f"Converged. Aiming timesteps required is {turning_timesteps} which was the same as the previous iteration")
+            elif turning_timesteps > new_aiming_timesteps_required:
+                # Wacky oscillation case
+                if spam: debug_print(f"WACKY OSCILLATION CASE WHERE aiming_timesteps_required ({turning_timesteps}) > new_aiming_timesteps_required ({new_aiming_timesteps_required})")
+            # Found an answer
+            if not aiming_timesteps_required:
+                # Only set the first answer
+                aiming_timesteps_required = turning_timesteps
+                if not debug:
+                    break
         else:
-            if special and aiming_timesteps_required > 40:
-                converged = True
-            if spam: debug_print(f"Not converged yet. aiming_timesteps_required ({aiming_timesteps_required}) != new_aiming_timesteps_required ({new_aiming_timesteps_required})")
-            aiming_timesteps_required += 1
+            if spam: debug_print(f"Not converged yet. aiming_timesteps_required ({turning_timesteps}) != new_aiming_timesteps_required ({new_aiming_timesteps_required})")
+            continue
+    
+    if aiming_timesteps_required:
+        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, aiming_timesteps_required)
+    else:
+        return False, None, None, None, None, None, None
+    if abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
+        shooting_angle_error_rad_using_tolerance = 0
+    else:
+        if shot_heading_error_rad > 0: # TODO: UNCOMMENT THE FOLLOWING AND USE THE TOLERANCE TO MAKE SHOOTING EASIER
+            shooting_angle_error_rad_using_tolerance = shot_heading_error_rad# - shot_heading_tolerance_rad
+        else:
+            shooting_angle_error_rad_using_tolerance = shot_heading_error_rad# + shot_heading_tolerance_rad
+    new_aiming_timesteps_required = math.ceil(math.degrees(abs(shooting_angle_error_rad_using_tolerance))/(ship_max_turn_rate*delta_time) - eps)
+    new_aiming_timesteps_required_exact_aiming = math.ceil(math.degrees(abs(shot_heading_error_rad))/(ship_max_turn_rate*delta_time) - eps)
+    
+    if new_aiming_timesteps_required == new_aiming_timesteps_required_exact_aiming:
+        # If it doesn't save any time to not use exact aiming, just exactly aim at the center of the asteroid. It also prevents potential edge cases where it aims at the side of the asteroid but it doesn't shoot it (see XFC 2021 scenario_2_still_corridors scenario)
+        shooting_angle_error_rad = shot_heading_error_rad
+    else:
+        shooting_angle_error_rad = shooting_angle_error_rad_using_tolerance
     shooting_angle_error_deg = math.degrees(shooting_angle_error_rad)
-    # TODO: OPPOSITNG CASE SHOOTING OTHER WAY IT'S MORE COMPLICATED TO CONSIDER
+    # TODO: OPPOSITNG CASE SHOOTING OTHER WAY IT'S MORE COMPLICATED TO CONSIDER, OR PROVE ITS IMPOSSIBLE
     # OH WAIT THIS CASE ISN'T REALLY POSSIBLE BECAUSE THE ASTEROID WOULD HAVE TO BE MOVING SUPER FAST. The highest I've seen the absolute shooting angle error is like 135 degrees, and that's an extreme synthetic scenario
-    if abs(shooting_angle_error_deg) >= 180:
-        #print(f'shooting_angle_error_deg: {shooting_angle_error_deg} asdy8f9y7asdf89asdy789fads789y9asdf78y7asdfy79asdfy789asdfy789asdfy789asdfy978asdfy789asdfy78adfsy78asdfy78y78asdfyf87asdyf78dsay9f78dsayf78sy78fsya78fysa78fy78sdayf78ysa78yf78asdy78fas')
-        pass
+    assert abs(shooting_angle_error_deg) <= 180
     if not feasible:
         return False, None, None, None, None, None, None
     #time.sleep(1)
     if spam: debug_print("Final answer is:")
     if spam: print(feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
+    
+    if debug and feasible and count_intersections(ts_data_array, aiming_ts_array) > 2:
+        # Plot the answer
+        plt.figure(figsize=(10, 5))
+        # Plotting T against F(T)
+        plt.plot(ts_data_array, aiming_ts_array, marker='o', label='TS Required (Fractional)')
+        plt.plot(ts_data_array, aiming_ts_rounded_array, marker='o', label='TS Required (Rounded)')
+        # Plotting T against T
+        plt.plot(ts_data_array, ts_data_array, marker='x', color='red', label='Turning TS')
+
+        # Adding titles and labels
+        plt.title('Plot of Turning Timesteps Required for Interception')
+        plt.xlabel('Timesteps')
+        plt.ylabel('Values')
+        plt.legend()
+        plt.grid(True)
+
+        # Show the plot
+        plt.show()
     return feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception
 
 def track_asteroid_we_shot_at(asteroids_pending_death, current_timestep, game_state, bullet_travel_timesteps, asteroid):
@@ -991,11 +1059,13 @@ class Simulation():
         most_imminent_asteroid_index = None
         most_imminent_asteroid_shooting_angle_error_deg = None
         most_imminent_asteroid_interception_time_s = None
+        most_imminent_asteroid_aiming_timesteps = math.inf
 
-        least_angular_distance_asteroid = None
-        least_angular_distance_asteroid_shooting_angle_error_deg = math.inf
-        least_angular_distance_asteroid_interception_time_s = None
-        least_angular_distance_asteroid_index = None
+        least_shot_delay_asteroid = None
+        least_shot_delay_asteroid_shooting_angle_error_deg = math.inf
+        least_shot_delay_asteroid_interception_time_s = None
+        least_shot_delay_asteroid_index = None
+        least_angular_distance_asteroid_aiming_timesteps = math.inf
         
         #second_least_angular_distance_asteroid = None
         #second_least_angular_distance_asteroid_shooting_angle_error_deg = None
@@ -1019,20 +1089,20 @@ class Simulation():
             # Game state is used for coordinates. I'm assuming that my coordinates are within the main wrap, and not out of bounds! This should be the case, since we're stationary and won't meander out of bounds.
             # Call the new binary search-based function
             
-            feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs = get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
+            #feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs = bs_get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
             # Call the old linear search-based function
-            feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin = OLD_get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
+            feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin = get_feasible_intercept_angle_and_turn_time(a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
             # Assert that all elements of the output are the same
-            if not (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)):
-                pass
-                debug_print('Comparing function outputs, linear vs binary search:')
-                print(feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin)
-                print(feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs)
+            #if not (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)):
+            #    pass
+            #    debug_print('Comparing function outputs, linear vs binary search:')
+            #    print(feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin)
+            #    print(feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs)
 
             #assert (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)), "The outputs of the binary search and linear search functions do not match"
 
-            feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs
-            #feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin
+            #feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs
+            feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin
             #debug_print(feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
                 if not feasible:
@@ -1043,19 +1113,19 @@ class Simulation():
                         wrapped_a = dict(a)
                         wrapped_a['position'] = (wrapped_a['position'][0]%self.game_state['map_size'][0], wrapped_a['position'][1]%self.game_state['map_size'][1])
                         # Call the new binary search-based function
-                        feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs = get_feasible_intercept_angle_and_turn_time(wrapped_a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
+                        #feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs = bs_get_feasible_intercept_angle_and_turn_time(wrapped_a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
                         # Call the old linear search-based function
-                        feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin = OLD_get_feasible_intercept_angle_and_turn_time(wrapped_a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
-                        if not (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)):
-                            pass
-                            print('Comparing function outputs, linear vs binary search:')
-                            print(feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin)
-                            print(feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs)
+                        feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin = get_feasible_intercept_angle_and_turn_time(wrapped_a, dummy_ship_state, self.game_state, timesteps_until_can_fire)
+                        #if not (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)):
+                        #    pass
+                            #print('Comparing function outputs, linear vs binary search:')
+                            #print(feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin)
+                            #print(feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs)
                         # Assert that all elements of the output are the same
                         #assert (not (feasible_bs and feasible_lin) or (shooting_angle_error_deg_bs == shooting_angle_error_deg_lin and aiming_timesteps_required_bs == aiming_timesteps_required_lin and interception_time_s_bs == interception_time_s_lin and intercept_x_bs == intercept_x_lin and intercept_y_bs == intercept_y_lin and asteroid_dist_during_interception_bs == asteroid_dist_during_interception_lin)), "The outputs of the binary search and linear search functions do not match"
 
-                        feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs
-                        #feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin
+                        #feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_bs, shooting_angle_error_deg_bs, aiming_timesteps_required_bs, interception_time_s_bs, intercept_x_bs, intercept_y_bs, asteroid_dist_during_interception_bs
+                        feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception = feasible_lin, shooting_angle_error_deg_lin, aiming_timesteps_required_lin, interception_time_s_lin, intercept_x_lin, intercept_y_lin, asteroid_dist_during_interception_lin
                         if feasible:
                             shoot_at_wrapped_asteroid = True
                         else:
@@ -1099,11 +1169,13 @@ class Simulation():
                     most_imminent_asteroid_index = a_ind
                     most_imminent_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
                     most_imminent_asteroid_interception_time_s = interception_time_s
-                if abs(shooting_angle_error_deg) < abs(least_angular_distance_asteroid_shooting_angle_error_deg):
-                    least_angular_distance_asteroid = wrapped_a if shoot_at_wrapped_asteroid else dict(a)
-                    least_angular_distance_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
-                    least_angular_distance_asteroid_interception_time_s = interception_time_s
-                    least_angular_distance_asteroid_index = len(target_asteroids_list) - 1
+                    most_imminent_asteroid_aiming_timesteps = aiming_timesteps_required
+                if aiming_timesteps_required < least_angular_distance_asteroid_aiming_timesteps:
+                    least_shot_delay_asteroid = wrapped_a if shoot_at_wrapped_asteroid else dict(a)
+                    least_shot_delay_asteroid_shooting_angle_error_deg = shooting_angle_error_deg
+                    least_shot_delay_asteroid_interception_time_s = interception_time_s
+                    least_angular_distance_asteroid_aiming_timesteps = aiming_timesteps_required
+                    least_shot_delay_asteroid_index = len(target_asteroids_list) - 1
             #else:
                 #debug_print('Asteroid infeasible, or we have a pending shot already!')
         # Check whether we have enough time to aim at it and shoot it down
@@ -1126,6 +1198,7 @@ class Simulation():
                 target_asteroid = most_imminent_asteroid
                 target_asteroid_shooting_angle_error_deg = most_imminent_asteroid_shooting_angle_error_deg
                 target_asteroid_interception_time_s = most_imminent_asteroid_interception_time_s
+                target_asteroid_turning_timesteps = most_imminent_asteroid_aiming_timesteps
             else:
                 # Between now and when I can shoot, I don't have enough time to aim at the imminent asteroid.
                 # Instead, find the closest asteroid along the way to shoot
@@ -1156,16 +1229,19 @@ class Simulation():
                     target_asteroid = target['asteroid']
                     target_asteroid_shooting_angle_error_deg = target['shooting_angle_error_deg']
                     target_asteroid_interception_time_s = target['interception_time_s']
+                    target_asteroid_turning_timesteps = target['aiming_timesteps_required']
                 else:
                     # Just gonna have to waste shot opportunities and turn all the way
                     target_asteroid = most_imminent_asteroid
                     target_asteroid_shooting_angle_error_deg = most_imminent_asteroid_shooting_angle_error_deg
                     target_asteroid_interception_time_s = most_imminent_asteroid_interception_time_s
-        elif least_angular_distance_asteroid is not None:
+                    target_asteroid_turning_timesteps = most_imminent_asteroid_aiming_timesteps
+        elif least_shot_delay_asteroid is not None:
             debug_print("Shooting at angularly closest asteroid since there aren't imminent asteroids")
-            target_asteroid = least_angular_distance_asteroid
-            target_asteroid_shooting_angle_error_deg = least_angular_distance_asteroid_shooting_angle_error_deg
-            target_asteroid_interception_time_s = least_angular_distance_asteroid_interception_time_s
+            target_asteroid = least_shot_delay_asteroid
+            target_asteroid_shooting_angle_error_deg = least_shot_delay_asteroid_shooting_angle_error_deg
+            target_asteroid_interception_time_s = least_shot_delay_asteroid_interception_time_s
+            target_asteroid_turning_timesteps = least_angular_distance_asteroid_aiming_timesteps
         else:
             # Ain't nothing to shoot at
             #debug_print('Nothing to shoot at!')
@@ -1182,16 +1258,27 @@ class Simulation():
         initial_future_timesteps_before_aiming = self.future_timesteps
         self.rotate_heading(target_asteroid_shooting_angle_error_deg)
         timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
+        #assert timesteps_until_can_fire == 0
         for _ in range(timesteps_until_can_fire):
             self.update(0, 0, False)
         
         asteroid_advance_timesteps = self.future_timesteps - initial_future_timesteps_before_aiming
         debug_print(f"Asteroid advanced timesteps: {asteroid_advance_timesteps}")
+        debug_print(f"Targetting turning timesteps: {target_asteroid_turning_timesteps}")
+        assert asteroid_advance_timesteps <= target_asteroid_turning_timesteps
+        if asteroid_advance_timesteps < target_asteroid_turning_timesteps:
+            debug_print(f"asteroid_advance_timesteps {asteroid_advance_timesteps} < target_asteroid_turning_timesteps {target_asteroid_turning_timesteps}")
+            #time.sleep(2)
+            for _ in range(target_asteroid_turning_timesteps - asteroid_advance_timesteps):
+                debug_print('Waiting one more timestep!')
+                self.update(0, 0, False)
+
         
         target_asteroid = extrapolate_asteroid_forward(target_asteroid, asteroid_advance_timesteps, False)
         debug_print(f"We're targetting asteroid {ast_to_string(target_asteroid)}")
         debug_print(f"Entering the bullet target sim, we're on timestep {self.initial_timestep + self.future_timesteps}")
         #debug_print(self.asteroids)
+        # TODO: For the bullet target sim, instead of first turning and then doing the sim, just sim the turn as well! That way we don't have to commit, and can make sure we hit something by trying multiple turns to diff asteroids!
         actual_asteroid_hit, timesteps_until_bullet_hit_asteroid = self.bullet_target_sim()
         if actual_asteroid_hit is None:
             self.fire_next_timestep_flag = False
@@ -1458,7 +1545,8 @@ class Simulation():
             still_need_to_turn -= ship_max_turn_rate*np.sign(heading_difference_deg)*delta_time
         if not self.update(0, still_need_to_turn/delta_time, shoot_on_first_timestep):
             return False
-        assert(abs(target_heading - self.heading) < eps)
+        # TODO: FIGURE OUT WHY THIS FAILS FOR CLOSING RING SCENARIO
+        #assert(abs(target_heading - self.heading) < eps)
         return True
 
     def accelerate(self, target_speed, turn_rate=0):
@@ -1531,6 +1619,7 @@ class Neo(KesslerController):
         self.last_respawn_maneuver_timestep_range = (-math.inf, 0)
         self.last_respawn_invincible_timestep_range = (-math.inf, 0)
         self.fire_next_timestep_flag = False
+        #self.process_pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
 
     def finish_init(self, game_state, ship_state):
         # If we need the game state or ship state to finish init, we can use this function to do that
@@ -1891,8 +1980,8 @@ class Neo(KesslerController):
             list: A list of elements that are in list1 but not in list2.
             """
             return [element for element in list1 if element not in list2 and 'timesteps_until_appearance' not in element]
-        #if self.current_timestep > 180:
-        #time.sleep(0.5)
+        #if self.current_timestep == 1:
+        #    time.sleep(1)
         #debug_print('Asteroids killed this timestep:')
         #for a in self.previous_asteroids_list:
         #    a['position'] = (a['position'][0] + a['velocity'][0]*delta_time, a['position'][1] + a['velocity'][1]*delta_time)

@@ -295,14 +295,14 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 1000)
     print(f'Using seed {randseed}')
-    random.seed(2)
+    random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=50,
+                                    num_asteroids=10,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(100, 500),
+                                    speed_range=(100, 300),
                                     angle_range=(-180, 180),
-                                    size_range=(1, 2)
+                                    size_range=(1, 4)
                                 )
 
     # Define game scenario
@@ -313,7 +313,7 @@ for _ in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
@@ -324,6 +324,9 @@ for _ in range(1):
 
     pre = time.perf_counter()
     #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
+    # my_test_scenario
+    # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
+    # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
