@@ -295,14 +295,14 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 1000)
     print(f'Using seed {randseed}')
-    random.seed(randseed)
+    random.seed(3)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=10,
+                                    num_asteroids=100,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(100, 300),
+                                    speed_range=(0, 300),
                                     angle_range=(-180, 180),
-                                    size_range=(1, 4)
+                                    size_range=(1, 2)
                                 )
 
     # Define game scenario

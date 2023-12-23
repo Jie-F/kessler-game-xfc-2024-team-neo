@@ -20,6 +20,7 @@ import bisect
 from functools import lru_cache
 import multiprocessing
 import matplotlib.pyplot as plt
+from concurrent.futures import ProcessPoolExecutor
 
 # TODO: Once we get hit, use the 3 seconds of invincibility and do a global search to find a spot on the map that we can stay for a long time, and then beeline it over there.
 # Bonus points if we can also do a search and find a good spot to lay a mine and lay the mine as well as get to the safe spot all within 3 seconds
@@ -32,7 +33,7 @@ import matplotlib.pyplot as plt
 
 # TODO: Simulate the dynamics of the bullet and asteroids, so we know whether the bullet will hit, and exactly which one it'll hit
 
-debug_mode = True
+debug_mode = False
 reality_state_dump = False
 simulation_state_dump = False
 delta_time = 1/30 # s/ts
@@ -1619,7 +1620,8 @@ class Neo(KesslerController):
         self.last_respawn_maneuver_timestep_range = (-math.inf, 0)
         self.last_respawn_invincible_timestep_range = (-math.inf, 0)
         self.fire_next_timestep_flag = False
-        #self.process_pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
+        # multiprocessing.cpu_count()
+        #self.process_pool = None
 
     def finish_init(self, game_state, ship_state):
         # If we need the game state or ship state to finish init, we can use this function to do that
@@ -1630,6 +1632,9 @@ class Neo(KesslerController):
         other_ship_lives = ctrl.Antecedent(np.arange(0, 4, 1), 'other_ship_lives')
         
         aggression = ctrl.Consequent(np.arange(0, 1, 1), 'asteroid_growth_factor')
+        #if self.process_pool is None and __name__ != '__main__':
+            #print(f"NAAAAAAAAAAAAAAAAAAMEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE: {__name__}")
+            #self.process_pool = multiprocessing.Pool(processes=4)
 
 
     def get_other_ships(self, game_state):
@@ -1754,7 +1759,6 @@ class Neo(KesslerController):
         #print(f"Amount of asteroids before culling: {len(game_state['asteroids'])} and after culling, but including duplicates: {len(relevant_asteroids)}")
         
         # Try moving!
-        very_dangerous_time = 1.2
         #print("Look for a course of action to potentially move")
         # Run a simulation and find a course of action to put me to safety
         very_good_maneuver_found = False # If we can already achieve a very good fitness function, just call it a day and don't look for anything even better
@@ -1763,10 +1767,9 @@ class Neo(KesslerController):
         best_maneuver_sim = None
         best_safe_time_after_maneuver = -math.inf
         search_iterations_count = 0
-        best_maneuver_tuple = None
         while search_iterations_count < min_search_iterations or (not very_good_maneuver_found and search_iterations_count < max_search_iterations):
             search_iterations_count += 1
-            if search_iterations_count % 5 == 0:
+            if search_iterations_count%5 == 0:
                 debug_print(f"Search iteration {search_iterations_count}")
                 pass
             random_ship_heading_angle = random.uniform(-30.0, 30.0)
@@ -1997,3 +2000,6 @@ class Neo(KesslerController):
         if reality_state_dump:
             append_dict_to_file(state_dump_dict, 'Reality State Dump.txt')
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
+
+if __name__ == '__main__':
+    pass
