@@ -449,6 +449,9 @@ def forecast_asteroid_mine_splits(asteroid, timesteps_until_appearance, mine, ga
     F = (-dist/mine_blast_radius + 1)*mine_blast_pressure*2*mine_radius
     a = F/asteroid['mass']
     # calculate "impulse" based on acc
+    if dist == 0:
+        debug_print(f"Dist is 0! Kessler will spit out a runtime warning, and this asteroid will disappear without splitting.")
+        return []
     vfx = asteroid['velocity'][0] + a*(asteroid['position'][0] - mine['position'][0])/dist
     vfy = asteroid['velocity'][1] + a*(asteroid['position'][1] - mine['position'][1])/dist
     return forecast_asteroid_splits(asteroid, timesteps_until_appearance, vfx, vfy, game_state, wrap)

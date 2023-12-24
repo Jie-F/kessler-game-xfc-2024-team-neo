@@ -6,6 +6,7 @@
 import time
 import random
 from neo_controller import Neo
+from smith_controller import Smith
 from baby_neo_controller import NeoController
 import numpy as np
 import cProfile
@@ -294,7 +295,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # Evaluate the game
 for _ in range(1):
     randseed = random.randint(1, 1000)
-    print(f'Using seed {randseed}')
+    #print(f'Using seed {randseed}')
     random.seed(randseed) #671 spams the miss sim bullet hing
     asteroids_random = generate_asteroids(
                                     num_asteroids=30,
@@ -322,12 +323,25 @@ for _ in range(1):
                                 ammo_limit_multiplier=0,
                                 stop_if_no_ammo=False)
 
+    # Can cause a runtime warning due to divide by 0 if you drop a mine on the first timestep and get out of the way, since the distance between the asteroid and mine is 0 when the mine is exploding
+    minecrash = Scenario(name='Mine Crash',
+                                asteroid_states=[{'position': (1920//2+30*3+1, 1080//2), 'speed': 30, 'angle': 180, 'size': 4}, {'position': (1920//2+30*3+1, 1000//2), 'speed': 30, 'angle': 180, 'size': 4}],
+                                ship_states=[
+                                    {'position': (1920//2, 1080//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                                    #{'position': (1920*2//3, 1080//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
+                                ],
+                                map_size=(width, height),
+                                #seed=2,
+                                time_limit=500,
+                                ammo_limit_multiplier=0,
+                                stop_if_no_ammo=False)
+
     pre = time.perf_counter()
     #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=minecrash, controllers=[Smith()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))
