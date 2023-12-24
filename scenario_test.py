@@ -295,21 +295,21 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 1000)
     print(f'Using seed {randseed}')
-    random.seed(3)
+    random.seed(randseed) #671 spams the miss sim bullet hing
     asteroids_random = generate_asteroids(
-                                    num_asteroids=50,
+                                    num_asteroids=30,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(0, 400),
+                                    speed_range=(300, 600),
                                     angle_range=(-180, 180),
-                                    size_range=(1, 2)
+                                    size_range=(1, 1)
                                 )
 
     # Define game scenario
     my_test_scenario = Scenario(name='Test Scenario',
                                 #num_asteroids=200,
                                 asteroid_states=asteroids_random,
-                                #asteroid_states=[{'position': (width//2, height*40//100), 'speed': 100, 'angle': -89, 'size': 4},
+                                #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
