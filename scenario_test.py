@@ -295,13 +295,13 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # Evaluate the game
 for _ in range(1):
     randseed = random.randint(1, 1000)
-    #print(f'Using seed {randseed}')
+    print(f'Using seed {randseed}')
     random.seed(randseed) #671 spams the miss sim bullet hing
     asteroids_random = generate_asteroids(
-                                    num_asteroids=30,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(300, 600),
+                                    speed_range=(200, 400),
                                     angle_range=(-180, 180),
                                     size_range=(1, 1)
                                 )
@@ -314,7 +314,7 @@ for _ in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 0},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
@@ -341,7 +341,7 @@ for _ in range(1):
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    score, perf_data = game.run(scenario=minecrash, controllers=[Smith()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))
