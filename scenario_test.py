@@ -296,14 +296,14 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 10000) #2645
     print(f'Using seed {randseed}')
-    random.seed(8549) #671 spams the miss sim bullet hing
+    random.seed(randseed) #671 spams the miss sim bullet hing
     asteroids_random = generate_asteroids(
-                                    num_asteroids=3,
+                                    num_asteroids=5,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(200, 300),
                                     angle_range=(-180, 180),
-                                    size_range=(2, 3)
+                                    size_range=(1, 4)
                                 )
 
     # Define game scenario
@@ -337,11 +337,11 @@ for _ in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
+    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))

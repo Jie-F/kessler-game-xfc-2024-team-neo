@@ -124,6 +124,25 @@ class GameStatePlotter:
         # This can be an empty function if you are calling update_plot manually in your game loop
         pass
 
+def write_to_json(data, filename):
+    import json
+    """
+    Serialize a Python list or dictionary to JSON and write it to a file.
+
+    Args:
+    data (list or dict): The Python list or dictionary to be serialized.
+    filename (str): The name of the file where the JSON will be saved.
+
+    Returns:
+    None
+    """
+    try:
+        with open(filename, 'a') as file:
+            json.dump(data, file, indent=4)
+        print(f"Data successfully written to {filename}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
 def debug_print(message):
     if debug_mode:
         print(message)
@@ -575,7 +594,7 @@ def is_asteroid_in_list(list_of_asteroids, a, tolerance=1e-9):
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
     for asteroid in list_of_asteroids:
         if math.isclose(a['position'][0], asteroid['position'][0], abs_tol=tolerance) and math.isclose(a['position'][1], asteroid['position'][1], abs_tol=tolerance) and math.isclose(a['velocity'][0], asteroid['velocity'][0], abs_tol=tolerance) and math.isclose(a['velocity'][1], asteroid['velocity'][1], abs_tol=tolerance) and math.isclose(a['size'], asteroid['size'], abs_tol=tolerance) and math.isclose(a['mass'], asteroid['mass'], abs_tol=tolerance) and math.isclose(a['radius'], asteroid['radius'], abs_tol=tolerance):
-            print(f"INSIDE COMP FUNCTION, ASTEROID {ast_to_string(a)} IS CLOSE TO {ast_to_string(asteroid)}")
+            #print(f"INSIDE COMP FUNCTION, ASTEROID {ast_to_string(a)} IS CLOSE TO {ast_to_string(asteroid)}")
             return True
     return False
 
@@ -844,8 +863,9 @@ def track_asteroid_we_shot_at(asteroids_pending_death, current_timestep, game_st
                 #debug_print(f"WARNING: ASTEREOID ALREWADY  IN LIST ")
             if enable_assertions:
                if is_asteroid_in_list(asteroids_pending_death[timestep], asteroid):
-                   print(f'ABOUT TO FAIL ASSERTION, we are in the future by {future_timesteps} timesteps, LIST FOR THIS TS IS:')
-                   print(asteroids_pending_death[timestep])
+                   #print(f'ABOUT TO FAIL ASSERTION, we are in the future by {future_timesteps} timesteps, LIST FOR THIS TS IS:')
+                   #print(asteroids_pending_death[timestep])
+                   pass
                assert not is_asteroid_in_list(asteroids_pending_death[timestep], asteroid)
             asteroids_pending_death[timestep].append(dict(asteroid))
         # Advance the asteroid to the next position
@@ -862,11 +882,12 @@ def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(aster
         if enable_assertions:
             assert check_coordinate_bounds(game_state, asteroid['position'][0], asteroid['position'][1])
     if current_timestep not in asteroids_pending_death:
-        print(f"This asteroid was NOT shot at and IS IN THE CLEAR! {ast_to_string(asteroid)}")
+        #print(f"This asteroid was NOT shot at and IS IN THE CLEAR! {ast_to_string(asteroid)}")
         return True
     else:
         if not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid):
-            print(f"This asteroid was NOT shot at and IS IN THE CLEAR! {ast_to_string(asteroid)}")
+            #print(f"This asteroid was NOT shot at and IS IN THE CLEAR! {ast_to_string(asteroid)}")
+            pass
         return not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
 
 def extrapolate_asteroid_forward(asteroid, timesteps, game_state=None, wrap=False):
@@ -879,7 +900,7 @@ def extrapolate_asteroid_forward(asteroid, timesteps, game_state=None, wrap=Fals
 
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
-    def __init__(self, game_state, ship_state, initial_timestep, asteroids=[], asteroids_pending_death={}, forecasted_asteroid_splits=[], mines=[], other_ships=[], bullets=[], last_timestep_fired=-math.inf, timesteps_to_not_check_collision_for=0, fire_first_timestep=False, game_state_plotter: GameStatePlotter | None = None):
+    def __init__(self, game_state: dict, ship_state: dict, initial_timestep: int, asteroids: list = [], asteroids_pending_death: dict = {}, forecasted_asteroid_splits: list = [], mines: list = [], other_ships: list = [], bullets: list = [], last_timestep_fired = -math.inf, timesteps_to_not_check_collision_for: int = 0, fire_first_timestep:bool = False, game_state_plotter: GameStatePlotter | None = None):
         #debug_print("INITIALIZING SIMULATION, ship info is printed below:")
         #print(ship_state)
         self.speed = ship_state['speed']
@@ -901,8 +922,8 @@ class Simulation():
         self.ship_move_sequence = []
         self.state_sequence = []
         self.asteroids_shot = 0
-        self.asteroids_pending_death = asteroids_pending_death
-        self.forecasted_asteroid_splits = forecasted_asteroid_splits
+        self.asteroids_pending_death = {ts: l[:] for ts, l in asteroids_pending_death.items()}
+        self.forecasted_asteroid_splits = forecasted_asteroid_splits.copy()
         self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
         self.fire_next_timestep_flag = False
         self.fire_first_timestep = fire_first_timestep
@@ -1259,7 +1280,7 @@ class Simulation():
             self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 0*len(aiming_move_sequence), self.game_state, timesteps_until_bullet_hit_asteroid - 0*len(aiming_move_sequence), actual_asteroid_hit_at_present_time)
             # Forecasted splits get progressed while doing the move sequence which includes rotation, so we need to start the forecast before the rotation even starts
             self.forecasted_asteroid_splits.extend(forecast_asteroid_bullet_splits(actual_asteroid_hit_at_present_time, timesteps_until_bullet_hit_asteroid, self.heading, self.game_state, True))
-            forecast_backup = copy.deepcopy(self.forecasted_asteroid_splits)
+            forecast_backup = self.forecasted_asteroid_splits.copy()
             #print('extending  list with')
             #print(forecast_asteroid_bullet_splits(actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, self.heading, self.game_state, True))
             
@@ -1479,7 +1500,7 @@ class Simulation():
         # Simulate the ship!
         # Bullet firing happens before we turn the ship
         # Check whether we want to shoot a simulated bullet
-        print(f"SIMULATION TS {self.future_timesteps}")
+        #print(f"SIMULATION TS {self.future_timesteps}")
         if self.fire_first_timestep and self.future_timesteps == 0:
             print('FIRE FIRST TIMETSEP IS TRUE SO WERE FIRING')
             fire_this_timestep = True
@@ -1495,8 +1516,8 @@ class Simulation():
                             if feasible and abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
                                 fire_this_timestep = True
                                 self.asteroids_shot += 1
-                                print(f"Tracking that we shot at the asteroid {ast_to_string(asteroid)}")
-                                print(self.asteroids_pending_death)
+                                #print(f"Tracking that we shot at the asteroid {ast_to_string(asteroid)}")
+                                #print(self.asteroids_pending_death)
                                 self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, calculate_timesteps_until_bullet_hits_asteroid(interception_time, asteroid['radius']), asteroid)
                                 break
         else:
@@ -1775,7 +1796,17 @@ class Neo(KesslerController):
         #debug_print('And asteroids:')
         #debug_print(game_state['asteroids'])
         debug_print('Simulating stationary targetting:')
+        #print('\n\nAST PENDING DEATH AND FORECASTED SPLITS')
+        #print(self.asteroids_pending_death)
+        #print(self.forecasted_asteroid_splits)
+        #write_to_json(self.asteroids_pending_death, 'BEFORE SIM.txt')
+        #write_to_json(self.forecasted_asteroid_splits, 'BEFORE SIM.txt')
         stationary_targetting_sim = Simulation(game_state, ship_state, self.current_timestep, game_state['asteroids'], self.asteroids_pending_death, self.forecasted_asteroid_splits, game_state['mines'], self.get_other_ships(game_state), game_state['bullets'], self.last_timestep_fired, 0, self.fire_next_timestep_flag, self.game_state_plotter)
+        #print('\nAST PENDING DEATH AND FORECASTED SPLITS AFTER THE SIM')
+        #print(self.asteroids_pending_death)
+        #print(self.forecasted_asteroid_splits)
+        #write_to_json(self.asteroids_pending_death, 'AFTER SIM.txt')
+        #write_to_json(self.forecasted_asteroid_splits, 'AFTER SIM.txt')
         stationary_targetting_sim.target_selection()
         best_stationary_targetting_move_sequence = stationary_targetting_sim.get_move_sequence()
         #print("stationary targetting move seq")
