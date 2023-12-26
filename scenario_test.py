@@ -296,9 +296,9 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 for _ in range(1):
     randseed = random.randint(1, 10000) #2645
     print(f'Using seed {randseed}')
-    random.seed(randseed) #671 spams the miss sim bullet hing
+    random.seed(2) #671 spams the miss sim bullet hing
     asteroids_random = generate_asteroids(
-                                    num_asteroids=5,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(200, 300),

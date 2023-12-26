@@ -22,7 +22,7 @@ import copy
 
 # TODO: Dynamic culling for sim? Different radii, or maybe direction?
 
-debug_mode = True
+debug_mode = False
 gamestate_plotting = False
 reality_state_dump = False
 simulation_state_dump = False
@@ -738,7 +738,6 @@ def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timest
         aiming_ts_array = []
         aiming_ts_rounded_array = []
     
-    # TODO: USE BINARY SEARCH INSTEAD OF LINEAR SEARCH
     for turning_timesteps in range(0, 31):
         feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception = calculate_interception(ship_state['position'][0], ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], ship_state['heading'], game_state, turning_timesteps)
         if spam: print(feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception)
@@ -1125,7 +1124,7 @@ class Simulation():
         most_imminent_asteroid_exists = False
         for asteroid in self.asteroids + self.forecasted_asteroid_splits:
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
-                print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
+                #print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
                 unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
                 # Iterate through all unwrapped asteroids to find which one of the unwraps is the best feasible target.
                 # 99% of the time, only one of the unwraps will have a feasible target, but there's situations where we could either shoot the asteroid before it wraps, or wait for it to wrap and then shoot it.
@@ -1271,7 +1270,7 @@ class Simulation():
             debug_print(f"We used a sim to forecast the asteroid that we'll hit being the one at pos ({actual_asteroid_hit['position'][0]}, {actual_asteroid_hit['position'][1]}) with vel ({actual_asteroid_hit['velocity'][0]}, {actual_asteroid_hit['velocity'][1]}) in {timesteps_until_bullet_hit_asteroid - len(aiming_move_sequence)} timesteps")
             debug_print(f"The primitive forecast would have said we'd hit asteroid at pos ({target_asteroid['position'][0]}, {target_asteroid['position'][1]}) with vel ({target_asteroid['velocity'][0]}, {target_asteroid['velocity'][1]}) in {calculate_timesteps_until_bullet_hits_asteroid(target_asteroid_interception_time_s, target_asteroid['radius'])} timesteps")
             #print(self.asteroids_pending_death)
-            print(f"\nTracking that we just shot at the asteroid {ast_to_string(actual_asteroid_hit)}, our intended target was {target_asteroid}")
+            #print(f"\nTracking that we just shot at the asteroid {ast_to_string(actual_asteroid_hit)}, our intended target was {target_asteroid}")
             #actual_asteroid_hit_UNEXTRAPOLATED = extrapolate_asteroid_forward(actual_asteroid_hit, -(len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid), self.game_state, True)
             actual_asteroid_hit_at_present_time = extrapolate_asteroid_forward(actual_asteroid_hit, -len(aiming_move_sequence), self.game_state, True)
             if gamestate_plotting:
@@ -1305,7 +1304,7 @@ class Simulation():
     def bullet_target_sim(self, ship_state=None, fire_first_timestep=False, fire_after_timesteps=0):
         # Assume we shoot on the next timestep, so we'll create a bullet and then track it and simulate it to see what it hits, if anything
         # This sim doesn't modify the state of the simulation class. Everything here is discarded after the sim is over, and this is just to see what my bullet hits, if anything.
-        asteroids = [dict(a) for a in self.asteroids] # TODO: CULL ASTEROIDS? But then we won't be considering other bullets so maybe this is a bad idea. Maybe cull for all bullets and mines combined?
+        asteroids = [dict(a) for a in self.asteroids] # TODO: CULL ASTEROIDS? But then we won't be considering other bullets so maybe this is a bad idea. Maybe cull for all bullets and mines combined? Remember to unwrap the asteroids!
         mines = [dict(m) for m in self.mines]
         bullets = [dict(b) for b in self.bullets]
         initial_ship_state = self.get_ship_state()
@@ -1502,7 +1501,7 @@ class Simulation():
         # Check whether we want to shoot a simulated bullet
         #print(f"SIMULATION TS {self.future_timesteps}")
         if self.fire_first_timestep and self.future_timesteps == 0:
-            print('FIRE FIRST TIMETSEP IS TRUE SO WERE FIRING')
+            #print('FIRE FIRST TIMETSEP IS TRUE SO WERE FIRING')
             fire_this_timestep = True
         elif fire is None:
             timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
