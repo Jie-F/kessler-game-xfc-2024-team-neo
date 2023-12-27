@@ -73,34 +73,86 @@ def ast_to_string(a):
     return f"Pos: ({a['position'][0]:0.2f}, {a['position'][1]:0.2f}), Vel: ({a['velocity'][0]:0.2f}, {a['velocity'][1]:0.2f}), Size: {a['size']}"
 
 
-def alternative_intercept_calc(a, ship_state, game_state, timesteps_until_can_fire=0):
-    t_0 = 1 - ship_radius/bullet_speed + bullet_length/2/bullet_speed # The bullet's head originates from the edge of the ship's radius. We want to set the position of the bullet to the center of the bullet, so we have to do some fanciness here
-    ax = a['position'][0]
-    ay = a['position'][1]
-    avx = a['velocity'][0]
-    avy = a['velocity'][1]
+def alternative_intercept_calc(asteroid, ship_state, game_state, timesteps_until_can_fire: int=0):
+    t_0 = (ship_radius - bullet_length/2)/bullet_speed # The bullet's head originates from the edge of the ship's radius. We want to set the position of the bullet to the center of the bullet, so we have to do some fanciness here
+    # Positions are relative to the ship
+    origin_x = ship_state['position'][0]
+    origin_y = ship_state['position'][1]
+    ax = asteroid['position'][0] - origin_x
+    ay = asteroid['position'][1] - origin_y
+    avx = asteroid['velocity'][0]
+    avy = asteroid['velocity'][1]
+    ax_delayed = ax + timesteps_until_can_fire*delta_time*avx # We add a delay to account for the timesteps until we can fire delay
+    ay_delayed = ay + timesteps_until_can_fire*delta_time*avy
     vb = bullet_speed
+    tr = math.radians(ship_max_turn_rate) # rad/s
+    vb_sq = vb*vb
     theta_0 = math.radians(ship_state['heading'])
+
+    def naive_desired_heading_calc():
+        A = avx*avx + avy*avy - vb*vb
+        B = 2*(ax_delayed*avx + ay_delayed*avy - vb*vb*t_0)
+        C = ax_delayed*ax_delayed + ay_delayed*ay_delayed - vb*vb*t_0*t_0
+        D = B*B - 4*A*C
+
+        positive_interception_times = []
+        t1, t2 = None, None
+        if D > 0:
+            t1 = (-B - math.sqrt(D))/(2*A)
+            t2 = (-B + math.sqrt(D))/(2*A)
+        elif D == 0:
+            t1 = -B/(2*A)
+        if t1 and t1 >= 0:
+            positive_interception_times.append(t1)
+        if t2 and t2 >= 0:
+            positive_interception_times.append(t2)
+        solutions = []
+        for t in positive_interception_times:
+            x = ax_delayed + t*avx
+            y = ay_delayed + t*avy
+            theta = math.atan2(y, x)
+            solutions.append((t, angle_difference_rad(theta, theta_0), x + origin_x, y + origin_y))
+            #solutions.append((t, theta, x + origin_x, y + origin_y))
+        return solutions
+
     def intercept_theta_are_zeros_of_this_function(theta):
         # Domain of this function is theta_0 - pi to theta_0 + pi
         assert theta_0 - math.pi <= theta <= theta_0 + math.pi
         abs_delta_theta = abs(theta - theta_0)
-        return (t_0*avx - avx*(1 - abs_delta_theta/math.pi) + ax)*(math.sin(theta) - avy/vb) - (t_0*avy - avy*(1 - abs_delta_theta/math.pi) + ay)*(math.cos(theta) - avx/vb)
-
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        #return (t_0*avx - avx*(1 - abs_delta_theta/math.pi) + ax)*(math.sin(theta) - avy/vb) - (t_0*avy - avy*(1 - abs_delta_theta/math.pi) + ay)*(math.cos(theta) - avx/vb)
+        return (avx - vb*cos_theta)*(vb*t_0*sin_theta - ay - avy*abs_delta_theta/tr) - (avy - vb*sin_theta)*(vb*t_0*cos_theta - ax - avx*abs_delta_theta/tr)
+        # (avx - vb*math.cos(theta))*(vb*t_0*math.sin(theta) - ay - avy*abs(theta - theta_0)/tr) - (avy - vb*math.sin(theta))*(vb*t_0*math.cos(theta) - ax - avx*abs(theta - theta_0)/tr)
+    
     def derivative_of_intercept_theta_are_zeros_of_this_function(theta):
         # Domain of this function is theta_0 - pi to theta_0 + pi
         assert theta_0 - math.pi <= theta <= theta_0 + math.pi
         cos_theta = math.cos(theta)
         sin_theta = math.sin(theta)
         abs_delta_theta = abs(theta - theta_0)
-        if theta != theta_0:
-            term1 = (-avx*sin_theta + avy*cos_theta)*(theta - theta_0)
-            term2 = ((avx*(abs_delta_theta - math.pi) + math.pi*(avx*t_0 + ax))*cos_theta)
-            term3 = ((avy*(abs_delta_theta - math.pi) + math.pi*(avy*t_0 + ay))*sin_theta)
-            derivative = (-term1 + (term2 + term3)*abs_delta_theta) / (math.pi*abs_delta_theta)
+        
+        term1 = vb*(-avx*abs(theta - theta_0)/tr - ax + t_0*vb*math.cos(theta))*math.cos(theta)
+        term2 = vb*(-avy*abs(theta - theta_0)/tr - ay + t_0*vb*math.sin(theta))*math.sin(theta)
+        term3 = (avx - vb*math.cos(theta))*(-avy*(theta - theta_0)*np.sign(theta - theta_0)/(tr*(theta - theta_0)) + t_0*vb*math.cos(theta))
+        term4 = (avy - vb*math.sin(theta))*(-avx*(theta - theta_0)*np.sign(theta - theta_0)/(tr*(theta - theta_0)) - t_0*vb*math.sin(theta))
+        derivative = term1 + term2 + term3 - term4
+        return derivative
+
+    def alt_derivative_of_intercept_theta_are_zeros_of_this_function(theta):
+        # Domain of this function is theta_0 - pi to theta_0 + pi
+        assert theta_0 - math.pi <= theta <= theta_0 + math.pi
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        abs_delta_theta = abs(theta - theta_0)
+        
+        if theta == theta_0:
+            derivative = vb*(avx*t_0*math.cos(theta_0) + avy*t_0*math.sin(theta_0) - ax*math.cos(theta_0) - ay*math.sin(theta_0))
         else:
-            # The derivative at theta = theta_0 is just the average of the limits of the derivative on both sides, averaged
-            derivative = (avx*(t_0 - 1) + ax)*math.cos(theta_0) + (avy*(t_0 - 1) + ay)*math.sin(theta_0)
+            term1 = -vb*(avx*math.cos(theta)*abs(theta - theta_0) + avy*math.sin(theta)*abs(theta - theta_0) + ax*tr*math.cos(theta) + ay*tr*math.sin(theta) - t_0*tr*vb)*abs(theta - theta_0)
+            term2 = (avx - vb*math.cos(theta))*(avy*(theta - theta_0) - t_0*tr*vb*math.cos(theta)*abs(theta - theta_0))
+            term3 = (avy - vb*math.sin(theta))*(avx*(theta - theta_0) + t_0*tr*vb*math.sin(theta)*abs(theta - theta_0))
+            derivative = (term1 - term2 + term3)/(tr*abs(theta - theta_0))
         return derivative
 
     def interception_time(intercept_theta):
@@ -111,40 +163,100 @@ def alternative_intercept_calc(a, ship_state, game_state, timesteps_until_can_fi
     def interception_distance(intercept_theta, intercept_time):
         return vb*((math.pi - abs(intercept_theta - theta_0))/math.pi + intercept_time - t_0)
 
-    def plot_function(a, ship_state, game_state, timesteps_until_can_fire):
+    def root_finder(initial_guess, function, derivative_function, tolerance=eps, max_iterations=5):
+        # theta_new = theta_old - f(theta_old)/f'(theta_old)
+        theta_old = initial_guess
+        print(f"Our initial guess is {initial_guess}")
+        for iteration in range(max_iterations):
+            f_value = function(theta_old)
+            derivative_value = derivative_function(theta_old)
+            
+            # Avoid division by zero
+            if derivative_value == 0:
+                raise ValueError("Derivative is zero. Newton's method fails.")
+
+            # Update the estimate
+            theta_new = theta_old - f_value/derivative_value
+            print(f"After iteration {iteration + 1}, our new theta value is {theta_new}")
+            # Check for convergence
+            if abs(theta_new - theta_old) < tolerance:
+                return theta_new, (iteration + 1)
+
+            theta_old = theta_new
+
+    def plot_function():
+        naive_theta_ans_list = naive_desired_heading_calc()  # Assuming this function returns a list of angles
         theta_0 = math.radians(ship_state['heading'])
         theta_range = np.linspace(theta_0 - math.pi, theta_0 + math.pi, 400)
-        
+        theta_delta_range = np.linspace(-math.pi, math.pi, 400)
+
         # Vectorize the functions for numpy compatibility
         vectorized_function = np.vectorize(intercept_theta_are_zeros_of_this_function)
         vectorized_derivative = np.vectorize(derivative_of_intercept_theta_are_zeros_of_this_function)
+        vectorized_alt_derivative = np.vectorize(alt_derivative_of_intercept_theta_are_zeros_of_this_function)
 
         # Calculate function values
         function_values = vectorized_function(theta_range)
         derivative_values = vectorized_derivative(theta_range)
+        alt_derivative_values = vectorized_alt_derivative(theta_range)
 
         plt.figure(figsize=(12, 6))
 
-        # Plot the function
-        plt.subplot(1, 2, 1)
-        plt.plot(theta_range, function_values, label="Function")
-        plt.xlabel("Theta")
-        plt.ylabel("Function Value")
-        plt.title("Function Plot")
-        plt.grid(True)
-        plt.legend()
+        # Plot the function and its derivatives
+        plt.plot(theta_delta_range, function_values, label="Function")
+        plt.plot(theta_delta_range, derivative_values, label="Derivative", color="orange")
+        plt.plot(theta_delta_range, alt_derivative_values, label="Alt Derivative", color="blue", linestyle=':')
 
-        # Plot the derivative
-        plt.subplot(1, 2, 2)
-        plt.plot(theta_range, derivative_values, label="Derivative", color="orange")
+        # Add vertical lines for each naive_theta_ans
+        for theta_ans in naive_theta_ans_list:
+            plt.axvline(x=theta_ans[1], color='yellow', linestyle='--', label=f"Naive Theta Ans at {theta_ans[1]:.2f}")
+
+            zero, iterations = root_finder(theta_ans[1] + theta_0, intercept_theta_are_zeros_of_this_function, derivative_of_intercept_theta_are_zeros_of_this_function)
+            delta_theta_solution = zero - theta_0
+            if not (-math.pi <= delta_theta_solution <= math.pi):
+                print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
+                delta_theta_solution = (delta_theta_solution + math.pi)%(2*math.pi) - math.pi
+            plt.axvline(x=delta_theta_solution, color='green', linestyle='--', label=f"Theta Ans Converged at {delta_theta_solution:.2f} after {iterations} iterations")
+
+        # Add a horizontal line at y=0
+        plt.axhline(y=0, color='black', linewidth=1.5, label="y=0")
+
         plt.xlabel("Theta")
-        plt.ylabel("Derivative Value")
-        plt.title("Derivative Plot")
+        plt.ylabel("Values")
+        plt.title("Function and Derivatives Plot")
         plt.grid(True)
         plt.legend()
 
         plt.tight_layout()
         plt.show()
+    
+    #print('PLOTTING FUNCTION!')
+    #plot_function()
+    valid_solutions = []
+    naive_solutions = naive_desired_heading_calc()
+    amount_we_can_turn_before_we_can_shoot_rad = math.radians(timesteps_until_can_fire*delta_time*ship_max_turn_rate)
+    for naive_solution in naive_solutions:
+        if abs(naive_solution[1]) <= amount_we_can_turn_before_we_can_shoot_rad + eps:
+            # The naive solution works because there's no turning delay
+            valid_solutions.append((True, math.degrees(naive_solution[1]), timesteps_until_can_fire, naive_solution[0], None, None, None))
+        else:
+            # Use more advanced solution
+            sol, _ = root_finder(naive_solution[1] + theta_0, intercept_theta_are_zeros_of_this_function, derivative_of_intercept_theta_are_zeros_of_this_function, 0.01)
+            delta_theta_solution = sol - theta_0
+            if not (-math.pi <= delta_theta_solution <= math.pi):
+                #print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
+                delta_theta_solution = (delta_theta_solution + math.pi)%(2*math.pi) - math.pi
+            # Check validity of solution to make sure time is positive and stuff
+            delta_theta_solution_deg = math.degrees(delta_theta_solution)
+            rot_time = abs(delta_theta_solution_deg)/(delta_time*ship_max_turn_rate)
+            valid_solutions.append((True, delta_theta_solution_deg, rot_time, None, None, None, None))
+
+    sorted_solutions = sorted(valid_solutions, key=lambda x: x[2])
+    if sorted_solutions:
+        return sorted_solutions[0]
+    else:
+        return False, None, None, None, None, None, None
+    # return feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception
 
 def get_feasible_intercept_angle_and_turn_time(a, ship_state, game_state, timesteps_until_can_fire=0):
     def count_intersections(a, b):
@@ -394,7 +506,7 @@ def benchmark_function(function, test_data, number=1):
     return total_time
 
 def main():
-    num_sets = 10000  # Adjust this based on your needs
+    num_sets = 1  # Adjust this based on your needs
     pos_range_x = (-width, 2*width)  # Example range for position
     pos_range_y = (-height, 2*height)
     vel_range = (-400, 400)  # Example range for velocity
@@ -403,11 +515,31 @@ def main():
     heading_range = (0, 360)  # Example range for ship heading
     timestep_range = (0, 5)  # Example range for timesteps
 
+    randseed = random.randint(1, 1000)
+    print(f'Using seed {randseed}')
+    random.seed(randseed)#642
+
     test_data = generate_test_data(num_sets, pos_range_x, pos_range_y, vel_range, radius_values, speed_range, heading_range, timestep_range)
+    
+    asteroid = test_data[0][0]
+    ship_state = test_data[0][1]
+    game_state = test_data[0][2]
+    timesteps_until_can_fire=0 # test_data[0][3]
+    #ship_pos_x, ship_pos_y = ship_state['position']
+    #ship_heading = ship_state['heading']
+    #asteroid_pos_x, asteroid_pos_y = asteroid['position']
+    #asteroid_vel_x, asteroid_vel_y = asteroid['velocity']
+    #asteroid_r = asteroid['radius']
+    print("feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception")
+    print('Old solution:')
+    #print(calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_y, asteroid_vel_x, asteroid_vel_y, asteroid_r, ship_heading, game_state, future_shooting_timesteps=0))
+    #print(f"feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception")
+    print(get_feasible_intercept_angle_and_turn_time(asteroid, ship_state, game_state, timesteps_until_can_fire))
+    print('New solution:')
+    print(alternative_intercept_calc(asteroid, ship_state, game_state, timesteps_until_can_fire))
+    #function_time = benchmark_function(get_feasible_intercept_angle_and_turn_time, test_data, number=10)
 
-    function_time = benchmark_function(get_feasible_intercept_angle_and_turn_time, test_data, number=10)
-
-    print(f"Function Execution Time: {function_time}")
+    #print(f"Function Execution Time: {function_time}")
 
 if __name__ == "__main__":
     main()
