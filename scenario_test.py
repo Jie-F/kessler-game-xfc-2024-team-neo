@@ -25,9 +25,9 @@ from examples.test_controller import TestController
 def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range):
     asteroids = []
     for _ in range(num_asteroids):
-        position = (random.randint(*position_range_x), random.randint(*position_range_y))
-        speed = random.randint(*speed_range)
-        angle = random.randint(*angle_range)
+        position = (random.uniform(*position_range_x), random.uniform(*position_range_y))
+        speed = random.triangular(*speed_range) #random.randint(*speed_range) 
+        angle = random.uniform(*angle_range)
         size = random.randint(*size_range)
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
@@ -285,7 +285,7 @@ shearing_pattern_scenario = Scenario(
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 1,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -297,17 +297,18 @@ missed = False
 #for _ in range(1):
 iterations = 0
 while not missed:
+#while True:
     iterations += 1
-    randseed = random.randint(1, 100000000) #2645
-    print(f'Using seed {randseed}')
-    random.seed(243592) #671 spams the miss sim bullet hing, 5592 #      243592 IS A GOOD ONE, MAKES ME MISS 1 out of 33 shots, 91933540 also makes me miss, 62832344 too, 14938532
+    randseed = 932776527 #random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
+    print(f'Using seed {randseed}, running test iteration {iterations}')
+    random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=5,
+                                    num_asteroids=4,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(400, 800),
-                                    angle_range=(-180, 180),
-                                    size_range=(1, 3)
+                                    speed_range=(-300, 1200, -300),
+                                    angle_range=(0, 360),
+                                    size_range=(1, 4)
                                 )
 
     # Define game scenario
@@ -318,7 +319,7 @@ while not missed:
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                                    {'position': (width//2, height//2), 'angle': 0, 'lives': 10, 'team': 1, "mines_remaining": 0},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
@@ -355,5 +356,6 @@ while not missed:
     print('Accuracy: ' + str([team.accuracy for team in score.teams]))
     print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
     if score.teams[0].accuracy < 1:
+        print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n')
         missed = True
 print(f"Ran {iterations} simulations to get one where Neo missed!")
