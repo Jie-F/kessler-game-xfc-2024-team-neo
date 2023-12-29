@@ -28,6 +28,12 @@ reality_state_dump = False
 simulation_state_dump = False
 enable_assertions = True
 
+# Quantities
+tad = 0.1
+grain = 0.001
+eps = 0.00000001
+
+# Kessler game constants
 delta_time = 1/30 # s/ts
 #fire_time = 1/10  # seconds
 bullet_speed = 800.0 # px/s
@@ -35,7 +41,6 @@ ship_max_turn_rate = 180.0 # deg/s
 ship_max_thrust = 480.0 # px/s^2
 ship_drag = 80.0 # px/s^2
 ship_max_speed = 240.0 # px/s
-eps = 0.00000001
 ship_radius = 20.0 # px
 timesteps_until_ship_achieves_max_speed = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # Should be 18 timesteps
 collision_check_pad = 2 # px
@@ -61,7 +66,19 @@ class GameStatePlotter:
         self.ax.set_aspect('equal', adjustable='box')
         self.game_state = game_state
 
-    def update_plot(self, asteroids: dict=[], ship_state: dict | None=None, bullets: list=[], special_bullets: list=[], circled_asteroids: list=[], ghost_asteroids: list=[], forecasted_asteroids: list=[], clear_plot=True, pause_time=eps, plot_title=""):
+    def update_plot(self, asteroids: dict=None, ship_state: dict | None=None, bullets: list=None, special_bullets: list=None, circled_asteroids: list=None, ghost_asteroids: list=None, forecasted_asteroids: list=None, clear_plot=True, pause_time=eps, plot_title=""):
+        if asteroids is None:
+            asteroids = []
+        if bullets is None:
+            bullets = []
+        if special_bullets is None:
+            special_bullets = []
+        if circled_asteroids is None:
+            circled_asteroids = []
+        if ghost_asteroids is None:
+            ghost_asteroids = []
+        if forecasted_asteroids is None:
+            forecasted_asteroids = []
         if clear_plot:
             self.ax.clear()
         self.ax.set_facecolor('black')
@@ -384,7 +401,11 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     positive_interception_times = []
     t1, t2 = None, None
     if abs(A) < eps:
-        t1 = -C/B # We're solving a linear function
+        t1 = -C/B # We're solving a linear function. There might be a second root that's suuuuuuper far from t=0 so we don't care about it
+    elif abs(A) < tad:
+        # A is probably smaller than B or C, so use alternative quadratic formula to get better numerical stability
+        t1 = (2*C)/(-B + math.sqrt(D))
+        t2 = (2*C)/(-B - math.sqrt(D))
     elif D > 0:
         t1 = (-B - math.sqrt(D))/(2*A)
         t2 = (-B + math.sqrt(D))/(2*A)
@@ -806,7 +827,11 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         positive_interception_times = []
         t1, t2 = None, None
         if abs(A) < eps:
-            t1 = -C/B # We're solving a linear function
+            t1 = -C/B # We're solving a linear function. There might be a second root that's suuuuuuper far from t=0 so we don't care about it
+        elif abs(A) < tad:
+            # A is probably smaller than B or C, so use alternative quadratic formula to get better numerical stability
+            t1 = (2*C)/(-B + math.sqrt(D))
+            t2 = (2*C)/(-B - math.sqrt(D))
         elif D > 0:
             t1 = (-B - math.sqrt(D))/(2*A)
             t2 = (-B + math.sqrt(D))/(2*A)
@@ -993,7 +1018,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         for theta_ans in naive_theta_ans_list:
             plt.axvline(x=theta_ans[1] + fudge, color='yellow', linestyle='--', label=f"Naive Theta Ans at {theta_ans[1]:.2f}")
 
-            zero, iterations = turbo_rootinator(theta_ans[1] + fudge, root_function, root_function_derivative, root_function_second_derivative, 0.1, 15)
+            zero, iterations = turbo_rootinator(theta_ans[1] + fudge, root_function, root_function_derivative, root_function_second_derivative, tad, 15)
             if zero:
                 delta_theta_solution = zero
                 if not (-math.pi <= delta_theta_solution <= math.pi):
@@ -1033,7 +1058,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         else:
             # Use more advanced solution
             #print('Using more advanced root finder')
-            sol, _ = turbo_rootinator(naive_solution[1], root_function, root_function_derivative, root_function_second_derivative, 0.1, 4)
+            sol, _ = turbo_rootinator(naive_solution[1], root_function, root_function_derivative, root_function_second_derivative, tad, 4)
             #print('Root finder gave us:')
             #print(sol)
             if not sol:
@@ -1309,9 +1334,21 @@ def time_travel_asteroid(asteroid, timesteps, game_state=None, wrap=False):
 
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
-    def __init__(self, game_state: dict, ship_state: dict, initial_timestep: int, asteroids: list = [], asteroids_pending_death: dict = {}, forecasted_asteroid_splits: list = [], mines: list = [], other_ships: list = [], bullets: list = [], last_timestep_fired = -math.inf, timesteps_to_not_check_collision_for: int=0, fire_first_timestep: bool=False, game_state_plotter: GameStatePlotter | None=None):
+    def __init__(self, game_state: dict, ship_state: dict, initial_timestep: int, asteroids: list=None, asteroids_pending_death: dict=None, forecasted_asteroid_splits: list=None, mines: list=None, other_ships: list=None, bullets: list=None, last_timestep_fired = -math.inf, timesteps_to_not_check_collision_for: int=0, fire_first_timestep: bool=False, game_state_plotter: GameStatePlotter | None=None):
         #print(f"INITIALIZING SIMULATION, fire first timestep is: {fire_first_timestep}")
         #print(ship_state)
+        if asteroids is None:
+            asteroids = []
+        if asteroids_pending_death is None:
+            asteroids_pending_death = {}
+        if forecasted_asteroid_splits is None:
+            forecasted_asteroid_splits = []
+        if mines is None:
+            mines = []
+        if other_ships is None:
+            other_ships = []
+        if bullets is None:
+            bullets = []
         self.speed = ship_state['speed']
         self.position = ship_state['position']
         self.velocity = ship_state['velocity']
@@ -1344,8 +1381,6 @@ class Simulation():
     def get_fire_next_timestep_flag(self):
         return self.fire_next_timestep_flag
 
-    #def get_shot_at_asteroids(self):
-    #    return self.asteroids_pending_death
     def get_asteroids_pending_death(self):
         return self.asteroids_pending_death
 
@@ -1894,7 +1929,9 @@ class Simulation():
             asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
             asteroids.extend(new_asteroids)
 
-    def apply_move_sequence(self, move_sequence=[]):
+    def apply_move_sequence(self, move_sequence=None):
+        if move_sequence is None:
+            move_sequence = []
         for move in move_sequence:
             thrust = 0
             turn_rate = 0
@@ -2138,9 +2175,6 @@ class Simulation():
 
     def get_move_sequence(self):
         return self.ship_move_sequence
-    
-    #def get_move_sequence_length(self):
-    #    return len(self.ship_move_sequence)
 
     def get_state_sequence(self):
         return self.state_sequence
@@ -2244,7 +2278,7 @@ class Neo(KesslerController):
         safe_time_after_maneuver = max(0, next_imminent_collision_time - maneuver_length*delta_time)
         return maneuver_sim, maneuver_length, next_imminent_collision_time, safe_time_after_maneuver, maneuver_fitness
 
-    def plan_action(self, ship_state: Dict, game_state: Dict):
+    def plan_action(self, ship_state: dict, game_state: dict):
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
         # We simulate both options, and take the one with the higher fitness score
@@ -2456,7 +2490,7 @@ class Neo(KesslerController):
         if (len(game_state['asteroids']) > 40 and mine_ast_count > 1.5*average_asteroids_inside_blast_radius or mine_ast_count > 20 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
             self.enqueue_action(self.current_timestep, None, None, None, True)
 
-    def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
+    def actions(self, ship_state: dict, game_state: dict) -> Tuple[float, float, bool, bool]:
         thrust_default, turn_rate_default, fire_default, drop_mine_default = 0, 0, False, False
         # Method processed each time step by this controller.
         self.current_timestep += 1
