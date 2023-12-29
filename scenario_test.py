@@ -10,6 +10,7 @@ from smith_controller import Smith
 from baby_neo_controller import NeoController
 import numpy as np
 import cProfile
+import sys
 
 
 from ctypes import windll
@@ -21,6 +22,46 @@ from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
 from examples.test_controller import TestController
 #from examples.graphics_both import GraphicsBoth
+
+global color_text
+color_text = True
+
+def color_print(text='', color='white', style='normal', same=False, previous=False):
+    global color_text
+    global colors
+    global styles
+
+    if color_text and 'colorama' not in sys.modules:
+        import colorama
+        colorama.init()
+
+        colors = {
+            'black': colorama.Fore.BLACK,
+            'red': colorama.Fore.RED,
+            'green': colorama.Fore.GREEN,
+            'yellow': colorama.Fore.YELLOW,
+            'blue': colorama.Fore.BLUE,
+            'magenta': colorama.Fore.MAGENTA,
+            'cyan': colorama.Fore.CYAN,
+            'white': colorama.Fore.WHITE,
+        }
+
+        styles = {
+            'dim': colorama.Style.DIM,
+            'normal': colorama.Style.NORMAL,
+            'bright': colorama.Style.BRIGHT,
+        }
+    elif color_text:
+        import colorama
+
+    if same:
+        end = ''
+    else:
+        end = '\n'
+    if color_text:
+        print(previous*'\033[A' + colors[color] + styles[style] + str(text) + colorama.Style.RESET_ALL, end=end)
+    else:
+        print(str(text), end=end)
 
 def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range):
     asteroids = []
@@ -296,14 +337,14 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 missed = False
 #for _ in range(1):
 iterations = 0
-while not missed:
-#while True:
+#while not missed:
+while True:
     iterations += 1
-    randseed = 932776527 #random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
-    print(f'Using seed {randseed}, running test iteration {iterations}')
+    randseed = random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
+    color_print(f'Using seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=4,
+                                    num_asteroids=5,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 1200, -300),
@@ -349,13 +390,13 @@ while not missed:
     score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
-    print('Scenario eval time: '+str(time.perf_counter()-pre))
-    print(score.stop_reason)
-    print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
-    print('Deaths: ' + str([team.deaths for team in score.teams]))
-    print('Accuracy: ' + str([team.accuracy for team in score.teams]))
-    print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
+    color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
+    color_print(score.stop_reason, 'green')
+    color_print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]), 'green')
+    color_print('Deaths: ' + str([team.deaths for team in score.teams]), 'green')
+    color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
+    color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
     if score.teams[0].accuracy < 1:
-        print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n')
+        color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
         missed = True
-print(f"Ran {iterations} simulations to get one where Neo missed!")
+color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
