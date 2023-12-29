@@ -89,11 +89,20 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
     vb_sq = vb*vb
     theta_0 = math.radians(ship_state['heading'])
 
+    # Calculate constants for naive_desired_heading_calc
+    A = avx*avx + avy*avy - vb_sq
+
+    # Calculate constants for root_function, root_function_derivative, root_function_second_derivative
+    k1 = ay*vb - avy*vb*t_0
+    k2 = ax*vb - avx*vb*t_0
+    k3 = avy*ax - avx*ay
+
     def naive_desired_heading_calc(timesteps_until_can_fire: int=0):
         time_until_can_fire_s = timesteps_until_can_fire*delta_time
         ax_delayed = ax + time_until_can_fire_s*avx # We add a delay to account for the timesteps until we can fire delay
         ay_delayed = ay + time_until_can_fire_s*avy
-        A = avx*avx + avy*avy - vb_sq
+
+        # A is calculated outside of this function since it's a constant
         B = 2*(ax_delayed*avx + ay_delayed*avy - vb_sq*t_0)
         C = ax_delayed*ax_delayed + ay_delayed*ay_delayed - vb_sq*t_0*t_0
         D = B*B - 4*A*C
@@ -121,82 +130,72 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             solutions.append((t + time_until_can_fire_s, angle_difference_rad(theta, theta_0), timesteps_until_can_fire, None, intercept_x, intercept_y, None))
         return solutions
 
+    def naive_root_function(theta, time_until_can_fire_s: int=0):
+        # Can be optimized more by expanding out the terms
+        # Convert heading error to absolute heading
+        theta += theta_0
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        ax_delayed = ax + time_until_can_fire_s*avx # We add a delay to account for the timesteps until we can fire delay
+        ay_delayed = ay + time_until_can_fire_s*avy
+        return (vb*cos_theta - avx)*(ay_delayed - vb*t_0*sin_theta) - (vb*sin_theta - avy)*(ax_delayed - vb*t_0*cos_theta)
+
+    def naive_time_function(theta):
+        # Convert heading error to absolute heading
+        theta += theta_0
+        return (ax + ay - vb*t_0*(math.sin(theta) + math.cos(theta)))/(vb*(math.sin(theta) + math.cos(theta)) - avx - avy)
+
+    def naive_time_function_for_plotting(theta):
+        return max(-200000, min(naive_time_function(theta)*100000, 200000))
+
     def root_function(theta):
+        # Convert heading error to absolute heading
+        theta += theta_0
         # Domain of this function is theta_0 - pi to theta_0 + pi
         # Make this function periodic by wrapping inputs outside this range, to within the range
         if not (theta_0 - math.pi <= theta <= theta_0 + math.pi):
             theta = (theta - theta_0 + math.pi)%(2*math.pi) - math.pi + theta_0
-        #assert theta_0 - math.pi <= theta <= theta_0 + math.pi
         abs_delta_theta = abs(theta - theta_0)
         cos_theta = math.cos(theta)
         sin_theta = math.sin(theta)
-        #return (t_0*avx - avx*(1 - abs_delta_theta/math.pi) + ax)*(math.sin(theta) - avy/vb) - (t_0*avy - avy*(1 - abs_delta_theta/math.pi) + ay)*(math.cos(theta) - avx/vb)
-        return (avx - vb*cos_theta)*(vb*t_0*sin_theta - ay - avy*abs_delta_theta/tr) - (avy - vb*sin_theta)*(vb*t_0*cos_theta - ax - avx*abs_delta_theta/tr)
-        # (avx - vb*math.cos(theta))*(vb*t_0*math.sin(theta) - ay - avy*abs(theta - theta_0)/tr) - (avy - vb*math.sin(theta))*(vb*t_0*math.cos(theta) - ax - avx*abs(theta - theta_0)/tr)
-    
-    def root_function_derivative(theta):
-        # Domain of this function is theta_0 - pi to theta_0 + pi
-        # Make this function periodic by wrapping inputs outside this range, to within the range
-        if not (theta_0 - math.pi <= theta <= theta_0 + math.pi):
-            theta = (theta - theta_0 + math.pi)%(2*math.pi) - math.pi + theta_0
-        #assert theta_0 - math.pi <= theta <= theta_0 + math.pi
-        cos_theta = math.cos(theta)
-        sin_theta = math.sin(theta)
-        abs_delta_theta = abs(theta - theta_0)
+        sinusoidal_component = k1*cos_theta - k2*sin_theta + k3
+        wacky_component = vb*abs_delta_theta/math.pi*(avy*cos_theta - avx*sin_theta)
+        return sinusoidal_component + wacky_component
         
-        term1 = vb*(-avx*abs_delta_theta/tr - ax + t_0*vb*cos_theta)*cos_theta
-        term2 = vb*(-avy*abs_delta_theta/tr - ay + t_0*vb*sin_theta)*sin_theta
-        term3 = (avx - vb*cos_theta)*(-avy*(theta - theta_0)*np.sign(theta - theta_0)/(tr*(theta - theta_0)) + t_0*vb*cos_theta)
-        term4 = (avy - vb*sin_theta)*(-avx*(theta - theta_0)*np.sign(theta - theta_0)/(tr*(theta - theta_0)) - t_0*vb*sin_theta)
-        derivative = term1 + term2 + term3 - term4
-        return derivative
+    def root_function_derivative(theta):
+        # Convert heading error to absolute heading
+        theta += theta_0
+        # Domain of this function is theta_0 - pi to theta_0 + pi
+        # Make this function periodic by wrapping inputs outside this range, to within the range
+        if not (theta_0 - math.pi <= theta <= theta_0 + math.pi):
+            theta = (theta - theta_0 + math.pi)%(2*math.pi) - math.pi + theta_0
+        
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        sinusoidal_component = -k1*sin_theta - k2*cos_theta
+        wacky_component = -vb*np.sign(theta - theta_0)/math.pi*(avx*sin_theta - avy*cos_theta + (theta - theta_0)*(avx*cos_theta + avy*sin_theta))
+        return sinusoidal_component + wacky_component
 
     def root_function_second_derivative(theta):
+        # Convert heading error to absolute heading
+        theta += theta_0
         # Domain of this function is theta_0 - pi to theta_0 + pi
         # Make this function periodic by wrapping inputs outside this range, to within the range
         if not (theta_0 - math.pi <= theta <= theta_0 + math.pi):
             theta = (theta - theta_0 + math.pi)%(2*math.pi) - math.pi + theta_0
         cos_theta = math.cos(theta)
         sin_theta = math.sin(theta)
-        abs_delta_theta = abs(theta - theta_0)
-        sign_delta_theta = np.sign(theta - theta_0)
-        t0vbst = t_0*vb*sin_theta
-        t0vbct = t_0*vb*cos_theta
-        term1 = -2*vb*(avx*sign_delta_theta/tr + t0vbst)
-        term2 = -2*vb*(avy*sign_delta_theta/tr - t0vbct)
-        term3 = vb*(avx*abs_delta_theta/tr + ax - t0vbct)
-        term4 = -vb*(avy*abs_delta_theta/tr + ay - t0vbst)
-        term5 = -(avx - vb*cos_theta)*t0vbst
-        term6 = (avy - vb*sin_theta)*t0vbct
-        return cos_theta*(term1 + term4) + sin_theta*(term2 + term3) + term5 + term6
 
-    def alt_derivative_of_intercept_theta_are_zeros_of_this_function(theta):
-        # Domain of this function is theta_0 - pi to theta_0 + pi
-        # Make this function periodic by wrapping inputs outside this range, to within the range
-        if not (theta_0 - math.pi <= theta <= theta_0 + math.pi):
-            theta = (theta - theta_0 + math.pi)%(2*math.pi) - math.pi + theta_0
-        #assert theta_0 - math.pi <= theta <= theta_0 + math.pi
-        cos_theta = math.cos(theta)
-        sin_theta = math.sin(theta)
-        abs_delta_theta = abs(theta - theta_0)
-        
-        if theta == theta_0:
-            derivative = vb*(avx*t_0*math.cos(theta_0) + avy*t_0*math.sin(theta_0) - ax*math.cos(theta_0) - ay*math.sin(theta_0))
-        else:
-            term1 = -vb*(avx*cos_theta*abs_delta_theta + avy*sin_theta*abs_delta_theta + ax*tr*cos_theta + ay*tr*sin_theta - t_0*tr*vb)*abs_delta_theta
-            term2 = (avx - vb*cos_theta)*(avy*(theta - theta_0) - t_0*tr*vb*cos_theta*abs_delta_theta)
-            term3 = (avy - vb*sin_theta)*(avx*(theta - theta_0) + t_0*tr*vb*sin_theta*abs_delta_theta)
-            derivative = (term1 - term2 + term3)/(tr*abs_delta_theta)
-        return derivative
+        sinusoidal_component = -k1*cos_theta + k2*sin_theta
+        wacky_component = -vb*np.sign(theta - theta_0)/math.pi*(2*avx*cos_theta + 2*avy*sin_theta - (theta - theta_0)*(avx*sin_theta - avy*cos_theta))
+        return sinusoidal_component + wacky_component
 
-    def interception_time(intercept_theta):
-        pass
-        return
-
-    def turbo_rootinator(initial_guess, function, derivative_function, second_derivative_function, tolerance=eps, max_iterations=5):
+    def turbo_rootinator(initial_guess, function, derivative_function, second_derivative_function, tolerance=eps, max_iterations=4):
         # theta_new = theta_old - f(theta_old)/f'(theta_old)
+        #theta_old = (initial_guess + math.pi)%(2*math.pi) - math.pi
         theta_old = initial_guess
         #print(f"Our initial guess is {initial_guess}")
+        small_num = 0.01
         initial_func_value = None
         for iteration in range(max_iterations):
             func_value = function(theta_old)
@@ -211,6 +210,17 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
 
             # Update the estimate
             theta_new = theta_old - (2*func_value*derivative_value)/(2*derivative_value*derivative_value - func_value*second_derivative_value)
+            # The value has jumped past the periodic boundary. Clamp it to right past the boundary just so things don't get too crazy.
+            if theta_new < -math.pi:
+                theta_new = math.pi - small_num
+            elif math.pi < theta_new:
+                theta_new = -math.pi + small_num
+            elif -math.pi <= theta_old <= 0 and 0 <= theta_new <= math.pi:
+                # The value jumped past the kink in the middle of the graph. Set it to right past the kink so the value doesn't jump around like crazy
+                theta_new = small_num
+            elif 0 <= theta_old <= math.pi and -math.pi <= theta_new <= 0:
+                theta_new = -small_num
+            
             #print(f"After iteration {iteration + 1}, our new theta value is {theta_new}. Func value is {func_value}")
             # Check for convergence
             # It converged if the theta value isn't changing much, and the function itself takes a value that is close to zero (magnitude at most 1% of the original func value)
@@ -224,6 +234,8 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         return abs(delta_theta_rad)/math.radians(ship_max_turn_rate)
 
     def bullet_travel_time(theta, t_rot):
+        # Convert heading error to absolute heading
+        theta += theta_0
         cos_theta = math.cos(theta)
         sin_theta = math.sin(theta)
 
@@ -232,6 +244,19 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             return math.inf
         else:
             return (cos_theta*(ay + avy*t_rot) - sin_theta*(ax + avx*t_rot))/denom
+
+    def bullet_travel_time_for_plot(theta):
+        # Convert heading error to absolute heading
+        theta += theta_0
+        cos_theta = math.cos(theta)
+        sin_theta = math.sin(theta)
+        t_rot = rotation_time(theta - theta_0)
+
+        denom = (avx*sin_theta - avy*cos_theta)
+        if denom == 0:
+            return math.inf
+        else:
+            return max(-200000, min(((cos_theta*(ay + avy*t_rot) - sin_theta*(ax + avx*t_rot))/denom)*100000, 200000))
 
     def plot_function():
         naive_theta_ans_list = naive_desired_heading_calc(timesteps_until_can_fire)  # Assuming this function returns a list of angles
@@ -243,27 +268,36 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         vectorized_function = np.vectorize(root_function)
         vectorized_derivative = np.vectorize(root_function_derivative)
         vectorized_second_derivative = np.vectorize(root_function_second_derivative)
+        vectorized_bullet_time = np.vectorize(bullet_travel_time_for_plot)
+        vectorized_naive_function = np.vectorize(naive_root_function)
+        vectorized_naive_time = np.vectorize(naive_time_function_for_plotting)
 
         # Calculate function values
-        function_values = vectorized_function(theta_range)
-        derivative_values = vectorized_derivative(theta_range)
-        alt_derivative_values = vectorized_second_derivative(theta_range)
+        function_values = vectorized_function(theta_delta_range)
+        derivative_values = vectorized_derivative(theta_delta_range)
+        alt_derivative_values = vectorized_second_derivative(theta_delta_range)
+        bullet_times = vectorized_bullet_time(theta_delta_range)
+        naive_function_values = vectorized_naive_function(theta_delta_range, timesteps_until_can_fire*delta_time)
+        naive_times = vectorized_naive_time(theta_delta_range)
 
         plt.figure(figsize=(12, 6))
 
         # Plot the function and its derivatives
         plt.plot(theta_delta_range, function_values, label="Function")
         plt.plot(theta_delta_range, derivative_values, label="Derivative", color="orange")
-        plt.plot(theta_delta_range, alt_derivative_values, label="Second Derivative", color="blue", linestyle=':')
+        #plt.plot(theta_delta_range, alt_derivative_values, label="Second Derivative", color="blue", linestyle=':')
+        plt.plot(theta_delta_range, bullet_times, label="Bullet Time", color="green", linestyle='-')
+        plt.plot(theta_delta_range, naive_function_values, label="Naive Function", color="magenta", linestyle='-')
+        plt.plot(theta_delta_range, naive_times, label="Naive Times", color="purple", linestyle='-')
 
         # Add vertical lines for each naive_theta_ans
         fudge = 0
         for theta_ans in naive_theta_ans_list:
             plt.axvline(x=theta_ans[1] + fudge, color='yellow', linestyle='--', label=f"Naive Theta Ans at {theta_ans[1]:.2f}")
 
-            zero, iterations = turbo_rootinator(theta_ans[1] + theta_0 + fudge, root_function, root_function_derivative, root_function_second_derivative, 0.1, 15)
+            zero, iterations = turbo_rootinator(theta_ans[1] + fudge, root_function, root_function_derivative, root_function_second_derivative, 0.1, 15)
             if zero:
-                delta_theta_solution = zero - theta_0
+                delta_theta_solution = zero
                 if not (-math.pi <= delta_theta_solution <= math.pi):
                     #print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
                     delta_theta_solution = (delta_theta_solution + math.pi)%(2*math.pi) - math.pi
@@ -287,7 +321,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
     #print('PLOTTING FUNCTION!')
     #plot_function()
     valid_solutions = []
-    print_debug = False
+    #print_debug = False
     naive_solutions = naive_desired_heading_calc(timesteps_until_can_fire)
     amount_we_can_turn_before_we_can_shoot_rad = math.radians(timesteps_until_can_fire*delta_time*ship_max_turn_rate)
     for naive_solution in naive_solutions:
@@ -298,10 +332,10 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
         else:
             # Use more advanced solution
             #print('Using more advanced root finder')
-            sol, _ = turbo_rootinator(naive_solution[1] + theta_0, root_function, root_function_derivative, root_function_second_derivative, 0.01)
+            sol, _ = turbo_rootinator(naive_solution[1], root_function, root_function_derivative, root_function_second_derivative, 0.1, 4)
             if not sol:
                 continue
-            delta_theta_solution = sol - theta_0
+            delta_theta_solution = sol
             if not (-math.pi <= delta_theta_solution <= math.pi):
                 #print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
                 delta_theta_solution = (delta_theta_solution + math.pi)%(2*math.pi) - math.pi
@@ -309,23 +343,11 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             delta_theta_solution_deg = math.degrees(delta_theta_solution)
             t_rot = rotation_time(delta_theta_solution)
             assert math.isclose(t_rot, abs(delta_theta_solution_deg)/ship_max_turn_rate)
-            # Intuitively, the following equation divides the distance between the bullet's initial position and the asteroid's interception point, by the velocity of the bullet relative to the asteroid, and this gives the interception time
-            # It only does this for either x or y component, but it's really the same.
-
-            t_bullet_1 = (ax + avx*t_rot - vb*t_0*math.cos(sol))/(vb*math.cos(sol) - avx)
-            t_bullet_2 = (ay + avy*t_rot - vb*t_0*math.sin(sol))/(vb*math.sin(sol) - avy)
-            if not math.isclose(t_bullet_1, t_bullet_2, abs_tol=0.1):
-                print('\nBAD:')
-                print(f"({ax} + {avx} * {t_rot} - {vb} * {t_0} * cos({sol}))/({vb} * cos({sol}) - {avx})")
-                print(f"({ay} + {avy} * {t_rot} - {vb} * {t_0} * sin({sol}))/({vb} * sin({sol}) - {avy})")
-            
-            
-
-            #assert math.isclose(t_bullet_1, t_bullet_2, abs_tol=0.5)
             t_bullet = bullet_travel_time(sol, t_rot)
             
-            #assert t_bullet >= 0
-            t_total = t_rot + t_bullet
+            if t_bullet < 0:
+                continue
+            #t_total = t_rot + t_bullet
             intercept_x = origin_x + vb*math.cos(sol)*(t_bullet + t_0)
             intercept_y = origin_y + vb*math.sin(sol)*(t_bullet + t_0)
 
@@ -338,20 +360,23 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
                 for disc_sol in proper_discretized_solutions:
                     # Only expecting there to be one
                     if not abs(math.degrees(disc_sol[1])) - eps <= t_rot_ts*delta_time*ship_max_turn_rate:
-                        print_debug = True
-                        print(f"Good tbullet: {t_bullet}, t_bullet_1: {t_bullet_1} with denom {(avx - vb*math.cos(sol))}, t_bullet_2: {t_bullet_2} with denom {(avy - vb*math.sin(sol))}")
-                        print(f"About to fail assertion! degrees required to turn: {abs(math.degrees(disc_sol[1]))} isn't at most the amount we can rotate: {t_rot_ts*delta_time*ship_max_turn_rate}")
-                        print('New sol:')
-                        print((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
-                        print('Old continuous sol:')
-                        print((feasible, delta_theta_solution_deg, t_rot/delta_time, t_total, intercept_x, intercept_y, None))
-                    if not t_rot_ts == disc_sol[2]:
-                        print_debug = True
-                        print(f"About to fail assertion! TS we need to rotate ceiled: {t_rot_ts} isn't equal to our discretized solution of {disc_sol[2]}")
-                        print((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
+                        continue
+                    #    print_debug = True
+                    #    #print(f"Good tbullet: {t_bullet}, t_bullet_1: {t_bullet_1} with denom {(avx - vb*math.cos(sol))}, t_bullet_2: {t_bullet_2} with denom {(avy - vb*math.sin(sol))}")
+                    #    print(f"About to fail assertion! degrees required to turn: {abs(math.degrees(disc_sol[1]))} isn't at most the amount we can rotate: {t_rot_ts*delta_time*ship_max_turn_rate}")
+                    #    print('New sol:')
+                    #    print((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
+                    #    print('Old continuous sol:')
+                    #    print((feasible, delta_theta_solution_deg, t_rot/delta_time, t_total, intercept_x, intercept_y, None))
+                    #    plot_function()
+                    #if not t_rot_ts == disc_sol[2]:
+                    #    print_debug = True
+                    #    print(f"About to fail assertion! TS we need to rotate ceiled: {t_rot_ts} isn't equal to our discretized solution of {disc_sol[2]}")
+                    #    print((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
+                    #    #plot_function()
                     #assert abs(math.degrees(disc_sol[1])) - eps <= t_rot_ts*delta_time*ship_max_turn_rate
                     
-                    #assert t_rot_ts == disc_sol[2]
+                    assert t_rot_ts == disc_sol[2]
                     valid_solutions.append((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
             else:
                 pass
@@ -359,13 +384,16 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
 
     sorted_solutions = sorted(valid_solutions, key=lambda x: x[2])
     if sorted_solutions:
-        if print_debug:
-            print('ALL SORTED SOLUTIONS:')
-            print(sorted_solutions)
-            print('Finally, printing the inputs to this problem:')
-            print("asteroid, ship_state, game_state, timesteps_until_can_fire")
-            print(asteroid, ship_state, game_state, timesteps_until_can_fire)
-            print()
+        #if print_debug:
+        #    pass
+            #print('ALL SORTED SOLUTIONS:')
+            #print(sorted_solutions)
+            #print('Finally, printing the inputs to this problem:')
+            #print("asteroid, ship_state, game_state, timesteps_until_can_fire")
+            #print(asteroid, ship_state, game_state, timesteps_until_can_fire)
+            #print()
+            #plot_function()
+        # TODO: Maybe return all solutions just so we have more options
         return sorted_solutions[0]
     else:
         return False, None, None, None, None, None, None
@@ -579,7 +607,6 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     
     
 
-
     # Calculate the amount off of the shot heading I can be and still hit the asteroid
     #print(f"Asteroid radius {asteroid_r} asteroid distance {asteroid_dist}")
     if asteroid_r < asteroid_dist:
@@ -596,7 +623,7 @@ def generate_random_asteroid(pos_range_x, pos_range_y, vel_range, radius_values)
     position = (random.uniform(*pos_range_x), random.uniform(*pos_range_y))
     velocity = (random.uniform(*vel_range), random.uniform(*vel_range))
     radius = random.choice(radius_values)
-    #return {'position': (1316.9501264494488, 1010.0839673451192), 'velocity': (-372.8657417197293, -337.7489773853769), 'radius': 24}
+    #return {'position': (260, 1603), 'velocity': (-150, -1600), 'radius': 24}
     return {'position': position, 'velocity': velocity, 'radius': radius}
 
 def generate_random_ship_state(pos_range_x, pos_range_y, vel_range, speed_range, heading_range):
@@ -604,7 +631,7 @@ def generate_random_ship_state(pos_range_x, pos_range_y, vel_range, speed_range,
     velocity = (random.uniform(*vel_range), random.uniform(*vel_range))
     speed = random.uniform(*speed_range)
     heading = random.uniform(*heading_range)
-    #return {'position': (1219.4836342299786, 1059.4291752463291), 'velocity': (0.0, 0.0), 'speed': 0.0, 'heading': 14.865219024464187}
+    #return {'position': (0, 0), 'velocity': (0.0, 0.0), 'speed': 0.0, 'heading': 165.904}
     return {'position': position, 'velocity': velocity, 'speed': speed, 'heading': heading}
 
 def generate_test_data(num_sets, ship_pos_range_x, ship_pos_range_y, ast_pos_range_x, ast_pos_range_y, vel_range, radius_values, speed_range, heading_range, timestep_range):
@@ -625,12 +652,12 @@ def benchmark_function(function, test_data, number=1):
     return total_time
 
 def main():
-    num_sets = 1  # Adjust this based on your needs
+    num_sets = 100000  # Adjust this based on your needs
     ast_pos_range_x = (-width, 2*width)  # Example range for position
     ast_pos_range_y = (-height, 2*height)
     ship_pos_range_x = (0, width)
     ship_pos_range_y = (0, height)
-    vel_range = (-400, 400)  # Example range for velocity
+    vel_range = (-350, 350)  # Example range for velocity
     radius_values = [8, 16, 24, 32]
     speed_range = (0, 0)  # Example range for ship speed
     heading_range = (0, 360)  # Example range for ship heading
@@ -638,10 +665,10 @@ def main():
 
     randseed = random.randint(1, 1000)
     print(f'Using seed {randseed}')
-    random.seed(randseed)#315 diff ans!!! TODO
+    random.seed(389)#315 diff ans!!! TODO
     nonzero_ans = False
-    while not nonzero_ans:
-    #for i in range(1):
+    #while not nonzero_ans:
+    for i in range(1):
         test_data = generate_test_data(num_sets, ship_pos_range_x, ship_pos_range_y, ast_pos_range_x, ast_pos_range_y, vel_range, radius_values, speed_range, heading_range, timestep_range)
         
         asteroid = test_data[0][0]
@@ -652,17 +679,17 @@ def main():
         #print('Old solution:')
         #print(calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_y, asteroid_vel_x, asteroid_vel_y, asteroid_r, ship_heading, game_state, future_shooting_timesteps=0))
         #print(f"feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception")
-        old_ans = get_feasible_intercept_angle_and_turn_time(asteroid, ship_state, game_state, timesteps_until_can_fire)
+        #old_ans = get_feasible_intercept_angle_and_turn_time(asteroid, ship_state, game_state, timesteps_until_can_fire)
         #print(old_ans)
         #print('\nNew solution:')
-        new_ans = solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fire)
+        #new_ans = solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fire)
         #print(new_ans)
         #if old_ans[0] != False:
         #nonzero_ans = old_ans[0]
-        #function_time = benchmark_function(get_feasible_intercept_angle_and_turn_time, test_data, number=1)
+        #function_time = benchmark_function(get_feasible_intercept_angle_and_turn_time, test_data, number=5)
         #print(f"Old Function Execution Time: {function_time}")
-        #function_time = benchmark_function(solve_interception, test_data, number=1)
-        #print(f"New Function Execution Time: {function_time}")
+        function_time = benchmark_function(solve_interception, test_data, number=5)
+        print(f"New Function Execution Time: {function_time}")
 
 if __name__ == "__main__":
     main()

@@ -293,17 +293,21 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
 # Evaluate the game
-for _ in range(1):
-    randseed = random.randint(1, 10000) #2645
+missed = False
+#for _ in range(1):
+iterations = 0
+while not missed:
+    iterations += 1
+    randseed = random.randint(1, 100000000) #2645
     print(f'Using seed {randseed}')
-    random.seed(658) #671 spams the miss sim bullet hing
+    random.seed(243592) #671 spams the miss sim bullet hing, 5592 #      243592 IS A GOOD ONE, MAKES ME MISS 1 out of 33 shots, 91933540 also makes me miss, 62832344 too, 14938532
     asteroids_random = generate_asteroids(
-                                    num_asteroids=15,
+                                    num_asteroids=5,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(200, 300),
+                                    speed_range=(400, 800),
                                     angle_range=(-180, 180),
-                                    size_range=(1, 4)
+                                    size_range=(1, 3)
                                 )
 
     # Define game scenario
@@ -314,7 +318,7 @@ for _ in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                                    {'position': (width//2, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
@@ -337,11 +341,11 @@ for _ in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
+    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     print('Scenario eval time: '+str(time.perf_counter()-pre))
@@ -350,3 +354,6 @@ for _ in range(1):
     print('Deaths: ' + str([team.deaths for team in score.teams]))
     print('Accuracy: ' + str([team.accuracy for team in score.teams]))
     print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
+    if score.teams[0].accuracy < 1:
+        missed = True
+print(f"Ran {iterations} simulations to get one where Neo missed!")
