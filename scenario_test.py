@@ -326,7 +326,7 @@ shearing_pattern_scenario = Scenario(
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 1,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -337,19 +337,19 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 missed = False
 #for _ in range(1):
 iterations = 0
-while not missed:
-#while True:
+#while not missed:
+while True:
     iterations += 1
     randseed = random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
     color_print(f'Using seed {randseed}, running test iteration {iterations}', 'green')
-    random.seed(randseed)
+    random.seed(978612582)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=1,
+                                    num_asteroids=3,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 1200, -300),
                                     angle_range=(0, 360),
-                                    size_range=(2, 2)
+                                    size_range=(1, 4)
                                 )
 
     # Define game scenario
@@ -360,7 +360,7 @@ while not missed:
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//2, height//2), 'angle': 0, 'lives': 10, 'team': 1, "mines_remaining": 0},
+                                    {'position': (width//2, height//2), 'angle': 0, 'lives': 5, 'team': 1, "mines_remaining": 0},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                                 ],
                                 map_size=(width, height),
@@ -387,7 +387,7 @@ while not missed:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    score, perf_data = game.run(scenario=super_hard_wrap, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
 
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
