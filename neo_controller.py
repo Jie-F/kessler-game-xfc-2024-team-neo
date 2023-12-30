@@ -22,7 +22,7 @@ import copy
 
 # TODO: Dynamic culling for sim? Different radii, or maybe direction?
 
-debug_mode = False
+debug_mode = True
 global gamestate_plotting
 gamestate_plotting = False
 start_gamestate_plotting_at_second = None
@@ -334,7 +334,89 @@ def predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, s
             next_imminent_collision_time = start_collision_time
     return next_imminent_collision_time
 
-def unwrap_asteroid(asteroid, max_x, max_y, pattern='half_surround', directional_culling=True):
+def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: float=10) -> list:
+    def calculate_border_crossings(x0, y0, vx, vy, W, H, c):
+        # Initialize lists to hold crossing times
+        x_crossings_times = []
+        y_crossings_times = []
+
+        # Calculate crossing times for x (if vx is not zero to avoid division by zero)
+        if vx != 0:
+            # Calculate time to first x-boundary crossing based on direction of vx
+            time_to_first_x_crossing = ((W - x0) / vx if vx > 0 else (x0 / -vx))
+            x_crossings_times.append(time_to_first_x_crossing)
+            # Add additional crossings until time c is reached
+            while x_crossings_times[-1] + (W / abs(vx)) <= c:
+                x_crossings_times.append(x_crossings_times[-1] + (W / abs(vx)))
+
+        # Calculate crossing times for y (if vy is not zero)
+        if vy != 0:
+            # Calculate time to first y-boundary crossing based on direction of vy
+            time_to_first_y_crossing = ((H - y0) / vy if vy > 0 else (y0 / -vy))
+            y_crossings_times.append(time_to_first_y_crossing)
+            # Add additional crossings until time c is reached
+            while y_crossings_times[-1] + (H / abs(vy)) <= c:
+                y_crossings_times.append(y_crossings_times[-1] + (H / abs(vy)))
+
+        # Merge the two lists while tracking the origin of each time
+        merged_times = []
+        sequence = []
+        i = j = 0
+
+        while i < len(x_crossings_times) and j < len(y_crossings_times):
+            if x_crossings_times[i] < y_crossings_times[j]:
+                merged_times.append(x_crossings_times[i])
+                sequence.append('x')
+                i += 1
+            else:
+                merged_times.append(y_crossings_times[j])
+                sequence.append('y')
+                j += 1
+
+        # Add any remaining times from the x_crossings_times list
+        while i < len(x_crossings_times):
+            merged_times.append(x_crossings_times[i])
+            sequence.append('x')
+            i += 1
+
+        # Add any remaining times from the y_crossings_times list
+        while j < len(y_crossings_times):
+            merged_times.append(y_crossings_times[j])
+            sequence.append('y')
+            j += 1
+
+        # Initialize current universe coordinates and list of visited universes
+        current_universe_x, current_universe_y = 0, 0
+        universes = [(current_universe_x, current_universe_y)]
+
+        # Iterate through merged crossing times and sequence
+        for time, crossing in zip(merged_times, sequence):
+            if time <= c:
+                if crossing == 'x':
+                    current_universe_x += 1 if vx > 0 else -1
+                else:  # crossing == 'y'
+                    current_universe_y += 1 if vy > 0 else -1
+                universes.append((current_universe_x, current_universe_y))
+
+        return universes
+
+    if abs(asteroid['velocity'][0]) < eps and abs(asteroid['velocity'][1]) < eps:
+        return [asteroid]
+
+    unwrapped_asteroids = []
+    # The idea is to track which universes the asteroid visits from t=t_0 until t=t_0 + time_horizon_s.
+    # The current universe is (0, 0) and if the asteroid wraps to the right, it visits (1, 0). If it wraps down, it visits (0, -1). If it wraps right and then down, it starts in (0, 0), visits (1, 0), and finally (1, -1).
+    border_crossings = calculate_border_crossings(asteroid['position'][0], asteroid['position'][1], asteroid['velocity'][0], asteroid['velocity'][1], max_x, max_y, time_horizon_s)
+    for universe in border_crossings:
+        # We negate the directions because we're using the frame of reference of the ship now, not the asteroid
+        dx = -universe[0]*max_x
+        dy = -universe[1]*max_y
+        unwrapped_asteroid = dict(asteroid)
+        unwrapped_asteroid['position'] = (unwrapped_asteroid['position'][0] + dx, unwrapped_asteroid['position'][1] + dy)
+        unwrapped_asteroids.append(unwrapped_asteroid)
+    return unwrapped_asteroids
+
+def unwrap_asteroid_OLD(asteroid, max_x, max_y, pattern='half_surround', directional_culling=True):
     duplicates = []
     # Original X and Y coordinates
     orig_x, orig_y = asteroid["position"]
@@ -880,6 +962,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             intercept_y = y + origin_y
             solutions.append((t + 0*time_until_can_fire_s, angle_difference_rad(theta, theta_0), timesteps_until_can_fire, None, intercept_x, intercept_y, None))
         return solutions
+        # Returned tuple is (interception time in seconds from firing to hit, delta theta rad, timesteps until can fire, None, intercept_x, intercept_y, None)
 
     def naive_root_function(theta, time_until_can_fire_s: int=0):
         # Can be optimized more by expanding out the terms
@@ -1095,7 +1178,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
     valid_solutions = []
     #print_debug = False
     naive_solutions = naive_desired_heading_calc(timesteps_until_can_fire)
-    debug_print('\n\nALL OUR NAIVE SOLUTIONS:', naive_solutions)
+    debug_print(f'\n\nALL OUR NAIVE SOLUTIONS:, keep in mind timesteps until can fire is {timesteps_until_can_fire} so we cant go below that', naive_solutions)
     amount_we_can_turn_before_we_can_shoot_rad = math.radians(timesteps_until_can_fire*delta_time*ship_max_turn_rate)
     for naive_solution in naive_solutions:
         debug_print("Evaluating naive solution:", naive_solution)
@@ -1125,7 +1208,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             # Check validity of solution to make sure time is positive and stuff
             delta_theta_solution_deg = math.degrees(delta_theta_solution)
             t_rot = rotation_time(delta_theta_solution)
-            assert math.isclose(t_rot, abs(delta_theta_solution_deg)/ship_max_turn_rate)
+            assert math.isclose(t_rot, abs(delta_theta_solution_deg)/ship_max_turn_rate, abs_tol=eps)
             t_bullet = bullet_travel_time(delta_theta_solution, t_rot)
             #debug_print(f't_bullet: {t_bullet}')
             if t_bullet < 0:
@@ -1141,8 +1224,9 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
             if feasible:
                 #debug_print(f"The coordinates of {intercept_x}, {intercept_y} are GUCCI! We'd have to turn this many ts: {t_rot/delta_time}")
                 # Since half timesteps don't exist, we need to discretize this solution by rounding up the amount of timesteps, and now we can use the naive method to confirm and get the exact angle
-                t_rot_ts = math.ceil(t_rot/delta_time)
-                debug_print(f"The rotation timesteps we've calculated is {t_rot_ts}")
+                # We max this with ts until can fire, because that's the floor and we can't go below it
+                t_rot_ts = max(timesteps_until_can_fire, math.ceil(t_rot/delta_time))
+                debug_print(f"The rotation timesteps we've calculated is {t_rot_ts}, from a t_rot of {t_rot}")
                 #valid_solutions.append((True, delta_theta_solution_deg, t_rot_ts, None, intercept_x, intercept_y, None))
                 proper_discretized_solutions = naive_desired_heading_calc(t_rot_ts)
                 for disc_sol in proper_discretized_solutions:
@@ -1163,7 +1247,7 @@ def solve_interception(asteroid, ship_state, game_state, timesteps_until_can_fir
                     #    print((True, math.degrees(disc_sol[1]), t_rot_ts, disc_sol[0], disc_sol[4], disc_sol[5], None))
                     #    #plot_function()
                     #assert abs(math.degrees(disc_sol[1])) - eps <= t_rot_ts*delta_time*ship_max_turn_rate
-                    
+                    # disc_sol tuple is (interception time in seconds from firing to hit, delta theta rad, timesteps until can fire, None, intercept_x, intercept_y, None)
                     assert t_rot_ts == disc_sol[2]
                     if check_coordinate_bounds(game_state, disc_sol[4], disc_sol[5]):
                         debug_print('Valid solution found!', disc_sol)
@@ -1483,7 +1567,7 @@ class Simulation():
         for asteroid in (self.asteroids + self.forecasted_asteroid_splits):
             debug_print(f"Checking collision with asteroid: {ast_to_string(asteroid)}")
             #debug_print(f"Future timesteps: {self.future_timesteps}, timesteps to not check collision for: {self.timesteps_to_not_check_collision_for}")
-            unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
+            unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
             for a in unwrapped_asteroids:
                 if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
                     predicted_collision_time = predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
@@ -1592,6 +1676,7 @@ class Simulation():
             # If the asteroids are moving slow enough, this should be rare, but especially if small asteroids are moving very quickly, this issue is common.
             # A simulation will easily show whether this will happen or not
             # TODO: CULLING
+            debug_print(f"The last timestep fired is {self.last_timestep_fired}")
             aiming_move_sequence = self.get_rotate_heading_move_sequence(target_asteroid_shooting_angle_error_deg)
             if self.fire_first_timestep:
                 timesteps_until_can_fire = max(0, 5 - len(aiming_move_sequence))
@@ -1599,11 +1684,11 @@ class Simulation():
                 timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps + len(aiming_move_sequence) - self.last_timestep_fired))
             #if enable_assertions:
             #   assert timesteps_until_can_fire == 0
-            #print(f'aiming move seq before append, and ts until can fire is {timesteps_until_can_fire}')
-            #print(aiming_move_sequence)
+            debug_print(f'aiming move seq before append, and ts until can fire is {timesteps_until_can_fire}')
+            debug_print(aiming_move_sequence)
             aiming_move_sequence.extend([{'thrust': 0, 'turn_rate': 0, 'fire': False} for _ in range(timesteps_until_can_fire)])
-            #print('aiming move seq after append')
-            #print(aiming_move_sequence)
+            debug_print('aiming move seq after append')
+            debug_print(aiming_move_sequence)
             asteroid_advance_timesteps = len(aiming_move_sequence)
             debug_print(f"Asteroid advanced timesteps: {asteroid_advance_timesteps}")
             debug_print(f"Targetting turning timesteps: {target_asteroid_turning_timesteps}")
@@ -1659,7 +1744,7 @@ class Simulation():
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
                 asteroids_still_exist = True
                 #print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
-                unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'none', True)
+                unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
                 # Iterate through all unwrapped asteroids to find which one of the unwraps is the best feasible target.
                 # 99% of the time, only one of the unwraps will have a feasible target, but there's situations where we could either shoot the asteroid before it wraps, or wait for it to wrap and then shoot it.
                 # In these cases, we need to pick whichever option is the fastest when factoring in turn time and waiting time.
@@ -1707,7 +1792,7 @@ class Simulation():
         # if there’s an imminent shot coming toward me, I will aim at the asteroid that gets me CLOSEST to the direction of the imminent shot.
         # So it only plans one shot at a time instead of a series of shots, and it’ll keep things simpler
         #debug_print(f"Least angular dist: {least_angular_distance_asteroid_shooting_angle_error_deg}")
-        debug_print('Target asts list: ', target_asteroids_list)
+        #debug_print('Target asts list: ', target_asteroids_list)
         actual_asteroid_hit = None
         aiming_move_sequence = []
 
@@ -1785,6 +1870,7 @@ class Simulation():
                 least_shot_delay_asteroid_aiming_timesteps = target['aiming_timesteps_required']
                 #print(sorted_targets)
                 #time.sleep(5)
+                print(target)
                 actual_asteroid_hit, aiming_move_sequence, target_asteroid, target_asteroid_shooting_angle_error_deg, target_asteroid_interception_time_s, target_asteroid_turning_timesteps, timesteps_until_bullet_hit_asteroid, ship_state_after_aiming = simulate_shooting_at_target(least_shot_delay_asteroid, least_shot_delay_asteroid_shooting_angle_error_deg, least_shot_delay_asteroid_interception_time_s, least_shot_delay_asteroid_aiming_timesteps)
                 if actual_asteroid_hit is not None and check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, actual_asteroid_hit, True):
                     break
@@ -2112,7 +2198,7 @@ class Simulation():
                     if fire_this_timestep:
                         break
                     if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
-                        unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'half_surround', True)
+                        unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'half_surround', True)
                         for a in unwrapped_asteroids:
                             if fire_this_timestep:
                                 break
