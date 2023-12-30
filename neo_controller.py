@@ -22,13 +22,15 @@ import copy
 
 # TODO: Dynamic culling for sim? Different radii, or maybe direction?
 
-debug_mode = True
+debug_mode = False
 global gamestate_plotting
 gamestate_plotting = False
 start_gamestate_plotting_at_second = None
 reality_state_dump = False
 simulation_state_dump = False
 enable_assertions = True
+unwrap_asteroid_collision_forecast_time_horizon = 10
+unwrap_asteroid_target_selection_time_horizon = 3 # 1 second to turn, 2 seconds for bullet travel time
 
 # Quantities
 tad = 0.1
@@ -1567,7 +1569,7 @@ class Simulation():
         for asteroid in (self.asteroids + self.forecasted_asteroid_splits):
             debug_print(f"Checking collision with asteroid: {ast_to_string(asteroid)}")
             #debug_print(f"Future timesteps: {self.future_timesteps}, timesteps to not check collision for: {self.timesteps_to_not_check_collision_for}")
-            unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
+            unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], unwrap_asteroid_collision_forecast_time_horizon)
             for a in unwrapped_asteroids:
                 if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
                     predicted_collision_time = predict_next_imminent_collision_time_with_asteroid(self.position[0], self.position[1], self.velocity[0], self.velocity[1], ship_radius, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'])
@@ -1744,7 +1746,7 @@ class Simulation():
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
                 asteroids_still_exist = True
                 #print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
-                unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'surround', True)
+                unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], unwrap_asteroid_target_selection_time_horizon)
                 # Iterate through all unwrapped asteroids to find which one of the unwraps is the best feasible target.
                 # 99% of the time, only one of the unwraps will have a feasible target, but there's situations where we could either shoot the asteroid before it wraps, or wait for it to wrap and then shoot it.
                 # In these cases, we need to pick whichever option is the fastest when factoring in turn time and waiting time.
@@ -2198,7 +2200,7 @@ class Simulation():
                     if fire_this_timestep:
                         break
                     if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
-                        unwrapped_asteroids = unwrap_asteroid_OLD(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], 'half_surround', True)
+                        unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], unwrap_asteroid_target_selection_time_horizon)
                         for a in unwrapped_asteroids:
                             if fire_this_timestep:
                                 break
