@@ -15,44 +15,44 @@ from scenarios import *
 
 portfolio = [
     #threat_test_1,
-    threat_test_2,
+    #threat_test_2,
     #threat_test_3,
-    threat_test_4,
+    #threat_test_4,
     #accuracy_test_1,
-    accuracy_test_2,
+    #accuracy_test_2,
     #accuracy_test_3,
-    accuracy_test_4,
-    accuracy_test_5,
-    accuracy_test_6,
+    #accuracy_test_4,
+    #accuracy_test_5,
+    #accuracy_test_6,
     #accuracy_test_7,
-    accuracy_test_8,
+    #accuracy_test_8,
     #accuracy_test_9,
     #accuracy_test_10,
-    wall_left_easy,
+    #wall_left_easy,
     #wall_right_easy,
     #wall_top_easy,
     #wall_bottom_easy,
-    ring_closing,
-    ring_static_left,
-    #ring_static_right,
-    #ring_static_top,
-    #ring_static_bottom,
+    #ring_closing,
+    #ring_static_left,
+    ring_static_right,
+    ring_static_top,
+    ring_static_bottom,
 
     wall_right_wrap_1,
-    #wall_right_wrap_2,
-    #wall_right_wrap_3,
-    #wall_right_wrap_4,
-    #wall_left_wrap_1,
+    wall_right_wrap_2,
+    wall_right_wrap_3,
+    wall_right_wrap_4,
+    wall_left_wrap_1,
     wall_left_wrap_2,
-    #wall_left_wrap_3,
-    #wall_left_wrap_4,
-    #wall_top_wrap_1,
-    #wall_top_wrap_2,
+    wall_left_wrap_3,
+    wall_left_wrap_4,
+    wall_top_wrap_1,
+    wall_top_wrap_2,
     wall_top_wrap_3,
-    #wall_top_wrap_4,
-    #wall_bottom_wrap_1,
-    #wall_bottom_wrap_2,
-    #wall_bottom_wrap_3,
+    wall_top_wrap_4,
+    wall_bottom_wrap_1,
+    wall_bottom_wrap_2,
+    wall_bottom_wrap_3,
     wall_bottom_wrap_4,
 ]
 
@@ -155,14 +155,14 @@ my_test_scenario = Scenario(name='Test Scenario',
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 1,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
-for scene in portfolio:
+for scene in alternate_scenarios:
     # Evaluate the game
     pre = time.perf_counter()
     print(f"Running scenario: {scene.name}")

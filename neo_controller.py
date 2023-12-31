@@ -48,6 +48,7 @@ ship_max_thrust = 480.0 # px/s^2
 ship_drag = 80.0 # px/s^2
 ship_max_speed = 240.0 # px/s
 ship_radius = 20.0 # px
+ship_mass = 300 # kg
 timesteps_until_ship_achieves_max_speed = math.ceil(ship_max_speed/(ship_max_thrust - ship_drag)/delta_time) # Should be 18 timesteps
 collision_check_pad = 2 # px
 asteroid_aim_buffer_pixels = 7 # px
@@ -807,6 +808,13 @@ def forecast_asteroid_mine_splits(asteroid, timesteps_until_appearance, mine, ga
         return []
     vfx = asteroid['velocity'][0] + a*(asteroid['position'][0] - mine['position'][0])/dist
     vfy = asteroid['velocity'][1] + a*(asteroid['position'][1] - mine['position'][1])/dist
+    return forecast_asteroid_splits(asteroid, timesteps_until_appearance, vfx, vfy, game_state, wrap)
+
+def forecast_asteroid_ship_splits(asteroid, timesteps_until_appearance, ship_position, game_state=None, wrap=False):
+    # Assume ship is stationary
+    ship_vel_x, ship_vel_y = 0, 0
+    vfx = (1/(ship_mass + asteroid['mass']))*(ship_mass*ship_vel_x + asteroid['mass']*asteroid['velocity'][0])
+    vfy = (1/(ship_mass + asteroid['mass']))*(ship_mass*ship_vel_y + asteroid['mass']*asteroid['velocity'][1])
     return forecast_asteroid_splits(asteroid, timesteps_until_appearance, vfx, vfy, game_state, wrap)
 
 def forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, game_state=None, wrap=False):
@@ -1573,9 +1581,13 @@ class Simulation():
     def get_forecasted_asteroid_splits(self):
         return self.forecasted_asteroid_splits
 
-    def get_instantaneous_asteroid_collision(self):
-        for a in self.asteroids:
-            if check_collision(self.position[0], self.position[1], ship_radius, a['position'][0], a['position'][1], a['radius']):
+    def get_instantaneous_asteroid_collision(self, asteroids: list=None, ship_position: tuple=None):
+        if ship_position is not None:
+            position = ship_position
+        else:
+            position = self.position
+        for a in (asteroids if asteroids is not None else self.asteroids):
+            if check_collision(position[0], position[1], ship_radius, a['position'][0], a['position'][1], a['radius']):
                 return True
         return False
 
@@ -2162,6 +2174,22 @@ class Simulation():
             asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
             asteroids.extend(new_asteroids)
 
+            # Check ship/asteroid collisions
+            if ship_state is not None:
+                ship_position = ship_state['position']
+            else:
+                ship_position = self.position
+            asteroid_remove_idxs = []
+            for idx_ast, asteroid in enumerate(asteroids):
+                if check_collision(ship_position[0], ship_position[1], ship_radius, asteroid['position'][0], asteroid['position'][1], asteroid['radius']):
+                    asteroids.extend(forecast_asteroid_ship_splits(asteroid, 0, ship_position, self.game_state, True))
+                    asteroid_remove_idxs.append(idx_ast)
+                    # Stop checking this ship's collisions
+                    break
+            # Cull asteroids marked for removal
+            asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
+
+
     def apply_move_sequence(self, move_sequence=None):
         if move_sequence is None:
             move_sequence = []
@@ -2676,6 +2704,7 @@ class Neo(KesslerController):
         # Run a simulation and find a course of action to put me to safety
         safe_maneuver_found = False
         best_imminent_collision_time_found = -math.inf
+        best_safe_time_after_maneuver_found = -math.inf
         best_maneuver_sim = None
         best_safe_time_after_maneuver = -math.inf
         search_iterations_count = 0
@@ -2692,7 +2721,7 @@ class Neo(KesslerController):
             random_ship_cruise_timesteps = random.randint(0, round(max_cruise_seconds/delta_time))
             maneuver_sim, maneuver_length, next_imminent_collision_time, safe_time_after_maneuver, maneuver_fitness = self.simulate_maneuver(ship_state, game_state, random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, math.inf, False)
             
-            if next_imminent_collision_time > best_imminent_collision_time_found:
+            if safe_time_after_maneuver > best_safe_time_after_maneuver_found:
                 debug_print(f"Alright we found a better one with time {next_imminent_collision_time}")
                 best_imminent_collision_time_found = next_imminent_collision_time
                 best_maneuver_sim = maneuver_sim

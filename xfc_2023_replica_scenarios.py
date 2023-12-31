@@ -419,38 +419,3 @@ adv_multi_ring_closing_both_inside_fast = Scenario(
                  {"position": ship_position_2, 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1}],
     time_limit=30,
 )
-
-
-
-
-
-
-
-
-
-
-num_asteroids = 18
-side_padding = 60
-asteroid_spacing = (width - 2*side_padding) // num_asteroids  # Spacing between asteroids
-asteroid_speed = 90  # Constant speed of the asteroids
-asteroid_start_y = 100  # Starting height of the wall
-
-# Create asteroid states
-asteroid_states = []
-for i in range(num_asteroids):
-    x_position = side_padding + i * asteroid_spacing + asteroid_spacing / 2  # Centering each asteroid
-    asteroid_states.append({
-        'position': (x_position, asteroid_start_y),
-        'angle': -90,  # Moving straight down
-        'speed': asteroid_speed,
-        'size': 3,
-    })
-
-# Create the scenario
-super_hard_wrap = Scenario(
-    name='adv_multi_wall_bottom_hard_1',
-    asteroid_states=asteroid_states,
-    ship_states=[{'position': (width//4, height*9//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
-    map_size=(width, height),
-    time_limit=30,
-)
