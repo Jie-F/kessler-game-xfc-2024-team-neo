@@ -285,3 +285,39 @@ super_hard_wrap = Scenario(
     map_size=(width, height),
     time_limit=30,
 )
+
+
+
+
+super_fast_asteroid = Scenario(name='Test Scenario',
+                            #num_asteroids=200,
+                            asteroid_states=[{'position': (width/2, height*2/3), 'speed': 100+width*30, 'angle': 0, 'size': 3}],
+                            #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+                            #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
+                            ship_states=[
+                                {'position': (width//2, height//2), 'angle': 0, 'lives': 5, 'team': 1, "mines_remaining": 0},
+                                #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
+                            ],
+                            map_size=(width, height),
+                            #seed=2,
+                            time_limit=np.inf,
+                            ammo_limit_multiplier=0,
+                            stop_if_no_ammo=False)
+
+
+
+
+edge_asteroid = Scenario(name='Test Scenario',
+                            #num_asteroids=200,
+                            asteroid_states=[{'position': (0, 0), 'speed': 0, 'angle': 0, 'size': 1}],
+                            #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+                            #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
+                            ship_states=[
+                                {'position': (width//2, height//2), 'angle': 0, 'lives': 5, 'team': 1, "mines_remaining": 0},
+                                #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
+                            ],
+                            map_size=(width, height),
+                            #seed=2,
+                            time_limit=np.inf,
+                            ammo_limit_multiplier=0,
+                            stop_if_no_ammo=False)
