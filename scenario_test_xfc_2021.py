@@ -102,8 +102,8 @@ alternate_scenarios = [
     #moving_corridor_curve_1,
     #moving_corridor_curve_2,
 
-    scenario_small_box,
-    scenario_big_box,
+    #scenario_small_box,
+    #scenario_big_box,
     scenario_2_still_corridors,
 ]
 

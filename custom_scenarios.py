@@ -321,3 +321,319 @@ edge_asteroid = Scenario(name='Test Scenario',
                             time_limit=np.inf,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
+
+
+
+
+
+
+# Parameters for the ring of asteroids
+R_initial = 200  # Initial radius of the ring, large enough to enclose the ship
+num_asteroids = 20  # Number of asteroids in the ring
+speed = 20  # Speed at which asteroids close in
+
+# Ship's initial position (center of the screen)
+ship_position = (500, 400)
+
+# Calculating initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+ast_x = [R_initial * np.cos(angle) + ship_position[0] for angle in theta]
+ast_y = [R_initial * np.sin(angle) + ship_position[1] for angle in theta]
+init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x)) + random.triangular(-90, 90, 0) for x, y in zip(ast_x, ast_y)]
+
+# Creating asteroid states
+asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed, 'size': 3} for x, y, angle in zip(ast_x, ast_y, init_angle)]
+
+# Creating the scenario
+wonky_ring = Scenario(
+    name="wonky_ring",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 3}],
+    seed=0
+)
+
+
+
+
+
+
+
+
+
+
+
+
+def polar_to_cartesian(angle, speed):
+    """Convert polar coordinates (angle, speed) to Cartesian (vx, vy)."""
+    angle_rad = np.radians(angle)
+    vx = speed * np.cos(angle_rad)
+    vy = speed * np.sin(angle_rad)
+    return vx, vy
+
+def cartesian_to_polar(vx, vy):
+    """Convert Cartesian coordinates (vx, vy) to polar (angle, speed)."""
+    speed = np.sqrt(vx**2 + vy**2)
+    angle = np.degrees(np.arctan2(vy, vx)) % 360
+    return angle, speed
+
+# Parameters for the moving ring scenario
+R_initial = 400
+num_asteroids = 20
+closing_speed = -40
+horizontal_speed = 100
+ship_position = (960, 540)
+
+# Calculate initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+asteroid_states = []
+for angle in theta:
+    x = R_initial * np.cos(angle) + ship_position[0]
+    y = R_initial * np.sin(angle) + ship_position[1]
+    init_angle = np.rad2deg(angle) % 360
+
+    # Convert to Cartesian, adjust vx, and convert back to polar
+    vx, vy = polar_to_cartesian(init_angle, closing_speed)
+    vx += horizontal_speed  # Adding horizontal movement
+    angle, speed = cartesian_to_polar(vx, vy)
+
+    asteroid_states.append({'position': (x, y), 'angle': angle, 'speed': speed, 'size': 3})
+
+# Create the Moving Ring scenario
+moving_ring_scenario = Scenario(
+    name='moving_ring_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': ship_position, 'angle': 0, 'lives': 3, 'mines_remaining': 3}],
+    map_size=(1920, 1080),
+    seed=0
+)
+
+
+
+
+
+
+
+
+
+
+
+def cartesian_to_polar(vx, vy):
+    """Convert Cartesian coordinates (vx, vy) to polar (angle, speed)."""
+    speed = np.sqrt(vx**2 + vy**2)
+    angle = np.degrees(np.arctan2(vy, vx)) % 360
+    return angle, speed
+
+# Parameters for the shifting square scenario
+side_length = 600
+num_asteroids_per_side = 10
+closing_speed = 20
+horizontal_speed = 100
+ship_position = (960, 540)
+
+# Calculate initial positions for the asteroids
+asteroid_states = []
+for i in range(num_asteroids_per_side):
+    # Top side
+    x_top = ship_position[0] - side_length / 2 + i * (side_length / (num_asteroids_per_side - 1))
+    asteroid_states.append({'position': (x_top, ship_position[1] - side_length / 2),
+                            'angle': 0, 'speed': horizontal_speed})
+    
+    # Bottom side
+    x_bottom = ship_position[0] - side_length / 2 + i * (side_length / (num_asteroids_per_side - 1))
+    asteroid_states.append({'position': (x_bottom, ship_position[1] + side_length / 2),
+                            'angle': 180, 'speed': horizontal_speed})
+    
+    # Left side (excluding corners)
+    if i != 0 and i != num_asteroids_per_side - 1:
+        y_left = ship_position[1] - side_length / 2 + i * (side_length / (num_asteroids_per_side - 1))
+        asteroid_states.append({'position': (ship_position[0] - side_length / 2, y_left),
+                                'angle': 270, 'speed': closing_speed})
+        
+    # Right side (excluding corners)
+    if i != 0 and i != num_asteroids_per_side - 1:
+        y_right = ship_position[1] - side_length / 2 + i * (side_length / (num_asteroids_per_side - 1))
+        asteroid_states.append({'position': (ship_position[0] + side_length / 2, y_right),
+                                'angle': 90, 'speed': closing_speed})
+
+# Create the Shifting Square scenario
+shifting_square_scenario = Scenario(
+    name='shifting_square_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': ship_position, 'angle': 0, 'lives': 5, 'mines_remaining': 3}],
+    map_size=(1920, 1080),
+    seed=0
+)
+
+
+
+
+
+
+
+
+# Parameters for the ring of asteroids
+R_initial = 800  # Initial radius of the ring, large enough to enclose the ship
+num_asteroids = 20  # Number of asteroids in the ring
+speed = 40  # Speed at which asteroids close in
+
+# Ship's initial position (center of the screen)
+ship_position = (500, 400)
+
+# Calculating initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+ast_x = [R_initial * np.cos(angle) + ship_position[0] for angle in theta]
+ast_y = [R_initial * np.sin(angle) + ship_position[1] for angle in theta]
+init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x)) for x, y in zip(ast_x, ast_y)]
+
+# Creating asteroid states
+asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed, 'size': 4} for x, y, angle in zip(ast_x, ast_y, init_angle)]
+
+# Creating the scenario
+delayed_closing_ring_scenario = Scenario(
+    name="delayed_closing_ring_scenario",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 3}],
+)
+
+
+
+
+
+
+
+
+
+def spiral_position(center, radius, angle):
+    """Calculate the x, y position for a given angle along a spiral."""
+    x = center[0] + radius * np.cos(angle)
+    y = center[1] + radius * np.sin(angle)
+    return x, y
+
+def calculate_spiral_movement(angle, tightness):
+    """Calculate the movement angle (tangent to the spiral) at a given point."""
+    movement_angle = np.degrees(angle + np.pi/2) % 360  # Perpendicular to radius
+    return movement_angle
+
+# Parameters for the Spiral Assault scenario
+center = (960, 540)
+initial_radius = 600
+num_asteroids = 50
+spiral_tightness = 0.5  # Adjust for desired spiral tightness
+asteroid_speed = 20  # Can be constant or variable
+
+# Calculate initial positions for the asteroids
+asteroid_states = []
+for i in range(num_asteroids - 3):
+    angle = i * spiral_tightness
+    radius = initial_radius - i * (initial_radius / num_asteroids)
+    position = spiral_position(center, radius, angle)
+    movement_angle = calculate_spiral_movement(angle, spiral_tightness)
+    asteroid_states.append({'position': position, 'angle': movement_angle, 'speed': asteroid_speed, 'size': 3})
+
+# Create the Spiral Assault scenario
+spiral_assault_scenario = Scenario(
+    name='spiral_assault_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': center, 'angle': 0, 'lives': 3, 'mines_remaining': 2}],
+    map_size=(1920, 1080),
+)
+
+
+
+
+
+
+
+
+
+
+
+
+# Parameters for the ring of asteroids
+R_initial = 400  # Initial radius of the ring, large enough to enclose the ship
+num_asteroids = 20  # Number of asteroids in the ring
+speed = 40  # Speed at which asteroids close in
+
+# Ship's initial position (center of the screen)
+ship_position = (500, 400)
+
+# Calculating initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+ast_x = [R_initial * np.cos(angle) + ship_position[0] for angle in theta]
+ast_y = [R_initial * np.sin(angle) + ship_position[1] for angle in theta]
+init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x)) + 30 for x, y in zip(ast_x, ast_y)]
+
+# Creating asteroid states
+asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y, angle in zip(ast_x, ast_y, init_angle)]
+
+# Creating the scenario
+dancing_ring = Scenario(
+    name="dancing_ring",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": ship_position, 'lives': 10, 'team': 1, "mines_remaining": 1}],
+    seed=0
+)
+
+
+
+
+
+# Parameters for the ring of asteroids
+R_initial = 400  # Initial radius of the ring, large enough to enclose the ship
+num_asteroids = 20  # Number of asteroids in the ring
+speed = 40  # Speed at which asteroids close in
+
+# Ship's initial position (center of the screen)
+ship_position = (500, 400)
+
+# Calculating initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+ast_x = [R_initial * np.cos(angle) + ship_position[0] for angle in theta]
+ast_y = [R_initial * np.sin(angle) + ship_position[1] for angle in theta]
+offset = [len(theta)//2 - i for i in range(len(theta))]
+init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x)) + o*5 for x, y, o in zip(ast_x, ast_y, offset)]
+
+# Creating asteroid states
+asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y, angle in zip(ast_x, ast_y, init_angle)]
+
+# Creating the scenario
+dancing_ring_2 = Scenario(
+    name="dancing_ring_2",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": ship_position, 'lives': 5, 'team': 1, "mines_remaining": 0}],
+    seed=0
+)
+
+
+
+
+
+
+
+
+def create_diagonal_asteroids(start_pos, end_pos, num_asteroids, direction, speed):
+    """Generate states for asteroids along a diagonal line."""
+    positions = np.linspace(start_pos, end_pos, num_asteroids)
+    angle = np.degrees(np.arctan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])) % 360
+    return [{'position': pos, 'angle': direction, 'speed': speed, 'size': 3} for pos in positions]
+
+# Parameters for the Intersecting Lines scenario
+width, height = 1920, 1080
+num_asteroids = 5
+speed = 100  # pixels per second
+
+# Create asteroid lines
+line1 = create_diagonal_asteroids((0, 0), (width, height), num_asteroids, 0, speed)  # Top-left to bottom-right
+line2 = create_diagonal_asteroids((width, 0), (0, height), num_asteroids, 180, speed)  # Top-right to bottom-left
+
+# Combine asteroid states
+asteroid_states = line1 + line2
+
+# Create the Intersecting Lines scenario
+intersecting_lines_scenario = Scenario(
+    name='intersecting_lines_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': (width/4, height/2), 'angle': 0, 'lives': 3, 'mines_remaining': 1}],#
+                 #{'position': (width*3/4, height/2), 'angle': 0, 'lives': 3, 'mines_remaining': 1}],
+    map_size=(width, height),
+)
