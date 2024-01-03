@@ -22,17 +22,17 @@ import matplotlib.patches as patches
 import numpy as np
 import copy
 
-debug_mode = False
+debug_mode = True
 print_explanations = True
 global gamestate_plotting
 gamestate_plotting = False
-start_gamestate_plotting_at_second = None
+start_gamestate_plotting_at_second = 25
 reality_state_dump = False
 simulation_state_dump = False
 enable_assertions = True
 unwrap_asteroid_collision_forecast_time_horizon = 8
 unwrap_asteroid_target_selection_time_horizon = 3 # 1 second to turn, 2 seconds for bullet travel time
-asteroid_size_shot_priority = [0, 1, 2, 3, 4] # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
+asteroid_size_shot_priority = [math.nan, 1, 2, 3, 4] # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 last_explanation_message = None
 second_last_explanation_message = None
 new_target_plot_pause_time_s = 0.5
@@ -2107,10 +2107,10 @@ class Simulation():
             #print(asteroids)
             #if gamestate_plotting:
                #flattened_asteroids_pending_death = [ast for ast_list in self.asteroids_pending_death.values() for ast in ast_list]
-            #if ship_state and math.isclose(ship_state['heading'], 295.8634517075428, abs_tol=0.000000001):
-            #    flattened_asteroids_pending_death = [ast for ast_list in self.asteroids_pending_death.values() for ast in ast_list]
-            #    self.game_state_plotter.update_plot(asteroids, None, bullets, [my_bullet], [], flattened_asteroids_pending_death, [], True, 2, 'BULLET SIMULATION')
-            #    print('INSIDE PLOTTING MY SPECIAL BULLET')
+            if math.isclose(self.heading, 79.12893456534394, abs_tol=0.000000001):
+                flattened_asteroids_pending_death = [ast for ast_list in self.asteroids_pending_death.values() for ast in ast_list]
+                self.game_state_plotter.update_plot(asteroids, None, bullets, [my_bullet], [], flattened_asteroids_pending_death, [], True, 2, 'BULLET SIMULATION')
+                print('INSIDE PLOTTING MY SPECIAL BULLET')
             # Simulate bullets
             if skip_half_of_first_cycle:
                 skip_half_of_first_cycle = False
