@@ -637,3 +637,23 @@ intersecting_lines_scenario = Scenario(
                  #{'position': (width*3/4, height/2), 'angle': 0, 'lives': 3, 'mines_remaining': 1}],
     map_size=(width, height),
 )
+
+
+
+
+# Can cause a runtime warning due to divide by 0 if you drop a mine on the first timestep and get out of the way, since the distance between the asteroid and mine is 0 when the mine is exploding
+minecrash = Scenario(name='Mine Crash',
+                            asteroid_states=[{'position': (1920//2+30*3+1, 1080//2), 'speed': 30, 'angle': 180, 'size': 4}, {'position': (1920//2+30*3+1, 1000//2), 'speed': 30, 'angle': 180, 'size': 4}],
+                            ship_states=[
+                                {'position': (1920//2, 1080//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                                #{'position': (1920*2//3, 1080//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
+                            ],
+                            map_size=(width, height),
+                            #seed=2,
+                            time_limit=500,
+                            ammo_limit_multiplier=0,
+                            stop_if_no_ammo=False)
+
+
+
+

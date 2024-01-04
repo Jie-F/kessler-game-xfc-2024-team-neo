@@ -114,7 +114,8 @@ adv_random_big_1 = Scenario(
                      {'position': (width*0.1, height*0.9), 'angle': 250.0, 'speed': 30, 'size': 4},
                      {'position': (width*0.38, height*0.97), 'angle': 40.0, 'speed': 40, 'size': 4},
                      ],
-    ship_states=[{'position': (width*0.25, height*0.12), 'angle': 180, 'lives': 3, 'team': 1, "mines_remaining": 1}],
+    ship_states=[{'position': (width*0.25, height*0.12), 'angle': 180, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width*0.05, height*0.14), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
     time_limit=45,
 )
 
@@ -133,7 +134,8 @@ adv_random_big_3 = Scenario(
                      {'position': (width*0.3, height*0.07), 'angle': 190.0, 'speed': 60, 'size': 3},
                      {'position': (width*0.66, height*0.33), 'angle': 195.0, 'speed': 40, 'size': 4},
                      ],
-    ship_states=[{'position': (width*0.72, height*0.08), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1}],
+    ship_states=[{'position': (width*0.72, height*0.04), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width*0.72, height*0.92), 'angle': 0, 'lives': 3, 'team': 2, "mines_remaining": 0}],
     time_limit=45,
 )
 
@@ -160,7 +162,8 @@ for i in range(num_asteroids):
 adv_multi_wall_bottom_hard_1 = Scenario(
     name='adv_multi_wall_bottom_hard_1',
     asteroid_states=asteroid_states,
-    ship_states=[{'position': (width//4, height*9//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 3}],
+    ship_states=[{'position': (width/4, height*9//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*3/4, height*9//10), 'angle': 90, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=30,
 )
@@ -189,7 +192,8 @@ for i in range(num_asteroids):
 adv_multi_wall_right_hard_1 = Scenario(
     name='adv_multi_wall_right_hard_1',
     asteroid_states=asteroid_states,
-    ship_states=[{'position': (width/5, height/4), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 1}],
+    ship_states=[{'position': (width/5, height*3/4), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width/5, height/4), 'angle': 90, 'lives': 3, 'team': 2, 'mines_remaining': 1}],
     map_size=(width, height),
     time_limit=30,
 )
