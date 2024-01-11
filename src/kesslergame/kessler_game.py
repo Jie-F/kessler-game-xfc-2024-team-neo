@@ -227,6 +227,7 @@ class KesslerGame:
             new_asteroids = []
             for idx_mine, mine in enumerate(mines):
                 if mine.detonating:
+                    print(f"\nMINE IS DETONATING IN KESSLER CODE, the ship is at {ship.position}")
                     for idx_ast, asteroid in enumerate(asteroids):
                         dist = np.sqrt((asteroid.position[0] - mine.position[0]) ** 2 + (asteroid.position[1] - mine.position[1]) ** 2)
                         if dist <= mine.blast_radius + asteroid.radius:

@@ -43,6 +43,42 @@ closing_ring_scenario = Scenario(
 
 
 
+
+
+
+
+
+# Parameters for the ring of asteroids
+R_initial = 200  # Initial radius of the ring, large enough to enclose the ship
+num_asteroids = 10  # Number of asteroids in the ring
+speed = 40  # Speed at which asteroids close in
+
+# Ship's initial position (center of the screen)
+ship_position = (500, 400)
+
+# Calculating initial positions and angles for the asteroids
+theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
+ast_x = [R_initial * np.cos(angle) + ship_position[0] for angle in theta]
+ast_y = [R_initial * np.sin(angle) + ship_position[1] for angle in theta]
+init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x)) for x, y in zip(ast_x, ast_y)]
+
+# Creating asteroid states
+asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed, 'size': 3} for x, y, angle in zip(ast_x, ast_y, init_angle)]
+
+# Creating the scenario
+easy_closing_ring_scenario = Scenario(
+    name="easy_closing_ring_scenario",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": ship_position, 'lives': 5, 'team': 1, "mines_remaining": 1}],
+    seed=0
+)
+
+
+
+
+
+
+
 # Parameters for the dense and fast-closing ring of asteroids
 R_initial = 400  # Increased initial radius of the ring
 num_asteroids = 40  # More asteroids for a denser ring
@@ -112,7 +148,7 @@ for i in range(len(corners)):
 rotating_square_scenario = Scenario(
     name="rotating_square_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": center, 'lives': 5, 'mines_remaining': 3}],  # Add additional ship states as needed
+    ship_states=[{"position": center, 'lives': 5, 'mines_remaining': 1}],  # Add additional ship states as needed
     seed=0
 )
 

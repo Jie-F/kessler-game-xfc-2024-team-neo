@@ -133,7 +133,10 @@ def find_closest_asteroid(game_state, ship_state, shot_at_asteroids, time_to_sim
     closest_asteroid = None
     breakout_flag = False
     total_asteroids_to_simulate = len(simulated_asteroids)
-    index_scale_factor = total_asteroids_to_simulate // len(asteroids)
+    if len(asteroids) == 0:
+        index_scale_factor = 1
+    else:
+        index_scale_factor = total_asteroids_to_simulate // len(asteroids)
     num_asteroids_done_simulation = 0
     while True:
         if breakout_flag:
@@ -546,7 +549,8 @@ class NeoController(KesslerController):
         """
         Method processed each time step by this controller.
         """
-
+        if len(game_state['asteroids']) == 0:
+            return 0, 0, False, False
         # Find the closest asteroid (disregards asteroid velocity)
         ship_pos_x = ship_state["position"][0]     # See src/kesslergame/ship.py in the KesslerGame Github
         ship_pos_y = ship_state["position"][1]       
