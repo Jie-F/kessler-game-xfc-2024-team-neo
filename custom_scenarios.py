@@ -148,9 +148,61 @@ for i in range(len(corners)):
 rotating_square_scenario = Scenario(
     name="rotating_square_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": center, 'lives': 5, 'mines_remaining': 1}],  # Add additional ship states as needed
+    ship_states=[{"position": center, 'lives': 3, 'mines_remaining': 1}],  # Add additional ship states as needed
     seed=0
 )
+
+
+
+
+
+
+
+
+
+
+
+def calculate_angle(from_pos, to_pos):
+    """Calculate the angle for movement from from_pos to to_pos."""
+    dx, dy = np.array(to_pos) - np.array(from_pos)
+    angle_rad = np.arctan2(dy, dx)
+    angle_deg = np.degrees(angle_rad) % 360
+    return angle_deg
+
+# Parameters for the rotating square/diamond
+center = (500, 400)  # Center of the screen
+size = 180  # Side length of the square
+speed = 20  # Speed of the asteroids
+
+# Calculate corner positions of the square
+corners = [
+    (center[0] - size / 2, center[1] - size / 2),
+    (center[0] + size / 2, center[1] - size / 2),
+    (center[0] + size / 2, center[1] + size / 2),
+    (center[0] - size / 2, center[1] + size / 2)
+]
+
+# Create asteroid states with initial positions and angles
+asteroid_states = []
+for i in range(len(corners)):
+    next_corner = corners[(i + 1) % len(corners)]
+    angle = calculate_angle(corners[i], next_corner)
+    asteroid_states.append({
+        "position": corners[i],
+        "angle": angle,
+        "speed": speed
+    })
+asteroid_states *= 3
+# Create the scenario
+rotating_square_2_overlap = Scenario(
+    name="rotating_square_2_overlap",
+    asteroid_states=asteroid_states,
+    ship_states=[{"position": center, 'lives': 3, 'mines_remaining': 2}],  # Add additional ship states as needed
+    seed=0
+)
+
+
+
 
 
 
@@ -650,13 +702,13 @@ dancing_ring_2 = Scenario(
 def create_diagonal_asteroids(start_pos, end_pos, num_asteroids, direction, speed):
     """Generate states for asteroids along a diagonal line."""
     positions = np.linspace(start_pos, end_pos, num_asteroids)
-    angle = np.degrees(np.arctan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])) % 360
+    #angle = np.degrees(np.arctan2(end_pos[1] - start_pos[1], end_pos[0] - start_pos[0])) % 360
     return [{'position': pos, 'angle': direction, 'speed': speed, 'size': 3} for pos in positions]
 
 # Parameters for the Intersecting Lines scenario
 width, height = 1920, 1080
-num_asteroids = 5
-speed = 100  # pixels per second
+num_asteroids = 20
+speed = 200  # pixels per second
 
 # Create asteroid lines
 line1 = create_diagonal_asteroids((0, 0), (width, height), num_asteroids, 0, speed)  # Top-left to bottom-right

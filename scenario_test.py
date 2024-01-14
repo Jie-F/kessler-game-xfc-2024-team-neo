@@ -100,11 +100,54 @@ seeds = [
     695316706,
     544253276,
 ]
+
+xfc2023 = [
+    #ex_adv_four_corners_pt1,
+    #ex_adv_asteroids_down_up_pt1,
+    #ex_adv_asteroids_down_up_pt2,
+    #ex_adv_direct_facing,
+    #ex_adv_two_asteroids_pt1,
+    #ex_adv_two_asteroids_pt2,
+    #ex_adv_ring_pt1,
+    #adv_random_big_1,
+    #adv_random_big_3,
+    #adv_multi_wall_bottom_hard_1,
+    #adv_multi_wall_right_hard_1,
+    adv_multi_ring_closing_left,
+    adv_multi_ring_closing_right,
+    adv_multi_two_rings_closing,
+    avg_multi_ring_closing_both2,
+    adv_multi_ring_closing_both_inside,
+    adv_multi_ring_closing_both_inside_fast
+]
+
+custom = [
+    target_priority_optimization1,
+    closing_ring_scenario,
+    easy_closing_ring_scenario,
+    more_intense_closing_ring_scenario,
+    rotating_square_scenario,
+    rotating_square_2_overlap,
+    falling_leaves_scenario,
+    zigzag_motion_scenario,
+    shearing_pattern_scenario,
+    super_hard_wrap,
+    wonky_ring,
+    moving_ring_scenario,
+    shifting_square_scenario,
+    delayed_closing_ring_scenario,
+    spiral_assault_scenario,
+    dancing_ring,
+    dancing_ring_2,
+    intersecting_lines_scenario
+]
+
 #for i in range(0, len(seeds)):
 #while True:
 for i in range(1):
+#for sc in custom:
     iterations += 1
-    randseed = 698839669#random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
+    randseed = random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -138,8 +181,9 @@ for i in range(1):
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    score, perf_data = game.run(scenario=rotating_square_scenario, controllers=[Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
-
+    #print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=rotating_square_2_overlap, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
     color_print(score.stop_reason, 'green')
