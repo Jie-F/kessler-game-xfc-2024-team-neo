@@ -144,19 +144,20 @@ custom = [
 
 #for i in range(0, len(seeds)):
 #while True:
-for i in range(1):
 #for sc in custom:
+while not missed:
+#for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000) #494287161 932776527 174657234 good but assertion fails
+    randseed = random.randint(1, 1000000000) # 573542813 assertion fails, 2 asteroids. 937588122 also fails if I don't clear the forecasts. 318109623, 349526511
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=15,
+                                    num_asteroids=5,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(-300, 600, -300),
+                                    speed_range=(-300, 2000, -300),
                                     angle_range=(0, 360),
-                                    size_range=(1, 4)
+                                    size_range=(1, 3)
                                 )
 
     # Define game scenario
@@ -194,4 +195,4 @@ for i in range(1):
     if score.teams[0].accuracy < 1:
         color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
         missed = True
-#color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
+color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
