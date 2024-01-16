@@ -1555,8 +1555,8 @@ class Simulation():
         most_imminent_asteroid_exists = False
         asteroids_still_exist = False
         for asteroid in self.asteroids + self.forecasted_asteroid_splits:
-            asteroids_still_exist = True
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid, True):
+                asteroids_still_exist = True
                 #print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
                 unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], unwrap_asteroid_target_selection_time_horizon)
                 # Iterate through all unwrapped asteroids to find which one of the unwraps is the best feasible target.
@@ -2484,7 +2484,7 @@ class Neo(KesslerController):
         best_action_sim_last_state = best_action_sim_state_sequence[-1]
         # Prune out the list of asteroids we shot at if the timestep (key) is in the past
         asteroids_pending_death = best_action_sim.get_asteroids_pending_death()
-        asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep > best_action_sim_last_state['timestep']}
+        asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep >= best_action_sim_last_state['timestep']}
         forecasted_asteroid_splits = best_action_sim.get_forecasted_asteroid_splits()
         game_state = best_action_sim.get_game_state()
         forecasted_asteroid_splits = maintain_forecasted_asteroids(forecasted_asteroid_splits, game_state, True)
@@ -2496,7 +2496,6 @@ class Neo(KesslerController):
             'ship_state': best_action_sim.get_ship_state(),
             'game_state': game_state,
             'asteroids': best_action_sim_last_state['asteroids'],
-            # TODO: REPLACE THIS
             'asteroids_pending_death': asteroids_pending_death,
             'forecasted_asteroid_splits': forecasted_asteroid_splits,
             'last_timestep_fired': best_action_sim.get_last_timestep_fired(),
