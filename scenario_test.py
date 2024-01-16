@@ -74,7 +74,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-width, height = (1920, 1080)
+width, height = (1000, 800)
 
 
 
@@ -92,14 +92,6 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 missed = False
 #for _ in range(1):
 iterations = 0
-#while not missed:
-seeds = [
-    268415523,
-    913608008,
-    427289500,
-    695316706,
-    544253276,
-]
 
 xfc2023 = [
     #ex_adv_four_corners_pt1,
@@ -112,7 +104,7 @@ xfc2023 = [
     #adv_random_big_1,
     #adv_random_big_3,
     #adv_multi_wall_bottom_hard_1,
-    #adv_multi_wall_right_hard_1,
+    adv_multi_wall_right_hard_1,
     adv_multi_ring_closing_left,
     adv_multi_ring_closing_right,
     adv_multi_two_rings_closing,
@@ -144,20 +136,20 @@ custom = [
 
 #for i in range(0, len(seeds)):
 #while True:
-#for sc in custom:
-while not missed:
+for sc in xfc2023:
+#while not missed:
 #for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000) # 573542813 assertion fails, 2 asteroids. 937588122 also fails if I don't clear the forecasts. 318109623, 349526511
+    randseed = random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=5,
+                                    num_asteroids=10,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(-300, 2000, -300),
+                                    speed_range=(-300, 700, 0),
                                     angle_range=(0, 360),
-                                    size_range=(1, 3)
+                                    size_range=(1, 4)
                                 )
 
     # Define game scenario
@@ -168,7 +160,7 @@ while not missed:
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 5, 'team': 1, "mines_remaining": 1},
+                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 0},
                                 ],
                                 map_size=(width, height),
@@ -182,8 +174,8 @@ while not missed:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=rotating_square_2_overlap, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=sc, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
