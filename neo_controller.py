@@ -1417,7 +1417,7 @@ class Simulation():
         if asteroids_shot == 0:
             asteroids_shot = 0.5
         time_per_asteroids_shot = move_sequence_length_s/asteroids_shot
-        asteroids_score = time_per_asteroids_shot/2
+        asteroids_score = time_per_asteroids_shot/3
         
         states = self.get_state_sequence()
 
@@ -2056,7 +2056,7 @@ class Simulation():
                 sim_was_safe = False
         return sim_was_safe
     
-    def simulate_maneuver_with_firing_shots(self, move_sequence: list):
+    def simulate_maneuver(self, move_sequence: list, allow_firing: bool):
         for move in move_sequence:
             thrust = 0
             turn_rate = 0
@@ -2064,7 +2064,7 @@ class Simulation():
                 thrust = move['thrust']
             if 'turn_rate' in move:
                 turn_rate = move['turn_rate']
-            if not self.update(thrust, turn_rate, None, move_sequence):
+            if not self.update(thrust, turn_rate, None if allow_firing else False, move_sequence):
                 return False
         return True
 
@@ -2653,7 +2653,7 @@ class Neo(KesslerController):
             maneuver_sim = Simulation(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['asteroids'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['game_state']['mines'], self.get_other_ships(self.game_state_to_base_planning['game_state']), self.game_state_to_base_planning['game_state']['bullets'], self.game_state_to_base_planning['last_timestep_fired'], 0, self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
             # This if statement is a doozy. Keep in mind that we evaluate the and clauses left to right, and the moment we find one that's false, we stop.
             # While evaluating, the simulation is advancing, and if it crashes, then it'll evaluate to false and stop the sim.
-            if maneuver_sim.simulate_maneuver_with_firing_shots(preview_move_sequence):
+            if maneuver_sim.simulate_maneuver(preview_move_sequence, True):
                 # The ship went through all the steps without colliding
                 maneuver_complete_without_crash = True
             else:
@@ -2684,7 +2684,7 @@ class Neo(KesslerController):
                 self.best_fitness_this_planning_period = maneuver_fitness
                 self.best_fitness_this_planning_period_index = len(self.sims_this_planning_period) - 1
 
-    def simulate_maneuver(self, ship_state, game_state, initial_turn_angle, accel_turn_rate, cruise_speed, cruise_turn_rate, cruise_timesteps, safe_timesteps=0, fire_first_timestep=False):
+    def simulate_respawn_maneuver(self, ship_state, game_state, initial_turn_angle, accel_turn_rate, cruise_speed, cruise_turn_rate, cruise_timesteps, safe_timesteps=0, fire_first_timestep=False):
         # First do a dummy simulation just to go through the motion, so we have the list of moves
         dummy_game_state = {'asteroids': [], 'mines': [], 'map_size': game_state['map_size']}
         maneuver_preview = Simulation(dummy_game_state, ship_state, self.current_timestep, [], {}, [], [], [], [], -math.inf, math.inf, False)
@@ -2694,9 +2694,7 @@ class Neo(KesslerController):
         maneuver_preview.accelerate(0)
         preview_move_sequence = maneuver_preview.get_move_sequence()
         maneuver_sim = Simulation(game_state, ship_state, self.current_timestep, game_state['asteroids'], self.asteroids_pending_death, self.forecasted_asteroid_splits, game_state['mines'], self.get_other_ships(game_state), game_state['bullets'], -math.inf, safe_timesteps, fire_first_timestep, self.game_state_plotter)
-        # This if statement is a doozy. Keep in mind that we evaluate the and clauses left to right, and the moment we find one that's false, we stop.
-        # While evaluating, the simulation is advancing, and if it crashes, then it'll evaluate to false and stop the sim.
-        if maneuver_sim.simulate_maneuver_with_firing_shots(preview_move_sequence):
+        if maneuver_sim.simulate_maneuver(preview_move_sequence, False):
             # The ship went through all the steps without colliding
             maneuver_complete_without_crash = True
         else:
@@ -2728,13 +2726,15 @@ class Neo(KesslerController):
         #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
         #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
         next_imminent_collision_time = math.inf
-        safe_time_threshold = 5
+        #safe_time_threshold = 5
+        safe_fitness_threshold = 0.001
 
         debug_print("Look for a respawn maneuver")
         # Run a simulation and find a course of action to put me to safety
         safe_maneuver_found = False
         best_imminent_collision_time_found = -math.inf
         best_safe_time_after_maneuver_found = -math.inf
+        best_maneuver_fitness_found = math.inf
         best_maneuver_sim = None
         best_safe_time_after_maneuver = -math.inf
         search_iterations_count = 0
@@ -2744,20 +2744,32 @@ class Neo(KesslerController):
             if search_iterations_count%5 == 0:
                 debug_print(f"Search iteration {search_iterations_count}")
                 pass
-            random_ship_heading_angle = random.uniform(-20.0, 20.0)
-            random_ship_accel_turn_rate = random.uniform(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)
-            random_ship_cruise_speed = SHIP_MAX_SPEED*random.choice([-1, 1])
-            random_ship_cruise_turn_rate = 0
-            random_ship_cruise_timesteps = random.randint(0, round(max_cruise_seconds/DELTA_TIME))
-            maneuver_sim, maneuver_length, next_imminent_collision_time, safe_time_after_maneuver, maneuver_fitness = self.simulate_maneuver(ship_state, game_state, random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, math.inf, False)
-            
-            if safe_time_after_maneuver > best_safe_time_after_maneuver_found:
-                debug_print(f"Alright we found a better one with time {next_imminent_collision_time}")
-                best_safe_time_after_maneuver_found = safe_time_after_maneuver
+            if search_iterations_count == 1:
+                # On the first iteration, try the null action. For ring scenarios, it may be best to stay at the center of the ring.
+                random_ship_heading_angle = 0
+                random_ship_accel_turn_rate = 0
+                random_ship_cruise_speed = 0
+                random_ship_cruise_turn_rate = 0
+                random_ship_cruise_timesteps = 0
+            else:
+                random_ship_heading_angle = random.uniform(-20.0, 20.0)
+                random_ship_accel_turn_rate = random.uniform(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)
+                random_ship_cruise_speed = SHIP_MAX_SPEED*random.choice([-1, 1])
+                random_ship_cruise_turn_rate = 0
+                random_ship_cruise_timesteps = random.randint(0, round(max_cruise_seconds/DELTA_TIME))
+            maneuver_sim, maneuver_length, next_imminent_collision_time, safe_time_after_maneuver, maneuver_fitness = self.simulate_respawn_maneuver(ship_state, game_state, random_ship_heading_angle, random_ship_accel_turn_rate, random_ship_cruise_speed, random_ship_cruise_turn_rate, random_ship_cruise_timesteps, math.inf, False)
+            if search_iterations_count == 1:
+                debug_print(f"The null respawn maneuver gives us a next collision time of {next_imminent_collision_time} s, safe time after maneuver is {safe_time_after_maneuver}, and the fitness is {maneuver_fitness}")
+            #if safe_time_after_maneuver > best_safe_time_after_maneuver_found:
+            if maneuver_fitness < best_maneuver_fitness_found:
+                debug_print(f"Alright we found a better one with next collision time {next_imminent_collision_time} s, safe time after maneuver is {safe_time_after_maneuver}, and the fitness is {maneuver_fitness}")
+                #best_safe_time_after_maneuver_found = safe_time_after_maneuver
+                best_maneuver_fitness_found = maneuver_fitness
                 best_imminent_collision_time_found = next_imminent_collision_time
                 best_maneuver_sim = maneuver_sim
                 best_safe_time_after_maneuver = safe_time_after_maneuver
-            if safe_time_after_maneuver >= safe_time_threshold:
+            #if safe_time_after_maneuver >= safe_time_threshold:
+            if best_maneuver_fitness_found < safe_fitness_threshold:
                 safe_maneuver_found = True
                 debug_print(f"Found safe maneuver! Next imminent collision time is {best_imminent_collision_time_found}")
                 debug_print(f"Maneuver takes this many seconds: {maneuver_length*DELTA_TIME}")
@@ -2768,7 +2780,7 @@ class Neo(KesslerController):
                     continue
         if search_iterations_count == max_search_iterations:
             debug_print("Hit the max iteration count")
-        debug_print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards. Moving to coordinates {best_maneuver_sim.get_state_sequence()[-1]['position'][0]} {best_maneuver_sim.get_state_sequence()[-1]['position'][1]} at timestep {best_maneuver_sim.get_state_sequence()[-1]['timestep']}")
+        print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards and has a fitness of {best_maneuver_fitness_found}. Moving to coordinates {best_maneuver_sim.get_state_sequence()[-1]['position'][0]} {best_maneuver_sim.get_state_sequence()[-1]['position'][1]} at timestep {best_maneuver_sim.get_state_sequence()[-1]['timestep']}")
         print_explanation(f"Found respawn maneuver where we're safe for {best_safe_time_after_maneuver:0.1f} s afterwards.")
         # Enqueue the respawn maneuver
         #print(best_maneuver_sim.get_move_sequence())
@@ -2802,7 +2814,7 @@ class Neo(KesslerController):
             self.init_done = True
         #print("thrust is " + str(thrust) + "\n" + "turn rate is " + str(turn_rate) + "\n" + "fire is " + str(fire) + "\n")
         if ship_state['is_respawning'] and not (self.last_respawn_invincible_timestep_range[0] <= self.current_timestep <= self.last_respawn_invincible_timestep_range[1]):
-            print_explanation("OUCH, that hurt!")
+            print_explanation("OUCH, that hurt! Using invincibility to get to safety.")
             # Clear the move queue, since previous moves have been invalidated by us taking damage
             self.action_queue = []
             self.actioned_timesteps.clear() # If we don't clear it, we'll have duplicated moves since we have to overwrite our planned moves to get to safety, which means enqueuing moves on timesteps we already enqueued moves for.
