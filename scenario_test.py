@@ -136,9 +136,10 @@ custom = [
 
 #for i in range(0, len(seeds)):
 #while True:
-#for sc in xfc2023:
+
 died = False
-while died or not missed:
+for sc in custom:
+#while died or not missed:
 #for i in range(1):
     iterations += 1
     randseed = random.randint(1, 1000000000) # 783098897   693367003   581741499
@@ -175,8 +176,8 @@ while died or not missed:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=sc, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')

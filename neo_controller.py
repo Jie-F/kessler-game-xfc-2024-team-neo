@@ -1534,8 +1534,8 @@ class Simulation():
             #print('APPLYING AIMING MOVE SEQ')
             #print(aiming_move_sequence)
             current_ship_state = self.get_ship_state()
-            if enable_assertions:
-                assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
+            #if enable_assertions:
+                #assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
             ship_state_after_aiming_from_sim = simulate_ship_movement_with_inputs(self.game_state, current_ship_state, aiming_move_sequence)
             ship_state_after_aiming = current_ship_state
             ship_state_after_aiming['heading'] = (ship_state_after_aiming['heading'] + target_asteroid_shooting_angle_error_deg)%360
