@@ -81,7 +81,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 1,
+                 'realtime_multiplier': 2,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -137,10 +137,11 @@ custom = [
 #for i in range(0, len(seeds)):
 #while True:
 #for sc in xfc2023:
-while not missed:
+died = False
+while died or not missed:
 #for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000)
+    randseed = random.randint(1, 1000000000) # 783098897   693367003   581741499
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -182,6 +183,8 @@ while not missed:
     color_print(score.stop_reason, 'green')
     color_print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]), 'green')
     color_print('Deaths: ' + str([team.deaths for team in score.teams]), 'green')
+    if [team.deaths for team in score.teams][0] == 1:
+        died = True
     color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
     color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
     if score.teams[0].accuracy < 1:
