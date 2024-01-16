@@ -1259,7 +1259,8 @@ class Simulation():
         #print(f"STARTING SIMULATION ON TIMESTEP {initial_timestep}")
         #if initial_timestep == 42:
         #    print(f"On TS 42 we have the bullets being:", bullets)
-        #print(ship_state)
+        debug_print(f"Starting sim on ts {initial_timestep} with ship state:", ship_state)
+
         if asteroids is None:
             asteroids = []
         if asteroids_pending_death is None:
@@ -1534,8 +1535,10 @@ class Simulation():
             #print('APPLYING AIMING MOVE SEQ')
             #print(aiming_move_sequence)
             current_ship_state = self.get_ship_state()
-            #if enable_assertions:
-                #assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
+            if not (abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain):
+                print(f"Current ship velocity is {current_ship_state['velocity']}")
+            if enable_assertions:
+                assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
             ship_state_after_aiming_from_sim = simulate_ship_movement_with_inputs(self.game_state, current_ship_state, aiming_move_sequence)
             ship_state_after_aiming = current_ship_state
             ship_state_after_aiming['heading'] = (ship_state_after_aiming['heading'] + target_asteroid_shooting_angle_error_deg)%360
@@ -2482,6 +2485,12 @@ class Neo(KesslerController):
         #best_action_sim = sorted_sim_list[0]['sim']
         best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
         best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
+        if best_action_fitness >= 10:
+            # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
+            print("We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.")
+            self.best_fitness_this_planning_period_index = 0
+            best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
+            best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         if best_action_fitness < 0.5:
             print_explanation("I'm chilling. Shooting from safety")
         elif best_action_fitness < 1.5:
@@ -2498,8 +2507,8 @@ class Neo(KesslerController):
         #end_state = sim_ship.get_state_sequence()[-1]
         #debug_print(f"Maneuver fitness: {best_maneuver_fitness}, stationary fitness: {best_stationary_targetting_fitness}")
         #print('state seq:', best_action_sim_state_sequence)
-        #print('move seq:', best_move_sequence)
-        #print(f"Best sim index: {self.best_fitness_this_planning_period_index}")
+        debug_print('Best move seq:', best_move_sequence)
+        debug_print(f"Best sim index: {self.best_fitness_this_planning_period_index}")
         #print('all sims this planning period:')
         #print(self.sims_this_planning_period)
         if not best_action_sim_state_sequence:
@@ -2689,6 +2698,9 @@ class Neo(KesslerController):
             #move_sequence = maneuver_sim.get_move_sequence()
             #state_sequence = maneuver_sim.get_state_sequence()
             #debug_print(f"\nGetting maneuver fitness:")
+            #if (len(self.sims_this_planning_period)) == 1:
+            #    print(f"THE PREVIEW MOVE SEQUENCE FOR MANEUVER THATS MESSING UP IS:", preview_move_sequence)
+            #    print(f"And the actual move seq is:", maneuver_sim.get_move_sequence())
             maneuver_length = maneuver_sim.get_sequence_length() - 1
             if maneuver_complete_without_crash:
                 maneuver_fitness = maneuver_sim.get_fitness()
