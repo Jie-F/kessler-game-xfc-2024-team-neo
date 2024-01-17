@@ -11,6 +11,7 @@ from baby_neo_controller import NeoController
 import numpy as np
 import cProfile
 import sys
+from r_controller import RController
 
 
 from ctypes import windll
@@ -81,7 +82,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 7,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -95,12 +96,12 @@ iterations = 0
 
 xfc2023 = [
     ex_adv_four_corners_pt1,
-    ex_adv_asteroids_down_up_pt1,
-    ex_adv_asteroids_down_up_pt2,
-    ex_adv_direct_facing,
-    ex_adv_two_asteroids_pt1,
-    ex_adv_two_asteroids_pt2,
-    ex_adv_ring_pt1,
+    #ex_adv_asteroids_down_up_pt1,
+    #ex_adv_asteroids_down_up_pt2,
+    #ex_adv_direct_facing,
+    #ex_adv_two_asteroids_pt1,
+    #ex_adv_two_asteroids_pt2,
+    #ex_adv_ring_pt1,
     #adv_random_big_1,
     #adv_random_big_3,
     #adv_multi_wall_bottom_hard_1,
@@ -110,18 +111,18 @@ xfc2023 = [
     #adv_multi_two_rings_closing,
     #avg_multi_ring_closing_both2,
     #adv_multi_ring_closing_both_inside,
-    #adv_multi_ring_closing_both_inside_fast
+    adv_multi_ring_closing_both_inside_fast
 ]
 
 custom = [
-    #target_priority_optimization1,
-    #closing_ring_scenario,
-    #easy_closing_ring_scenario,
-    #more_intense_closing_ring_scenario,
-    #rotating_square_scenario,
-    #rotating_square_2_overlap,
-    #falling_leaves_scenario,
-    #zigzag_motion_scenario,
+    target_priority_optimization1,
+    closing_ring_scenario,
+    easy_closing_ring_scenario,
+    more_intense_closing_ring_scenario,
+    rotating_square_scenario,
+    rotating_square_2_overlap,
+    falling_leaves_scenario,
+    zigzag_motion_scenario,
     shearing_pattern_scenario,
     super_hard_wrap,
     wonky_ring,
@@ -139,11 +140,11 @@ custom = [
 #while True:
 
 died = False
-#for sc in custom:
+#for sc in xfc2023:
 #while died or not missed:
 for i in range(1):
     iterations += 1
-    randseed = 2#random.randint(1, 1000000000) # 783098897   693367003   581741499
+    randseed = random.randint(1, 1000000000) # 783098897   693367003   581741499
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -164,7 +165,7 @@ for i in range(1):
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
                                     {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 0},
+                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 1},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -178,7 +179,7 @@ for i in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=exploding_grid_scenario, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=shearing_pattern_scenario, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')

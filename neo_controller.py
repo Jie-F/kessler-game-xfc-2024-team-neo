@@ -26,6 +26,9 @@ import matplotlib.patches as patches
 import numpy as np
 import copy
 
+# Very important note: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
+# If any global variables are changed during execution, make sure to reset them when the timestep is 0.
+
 # Configurables
 debug_mode = False
 print_explanations = True
@@ -35,8 +38,9 @@ bullet_sim_plotting = False
 next_target_plotting = False
 maneuver_sim_plotting = False
 start_gamestate_plotting_at_second = None
-slow_down_game_after_second = 1000.3
+slow_down_game_after_second = math.inf
 slow_down_game_pause_time = 2
+explanation_message_silence_interval_s = 5 # Repeated messages within this time window get silenced
 
 # State dumping for debug
 reality_state_dump = False
@@ -49,11 +53,11 @@ unwrap_asteroid_collision_forecast_time_horizon = 8
 unwrap_asteroid_target_selection_time_horizon = 3 # 1 second to turn, 2 seconds for bullet travel time
 asteroid_size_shot_priority = [math.nan, 1, 2, 3, 4] # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 new_target_plot_pause_time_s = 0.5
-mine_collision_time_fudge_s = 1.5
+mine_collision_time_fudge_s = 1
 
 # Initialization
-last_explanation_message = None
-second_last_explanation_message = None
+# Global variable to store messages and their last printed timestep
+explanation_messages_with_timestamps = {} # Make sure to clear this when timestep is 0 so back-to-back runs work properly!
 
 # Quantities
 tad = 0.1
@@ -160,15 +164,14 @@ def preprocess_bullets(bullets):
         b['tail_delta'] = bullet_tail_delta
     return bullets
 
-def print_explanation(message):
-    if not print_explanations:
-        return
-    global last_explanation_message, second_last_explanation_message
-    if message != last_explanation_message and message != second_last_explanation_message:
+def print_explanation(message, current_timestep, time_threshold=explanation_message_silence_interval_s/DELTA_TIME):
+    global explanation_messages_with_timestamps
+
+    # Check if the message was printed within the time threshold
+    last_timestep_printed = explanation_messages_with_timestamps.get(message, -math.inf)
+    if current_timestep - last_timestep_printed >= time_threshold:
         print(message)
-        # Update the message history
-        second_last_explanation_message = last_explanation_message
-        last_explanation_message = message
+        explanation_messages_with_timestamps[message] = current_timestep
 
 def debug_print(*messages):
     if debug_mode:
@@ -1305,6 +1308,14 @@ class Simulation():
         self.fire_first_timestep = fire_first_timestep
         self.game_state_plotter = game_state_plotter
         self.sim_id = random.randint(1, 100000)
+        self.explanation_messages = []
+        self.safety_messages = []
+
+    def get_explanations(self):
+        return self.explanation_messages
+
+    def get_safety_messages(self):
+        return self.safety_messages
 
     def get_sim_id(self):
         return self.sim_id
@@ -1434,8 +1445,11 @@ class Simulation():
         
         states = self.get_state_sequence()
         
+        ship_start_position = states[0]['position']
+        ship_end_position = states[-1]['position']
+
         if len(states) >= 2:
-            displacement = math.dist(states[0]['position'], states[-1]['position'])
+            displacement = math.dist(ship_start_position, ship_end_position)
         else:
             displacement = 0
         displacement_score = displacement/1000 # TODO: If wrapped, this score will be disporportionately big. Ideally account for that by unwrapping somehow
@@ -1443,14 +1457,16 @@ class Simulation():
 
         if displacement < eps:
             # Stationary
+            # Only has to be safe for 3 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
             safe_time_score = max(0, min(5, 5 - 5/3*safe_time_after_maneuver_s))
         else:
             # Maneuvering
             safe_time_score = max(0, min(5, 5 - safe_time_after_maneuver_s))
 
         other_ship_proximity_score = 0
-        ship_proximity_max_penalty = 2.5
-        ship_proximity_detection_radius = 200
+        ship_proximity_max_penalty = 6
+        ship_proximity_detection_radius = 400
+        ship_prox_exponent = 3
         for other_ship in self.other_ships:
             other_ship_pos_x, other_ship_pos_y = other_ship['position']
             self_pos_x, self_pos_y = self.position
@@ -1461,11 +1477,47 @@ class Simulation():
             sep_y = min(abs_sep_y, self.game_state['map_size'][1] - abs_sep_y)
             separation_dist = math.sqrt(sep_x*sep_x + sep_y*sep_y)
             if separation_dist < ship_proximity_detection_radius:
-                other_ship_proximity_score += ship_proximity_max_penalty - separation_dist*ship_proximity_max_penalty/ship_proximity_detection_radius
+                other_ship_proximity_score += ship_proximity_max_penalty/(ship_proximity_detection_radius**ship_prox_exponent)*(ship_proximity_detection_radius - separation_dist)**ship_prox_exponent
         #print(f"Prox score: {other_ship_proximity_score}")
         sequence_length_score = move_sequence_length_s/10
+
+        # Slightly discourage being too close to the edges
+        edge_proximity_score_cap = 0.1
+        # Find the edge I'm the closest to
+        if ship_end_position[0] < self.game_state['map_size'][0]/2:
+            sep_x = ship_end_position[0]
+        else:
+            sep_x = self.game_state['map_size'][0] - ship_end_position[0]
+        if ship_end_position[1] < self.game_state['map_size'][1]/2:
+            sep_y = ship_end_position[1]
+        else:
+            sep_y = self.game_state['map_size'][1] - ship_end_position[1]
+        separation_dist = min(sep_x, sep_y)
+        max_separation_dist = min(self.game_state['map_size'][0], self.game_state['map_size'][1])/2
+        edge_proximity_score = edge_proximity_score_cap*(1 - separation_dist/max_separation_dist)
+
+        
         debug_print(f"Fitness: {safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Safe time score: {safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
-        return safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score
+        #self.explanation_messages.append(f"Fitness: {safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Safe time score: {safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
+        if safe_time_score > 3:
+            self.safety_messages.append("I'm dangerously close to being hit by asteroids. Trying my hardest to maneuver out of this situation.")
+        elif safe_time_score > 2:
+            self.safety_messages.append("I'm close to being hit by asteroids.")
+        elif safe_time_score > 1:
+            self.safety_messages.append("I'll eventually get hit by asteroids. Keeping my eye out for a dodge maneuver.")
+        
+        if other_ship_proximity_score > 3:
+            self.safety_messages.append("I'm dangerously close to the other ship. Get away from me!")
+        elif other_ship_proximity_score > 1:
+            self.safety_messages.append("I'm close to the other ship. Being cautious.")
+        
+        if edge_proximity_score > 0.08:
+            self.safety_messages.append("I'm really close to the edge. This is fine, but be careful!")
+
+        overall_fitness = safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score
+        if overall_fitness < 1:
+            self.safety_messages.append("I'm safe and chilling")
+        return overall_fitness
 
     def find_extreme_shooting_angle_error(self, asteroid_list, threshold, mode='largest_below'):
         # Extract the shooting_angle_error_deg values
@@ -1546,10 +1598,10 @@ class Simulation():
             ship_state_after_aiming = current_ship_state
             #print(f"\nOld heading: {ship_state_after_aiming['heading']}, add error: {target_asteroid_shooting_angle_error_deg}")
             ship_state_after_aiming['heading'] = (ship_state_after_aiming['heading'] + target_asteroid_shooting_angle_error_deg)%360
-            #print('\nsim:', ship_state_after_aiming_from_sim, 'shortcut:', ship_state_after_aiming)
+            #print('sim:', ship_state_after_aiming_from_sim, 'shortcut:', ship_state_after_aiming)
             
             if enable_assertions:
-                assert math.isclose(ship_state_after_aiming_from_sim['heading']%360, ship_state_after_aiming['heading']%360)
+                assert math.isclose(ship_state_after_aiming_from_sim['heading']%360, ship_state_after_aiming['heading']%360, abs_tol=grain)
             #print('SHIP STTAT AFTER AIMING')
             #print(ship_state_after_aiming)
             # TODO: Maybe we can't ignore the variable of whether the ship was safe?
@@ -1701,10 +1753,13 @@ class Simulation():
                             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing, True):
                                 break
                         #    print(f"DANG IT, we're forced to turn to the most imminent shot, but we'll still miss if we do!")
+            if actual_asteroid_hit:
+                self.explanation_messages.append("Shooting at asteroid that is about to hit me.")
         if not actual_asteroid_hit:
             # Nothing has been hit from the imminent shots so far. Move down the list to trying for convenient shots.
             if target_asteroids_list:
                 debug_print("Shooting at asteroid with least shot delay since there aren't imminent asteroids")
+                self.explanation_messages.append("Shooting at asteroid with least shot delay since no asteroids are about to hit me.")
                 # TODO: Can sort tiebreakers like key=lambda a: (a['aiming_timesteps_required'], a['size'], a['distance']))
                 # Once I get more prioritization, I can make use of this choice to prioritize small asteroids, or ones that are far from me, or whatever!
                 #print('BEFOER AND AFTER SORTING')
@@ -1727,12 +1782,13 @@ class Simulation():
                 # Ain't nothing to shoot at
                 # TODO: IF THERE'S NOTHING TO SHOOT AT, TURN TOWARD THE CENTER! THIS WAY MAYBE there's a super fast one that I just keep not getting.
                 debug_print('Nothing to shoot at!')
+                self.explanation_messages.append("There's nothing I can feasibly shoot at!")
                 # Pick a direction to turn the ship anyway, just to better line it up with more shots
                 #for a in self.asteroids + self.forecasted_asteroid_splits:
                 # TODO: THIS WORKS, BUT MAKE THIS SMARTER SO IT DOESN'T JUST ALWAYS TURN LEFT EVEN IF IT"S BETTER TO TURN RIGHRT
                 if asteroids_still_exist:
                     if random.randint(1, 10) == 1:
-                        print_explanation("Asteroids exist but we can't hit them. Moving around a bit randomly.")
+                        self.explanation_messages.append("Asteroids exist but we can't hit them. Moving around a bit randomly.")
                         self.asteroids_shot -= 1
                     #turn_direction = random.random()
                     #idle_thrust = random.triangular(0, SHIP_MAX_THRUST, 0)
@@ -1740,7 +1796,7 @@ class Simulation():
                     idle_thrust = 0
                 else:
                     #print('asteroids DO NOT exist')
-                    print_explanation("Asteroids no longer exist. We're all done!")
+                    self.explanation_messages.append("Asteroids no longer exist. We're all done!")
                     turn_direction = 0
                     idle_thrust = 0
                 # We still simulate one iteration of this, because if we had a pending shot from before, this will do the shot!
@@ -1773,7 +1829,7 @@ class Simulation():
             if asteroids_still_exist:
                 #print('asteroids still exist')
                 if random.randint(1, 10) == 1:
-                    print_explanation("Asteroids exist but we can't hit them. Moving around a bit randomly.")
+                    self.explanation_messages.append("Asteroids exist but we can't hit them. Moving around a bit randomly.")
                     self.asteroids_shot -= 1
                 #turn_direction = random.random()
                 #idle_thrust = random.triangular(0, SHIP_MAX_THRUST, 0)
@@ -2228,6 +2284,7 @@ class Simulation():
             drop_mine_this_timestep = False
         if drop_mine_this_timestep:
             # This doesn't check whether it's valid to place a mine! It just does it!
+            self.explanation_messages.append("This is a good chance to drop a mine. Bombs away!")
             debug_print(f'BOMBS AWAY! Sim ID {self.sim_id}, future timesteps {self.future_timesteps}')
             new_mine = {
                 'position': self.position,
@@ -2420,6 +2477,7 @@ class Neo(KesslerController):
         return "Neo"
 
     def __init__(self):
+        debug_print('INITIALIZING NEO')
         self.init_done = False
         self.ship_id = None
         self.current_timestep = -1
@@ -2441,6 +2499,13 @@ class Neo(KesslerController):
         self.set_of_base_gamestate_timesteps = set()
         self.other_ships_exist = None
 
+        global explanation_messages_with_timestamps
+        if explanation_messages_with_timestamps:
+            debug_print('This is not a fresh run of this controller!')
+            explanation_messages_with_timestamps.clear()
+        else:
+            debug_print('Freshly running controller')
+
     def finish_init(self, game_state, ship_state):
         # If we need the game state or ship state to finish init, we can use this function to do that
         if self.ship_id is None:
@@ -2449,17 +2514,15 @@ class Neo(KesslerController):
             self.game_state_plotter = GameStatePlotter(game_state)
         if len(self.get_other_ships(game_state)) > 0:
             self.other_ships_exist = True
-            print_explanation("I'm alone. Using deterministic lookahead planning.")
+            print_explanation("I've got another ship friend here with me. I'll try coexisting with them, but be careful to avoid them.", self.current_timestep)
         else:
             self.other_ships_exist = False
+            print_explanation("I'm alone. We can see into the future perfectly!", self.current_timestep)
         asteroid_density = ctrl.Antecedent(np.arange(0, 11, 1), 'asteroid_density')
         asteroids_entropy = ctrl.Antecedent(np.arange(0, 11, 1), 'asteroids_entropy')
         other_ship_lives = ctrl.Antecedent(np.arange(0, 4, 1), 'other_ship_lives')
         
         aggression = ctrl.Consequent(np.arange(0, 1, 1), 'asteroid_growth_factor')
-        #if self.process_pool is None and __name__ != '__main__':
-            #print(f"NAAAAAAAAAAAAAAAAAAMEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE: {__name__}")
-            #self.process_pool = multiprocessing.Pool(processes=4)
 
 
     def get_other_ships(self, game_state):
@@ -2493,23 +2556,32 @@ class Neo(KesslerController):
         best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         if best_action_fitness >= 10:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
-            print("We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.")
+            debug_print("RIP, I'm gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.")
+            print_explanation("RIP, I'm gonna die.", self.current_timestep)
             self.best_fitness_this_planning_period_index = 0
             best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
+        '''
         if best_action_fitness < 0.5:
-            print_explanation("I'm chilling. Shooting from safety")
+            print_explanation("I'm chilling. Shooting from safety", self.current_timestep)
         elif best_action_fitness < 1.5:
-            print_explanation("I'm in a tiny bit of danger. Probably staying put but I'm keeping my options open.")
+            print_explanation("I'm in a tiny bit of danger. Probably staying put but I'm keeping my options open.", self.current_timestep)
         elif best_action_fitness < 3:
-            print_explanation("I'm in a bit of danger. Looking for a way to safety.")
+            print_explanation("I'm in a bit of danger. Looking for a way to safety.", self.current_timestep)
         elif best_action_fitness < 4:
-            print_explanation("I'm in moderate danger. Looking for a way to safety.")
+            print_explanation("I'm in moderate danger. Looking for a way to safety.", self.current_timestep)
         else:
-            print_explanation("I'm in extreme danger. Trying my hardest to find a way to safety.")
+            print_explanation("I'm in extreme danger. Trying my hardest to find a way to safety.", self.current_timestep)
+        '''
+        stationary_safety_messages = self.sims_this_planning_period[0]['sim'].get_safety_messages()
+        for message in stationary_safety_messages:
+            print_explanation(message, self.current_timestep)
         debug_print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness}")
         best_move_sequence = best_action_sim.get_move_sequence()
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
+        explanation_messages = best_action_sim.get_explanations()
+        for explanation in explanation_messages:
+            print_explanation(explanation, self.current_timestep)
         #end_state = sim_ship.get_state_sequence()[-1]
         #debug_print(f"Maneuver fitness: {best_maneuver_fitness}, stationary fitness: {best_stationary_targetting_fitness}")
         #print('state seq:', best_action_sim_state_sequence)
@@ -2762,7 +2834,7 @@ class Neo(KesslerController):
         #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
         # Check for danger
-        max_search_iterations = 200
+        max_search_iterations = 600
         min_search_iterations = 60
         max_cruise_seconds = 1 + 26*DELTA_TIME
         #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
@@ -2823,7 +2895,7 @@ class Neo(KesslerController):
         if search_iterations_count == max_search_iterations:
             debug_print("Hit the max iteration count")
         print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards and has a fitness of {best_maneuver_fitness_found}. Moving to coordinates {best_maneuver_sim.get_state_sequence()[-1]['position'][0]} {best_maneuver_sim.get_state_sequence()[-1]['position'][1]} at timestep {best_maneuver_sim.get_state_sequence()[-1]['timestep']}")
-        print_explanation(f"Found respawn maneuver where we're safe for {best_safe_time_after_maneuver:0.1f} s afterwards.")
+        print_explanation(f"Found respawn maneuver where we're safe for {best_safe_time_after_maneuver:0.1f} s afterwards.", self.current_timestep)
         # Enqueue the respawn maneuver
         #print(best_maneuver_sim.get_move_sequence())
         for move in best_maneuver_sim.get_move_sequence():
@@ -2846,8 +2918,8 @@ class Neo(KesslerController):
         if self.current_timestep == 0:
             # Only do these on the first timestep
             asteroids_count, current_count = asteroid_counter(game_state['asteroids'])
-            print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.")
-            print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.")
+            print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", self.current_timestep)
+            print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.", self.current_timestep)
             evaluate_scenario(game_state, ship_state)
         debug_print(f"\n\nTimestep {self.current_timestep}, ship is at {ship_state['position'][0]} {ship_state['position'][1]}")
 
@@ -2856,7 +2928,7 @@ class Neo(KesslerController):
             self.init_done = True
         #print("thrust is " + str(thrust) + "\n" + "turn rate is " + str(turn_rate) + "\n" + "fire is " + str(fire) + "\n")
         if ship_state['is_respawning'] and not (self.last_respawn_invincible_timestep_range[0] <= self.current_timestep <= self.last_respawn_invincible_timestep_range[1]):
-            print_explanation("OUCH, that hurt! Using invincibility to get to safety.")
+            print_explanation("OUCH, that hurt! Using invincibility to get to safety.", self.current_timestep)
             # Clear the move queue, since previous moves have been invalidated by us taking damage
             self.action_queue = []
             self.actioned_timesteps.clear() # If we don't clear it, we'll have duplicated moves since we have to overwrite our planned moves to get to safety, which means enqueuing moves on timesteps we already enqueued moves for.
@@ -2893,7 +2965,7 @@ class Neo(KesslerController):
                     self.plan_action(self.other_ships_exist)
                     self.decide_next_action()
                     if len(self.get_other_ships(game_state)) == 0:
-                        print_explanation("I'm alone. Beginning deterministic lookahead planning.")
+                        print_explanation("I'm alone. We can see into the future perfectly now!", self.current_timestep)
                         self.other_ships_exist = False
             else:
                 if not self.game_state_to_base_planning:
@@ -2937,8 +3009,6 @@ class Neo(KesslerController):
             drop_mine_combined = drop_mine if drop_mine is not None else drop_mine_combined
         if fire_combined == True and ship_state['can_fire']:
             self.last_timestep_fired = self.current_timestep
-        if drop_mine_combined:
-            print_explanation("It's worth dropping a mine. Bombs away!")
         # The next action in the queue is for a future timestep. All actions for this timestep are processed.
         # Bounds check the stuff before the Kessler code complains to me about it
         if thrust_combined < -SHIP_MAX_THRUST or thrust_combined > SHIP_MAX_THRUST:
