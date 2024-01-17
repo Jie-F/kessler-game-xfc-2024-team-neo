@@ -148,14 +148,24 @@ def mine_fis(mines_left: int, lives_left: int, asteroids_hit: int):
     return should_drop_mine
 
 def wrap_position(position: tuple, bounds: tuple):
-    wrapped_position = []
-    for pos, bound in zip(position, bounds):
-        if pos > bound:
-            pos -= bound
-        elif pos < 0:
-            pos += bound
-        wrapped_position.append(pos)
-    return tuple(wrapped_position)
+    x, y = position
+    x_bound, y_bound = bounds
+
+    if x > x_bound:
+        x_wrapped = x - x_bound
+    elif x < 0:
+        x_wrapped = x + x_bound
+    else:
+        x_wrapped = x
+    
+    if y > y_bound:
+        y_wrapped = y - y_bound
+    elif y < 0:
+        y_wrapped = y + y_bound
+    else:
+        y_wrapped = y
+
+    return x_wrapped, y_wrapped
 
 
 def preprocess_bullets(bullets):
@@ -1367,7 +1377,7 @@ class Simulation():
         self.mines = [mine for idx, mine in enumerate(self.mines) if idx not in mine_remove_idxs]
         return mine_collision
 
-    def get_next_extrapolated_collision_time(self):
+    def get_next_extrapolated_asteroid_collision_time(self):
         #debug_print(f"Inside get fitness, we shot {self.asteroids_shot} asteroids. getting extrapolated collision time. The ship's velocity is: ({self.velocity[0]}, {self.velocity[1]})")
         # Assume constant velocity from here
         next_imminent_asteroid_collision_time = math.inf
@@ -1409,13 +1419,18 @@ class Simulation():
                         next_imminent_asteroid_collision_time = min(next_imminent_asteroid_collision_time, predicted_collision_time)
             #else:
             #    debug_print(f"Inside extrapolated coll time checker. We already have a pending shot for this so we'll ignore this asteroid: {ast_to_string(asteroid)}")
+        return next_imminent_asteroid_collision_time
+
+    def get_next_extrapolated_mine_collision_time(self):
         next_imminent_mine_collision_time = math.inf
-        #print(f"Inside fitness checker. Mines:", self.mines)
         for m in self.mines:
             next_imminent_mine_collision_time = min(next_imminent_mine_collision_time, predict_ship_mine_collision(self.position[0], self.position[1], self.velocity[0], self.velocity[1], m, 0))
-        # Bring forward the mine collision time by 1 second to penalize staying within the blast radius of a mine that's about to go off. It takes time to escape the radius.
-        fudged_mine_collision_time = max(0, next_imminent_mine_collision_time - mine_collision_time_fudge_s)
-        next_imminent_collision_time = min(next_imminent_asteroid_collision_time, fudged_mine_collision_time)
+        return next_imminent_mine_collision_time
+
+    def get_next_extrapolated_collision_time(self):
+        next_imminent_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time()
+        next_imminent_mine_collision_time = self.get_next_extrapolated_mine_collision_time()
+        next_imminent_collision_time = min(next_imminent_asteroid_collision_time, next_imminent_mine_collision_time)
         return next_imminent_collision_time
 
     def coordinates_in_same_wrap(self, pos1, pos2):
@@ -1430,7 +1445,9 @@ class Simulation():
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
         # The LOWER the fitness score, the BETTER!
         move_sequence_length_s = (self.get_sequence_length() - 1)*DELTA_TIME
-        safe_time_after_maneuver_s = self.get_next_extrapolated_collision_time()
+        next_extrapolated_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time()
+        next_extrapolated_mine_collision_time = self.get_next_extrapolated_mine_collision_time()
+        safe_time_after_maneuver_s = min(next_extrapolated_asteroid_collision_time, next_extrapolated_mine_collision_time)
         asteroids_shot = self.asteroids_shot
 
         if asteroids_shot < 0:
@@ -1458,10 +1475,14 @@ class Simulation():
         if displacement < eps:
             # Stationary
             # Only has to be safe for 3 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
-            safe_time_score = max(0, min(5, 5 - 5/3*safe_time_after_maneuver_s))
+            asteroid_safe_time_score = max(0, min(5, 5 - 5/3*next_extrapolated_asteroid_collision_time))
         else:
             # Maneuvering
-            safe_time_score = max(0, min(5, 5 - safe_time_after_maneuver_s))
+            asteroid_safe_time_score = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time))
+        # Regardless of stationary or maneuvering, the mine safe time score is calculated the same way
+        next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
+        assert -eps <= next_extrapolated_mine_collision_time <= 3 + eps
+        mine_safe_time_score = 5 - 4/3*next_extrapolated_mine_collision_time
 
         other_ship_proximity_score = 0
         ship_proximity_max_penalty = 6
@@ -1497,15 +1518,22 @@ class Simulation():
         edge_proximity_score = edge_proximity_score_cap*(1 - separation_dist/max_separation_dist)
 
         
-        debug_print(f"Fitness: {safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Safe time score: {safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
-        #self.explanation_messages.append(f"Fitness: {safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Safe time score: {safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
-        if safe_time_score > 3:
+        debug_print(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
+        #self.explanation_messages.append(f"Fitness: {safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < eps else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
+        if asteroid_safe_time_score > 3:
             self.safety_messages.append("I'm dangerously close to being hit by asteroids. Trying my hardest to maneuver out of this situation.")
-        elif safe_time_score > 2:
+        elif asteroid_safe_time_score > 2:
             self.safety_messages.append("I'm close to being hit by asteroids.")
-        elif safe_time_score > 1:
+        elif asteroid_safe_time_score > 1:
             self.safety_messages.append("I'll eventually get hit by asteroids. Keeping my eye out for a dodge maneuver.")
         
+        if mine_safe_time_score > 3:
+            self.safety_messages.append("I'm dangerously close to being kablooied by a mine. Trying my hardest to maneuver out of this situation.")
+        elif mine_safe_time_score > 2:
+            self.safety_messages.append("I'm close to being boomed by a mine.")
+        elif mine_safe_time_score > 1:
+            self.safety_messages.append("I'm within the radius of a mine.")
+
         if other_ship_proximity_score > 3:
             self.safety_messages.append("I'm dangerously close to the other ship. Get away from me!")
         elif other_ship_proximity_score > 1:
@@ -1514,7 +1542,7 @@ class Simulation():
         if edge_proximity_score > 0.08:
             self.safety_messages.append("I'm really close to the edge. This is fine, but be careful!")
 
-        overall_fitness = safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score
+        overall_fitness = asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score
         if overall_fitness < 1:
             self.safety_messages.append("I'm safe and chilling")
         return overall_fitness
@@ -1594,14 +1622,14 @@ class Simulation():
                 print(f"Current ship velocity is {current_ship_state['velocity']}")
             if enable_assertions:
                 assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
-            ship_state_after_aiming_from_sim = simulate_ship_movement_with_inputs(self.game_state, current_ship_state, aiming_move_sequence)
+            #ship_state_after_aiming_from_sim = simulate_ship_movement_with_inputs(self.game_state, current_ship_state, aiming_move_sequence)
             ship_state_after_aiming = current_ship_state
             #print(f"\nOld heading: {ship_state_after_aiming['heading']}, add error: {target_asteroid_shooting_angle_error_deg}")
             ship_state_after_aiming['heading'] = (ship_state_after_aiming['heading'] + target_asteroid_shooting_angle_error_deg)%360
             #print('sim:', ship_state_after_aiming_from_sim, 'shortcut:', ship_state_after_aiming)
             
-            if enable_assertions:
-                assert math.isclose(ship_state_after_aiming_from_sim['heading']%360, ship_state_after_aiming['heading']%360, abs_tol=grain)
+            #if enable_assertions:
+            #    assert math.isclose(ship_state_after_aiming_from_sim['heading']%360, ship_state_after_aiming['heading']%360, abs_tol=grain)
             #print('SHIP STTAT AFTER AIMING')
             #print(ship_state_after_aiming)
             # TODO: Maybe we can't ignore the variable of whether the ship was safe?
@@ -2730,7 +2758,7 @@ class Neo(KesslerController):
             else:
                 search_iterations = 3
         max_cruise_seconds = 1
-        next_imminent_collision_time = math.inf
+        #next_imminent_collision_time = math.inf
 
         if self.game_state_to_base_planning['ship_state']['lives_remaining'] == 1:
             # When down to our last life, try twice as hard to survive
@@ -2782,16 +2810,16 @@ class Neo(KesslerController):
             maneuver_length = maneuver_sim.get_sequence_length() - 1
             if maneuver_complete_without_crash:
                 maneuver_fitness = maneuver_sim.get_fitness()
-                next_imminent_collision_time = maneuver_sim.get_next_extrapolated_collision_time()
+                #next_imminent_collision_time = maneuver_sim.get_next_extrapolated_collision_time()
             else:
                 maneuver_fitness = maneuver_sim.get_fitness() + 10
-                next_imminent_collision_time = 0
-            safe_time_after_maneuver = max(0, next_imminent_collision_time)
+                #next_imminent_collision_time = 0
+            #safe_time_after_maneuver = max(0, next_imminent_collision_time)
 
             self.sims_this_planning_period.append({
                 'sim': maneuver_sim,
                 'fitness': maneuver_fitness,
-                'safe_time_after_maneuver': safe_time_after_maneuver,
+                #'safe_time_after_maneuver': safe_time_after_maneuver,
                 'maneuver_length': maneuver_length,
             })
             if maneuver_fitness < self.best_fitness_this_planning_period:

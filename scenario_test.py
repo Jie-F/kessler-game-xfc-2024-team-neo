@@ -107,10 +107,10 @@ xfc2023 = [
     #adv_multi_wall_bottom_hard_1,
     #adv_multi_wall_right_hard_1,
     #adv_multi_ring_closing_left,
-    #adv_multi_ring_closing_right,
-    #adv_multi_two_rings_closing,
-    #avg_multi_ring_closing_both2,
-    #adv_multi_ring_closing_both_inside,
+    adv_multi_ring_closing_right,
+    adv_multi_two_rings_closing,
+    avg_multi_ring_closing_both2,
+    adv_multi_ring_closing_both_inside,
     adv_multi_ring_closing_both_inside_fast
 ]
 
@@ -144,16 +144,16 @@ died = False
 #while died or not missed:
 for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000) # 783098897   693367003   581741499
+    randseed = 123#random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=1,
+                                    num_asteroids=10,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(-300, 1800, 0),
+                                    speed_range=(-300, 1000, 0),
                                     angle_range=(0, 360),
-                                    size_range=(1, 1)
+                                    size_range=(1, 3)
                                 )
 
     # Define game scenario
@@ -174,12 +174,12 @@ for i in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    #cProfile.run('game.run(scenario=adv_multi_ring_closing_right, controllers=[Neo(), NeoController()])')
+    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=shearing_pattern_scenario, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #score, perf_data = game.run(scenario=adv_multi_ring_closing_both_inside, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
