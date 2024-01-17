@@ -745,3 +745,55 @@ minecrash = Scenario(name='Mine Crash',
 
 
 
+
+
+
+
+
+
+
+
+
+
+width, height = 1920, 1080
+center = (width // 2, height // 2)
+grid_size = 12
+distance_factor = 0.5  # This factor will determine how speed increases with distance
+
+def calculate_distance(pos1, pos2):
+    return np.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2)
+
+def calculate_angle(center, position):
+    dx, dy = position[0] - center[0], position[1] - center[1]
+    return np.degrees(np.arctan2(dy, dx)) % 360
+
+asteroid_states = []
+grid_step = min(width, height) // (grid_size + 1)
+
+for i in range(grid_size):
+    for j in range(grid_size):
+        asteroid_x = grid_step * (i + 1)
+        asteroid_y = grid_step * (j + 1)
+        position = (asteroid_x, asteroid_y)
+        distance = calculate_distance(center, position)
+        speed = distance_factor * distance
+        angle = calculate_angle(center, position)
+
+        asteroid_states.append({
+            'position': position,
+            'speed': speed,
+            'angle': angle,
+            'size': 1
+        })
+
+# Ship state
+ship_state = [{'position': center, 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 3}]
+
+# Creating the Exploding Grid scenario
+exploding_grid_scenario = Scenario(
+    name='exploding_grid_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=ship_state,
+    map_size=(width, height),
+    seed=0
+)

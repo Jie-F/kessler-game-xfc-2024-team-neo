@@ -14,26 +14,26 @@ windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor i
 from scenarios import *
 
 portfolio = [
-    #threat_test_1,
-    #threat_test_2,
-    #threat_test_3,
-    #threat_test_4,
-    #accuracy_test_1,
-    #accuracy_test_2,
-    #accuracy_test_3,
-    #accuracy_test_4,
-    #accuracy_test_5,
-    #accuracy_test_6,
-    #accuracy_test_7,
-    #accuracy_test_8,
-    #accuracy_test_9,
-    #accuracy_test_10,
-    #wall_left_easy,
-    #wall_right_easy,
-    #wall_top_easy,
-    #wall_bottom_easy,
-    #ring_closing,
-    #ring_static_left,
+    threat_test_1,
+    threat_test_2,
+    threat_test_3,
+    threat_test_4,
+    accuracy_test_1,
+    accuracy_test_2,
+    accuracy_test_3,
+    accuracy_test_4,
+    accuracy_test_5,
+    accuracy_test_6,
+    accuracy_test_7,
+    accuracy_test_8,
+    accuracy_test_9,
+    accuracy_test_10,
+    wall_left_easy,
+    wall_right_easy,
+    wall_top_easy,
+    wall_bottom_easy,
+    ring_closing,
+    ring_static_left,
     ring_static_right,
     ring_static_top,
     ring_static_bottom,
@@ -155,14 +155,14 @@ my_test_scenario = Scenario(name='Test Scenario',
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 0,
+                 'realtime_multiplier': 5,
                  'graphics_obj': None,
                  'frequency': 30}
 
 game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
 # game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
 
-for scene in alternate_scenarios:
+for scene in portfolio:
     # Evaluate the game
     pre = time.perf_counter()
     print(f"Running scenario: {scene.name}")

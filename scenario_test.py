@@ -81,7 +81,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 5,
+                 'realtime_multiplier': 7,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -114,14 +114,14 @@ xfc2023 = [
 ]
 
 custom = [
-    target_priority_optimization1,
-    closing_ring_scenario,
-    easy_closing_ring_scenario,
-    more_intense_closing_ring_scenario,
-    rotating_square_scenario,
-    rotating_square_2_overlap,
-    falling_leaves_scenario,
-    zigzag_motion_scenario,
+    #target_priority_optimization1,
+    #closing_ring_scenario,
+    #easy_closing_ring_scenario,
+    #more_intense_closing_ring_scenario,
+    #rotating_square_scenario,
+    #rotating_square_2_overlap,
+    #falling_leaves_scenario,
+    #zigzag_motion_scenario,
     shearing_pattern_scenario,
     super_hard_wrap,
     wonky_ring,
@@ -131,18 +131,19 @@ custom = [
     spiral_assault_scenario,
     dancing_ring,
     dancing_ring_2,
-    intersecting_lines_scenario
+    intersecting_lines_scenario,
+    exploding_grid_scenario
 ]
 
 #for i in range(0, len(seeds)):
 #while True:
 
 died = False
-for sc in custom:
+#for sc in custom:
 #while died or not missed:
-#for i in range(1):
+for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000) # 783098897   693367003   581741499
+    randseed = 2#random.randint(1, 1000000000) # 783098897   693367003   581741499
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -176,8 +177,8 @@ for sc in custom:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=sc, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=exploding_grid_scenario, controllers=[Neo(), NeoController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')

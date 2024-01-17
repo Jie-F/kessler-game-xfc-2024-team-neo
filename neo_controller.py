@@ -8,6 +8,7 @@
 # TODO: Penalize getting close to edge
 # TODO: Tolerance in shooting for target sim
 # TODO: Stop shooting once there's nothing left I haven't shot at
+# TODO: Potential closing ring strat: drop the mine at a time where the ring becomes stationary
 
 from src.kesslergame import KesslerController
 import random
@@ -33,7 +34,7 @@ gamestate_plotting = False
 bullet_sim_plotting = False
 next_target_plotting = False
 maneuver_sim_plotting = False
-start_gamestate_plotting_at_second = None#0#16
+start_gamestate_plotting_at_second = None
 slow_down_game_after_second = 1000.3
 slow_down_game_pause_time = 2
 
@@ -567,30 +568,32 @@ def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: 
     return unwrapped_asteroids
 
 def check_coordinate_bounds(game_state, x, y):
-    if 0 <= x < game_state['map_size'][0] and 0 <= y < game_state['map_size'][1]:
+    if 0 <= x <= game_state['map_size'][0] and 0 <= y <= game_state['map_size'][1]:
         return True
     else:
         return False
 
-def solve_quadratic(A, B, C):
-    # This solves A*x*x + B*x + C = 0 for x
-    # TODO: REALLY STRESS TEST THIS BECAUSE IT'S SO IMPORTANT
-    # TODO: Handle cases where each of A, B, C are basically 0
-    D = B*B - 4*A*C
-    r1, r2 = None, None
-    if D < 0:
-        return r1, r2
-    elif abs(A) < eps:
-        r1 = -C/B # We're solving a linear function. There might be a second root that's suuuuuuper far from t=0 so we don't care about it
-    elif abs(A) < tad:
-        # A is probably smaller than B or C, so use alternative quadratic formula to get better numerical stability
-        r1 = (2*C)/(-B + math.sqrt(D))
-        r2 = (2*C)/(-B - math.sqrt(D))
-    elif D > 0:
-        r1 = (-B - math.sqrt(D))/(2*A)
-        r2 = (-B + math.sqrt(D))/(2*A)
-    elif D == 0:
-        r1 = -B/(2*A)
+def solve_quadratic(a, b, c):
+    # This solves a*x*x + b*x + c = 0 for x
+    # This handles the case where a, b, or c are 0.
+    d = b*b - 4*a*c
+    if d < 0:
+        # No real solutions.
+        r1 = None
+        r2 = None
+    elif a == 0:
+        # This is a linear equation. Handle this case separately.
+        r1 = -c/b
+        r2 = None
+    else:
+        # This handles the case where b or c are 0
+        # If d is 0, technically there's only one solution but this will give two duplicated solutions. It's not worth checking each time for this since it's so rare
+        if b > 0:
+            u = -b - math.sqrt(d)
+        else:
+            u = -b + math.sqrt(d)
+        r1 = u/(2*a)
+        r2 = 2*c/u
     return r1, r2
 
 def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_y, asteroid_vel_x, asteroid_vel_y, asteroid_r, ship_heading, game_state, future_shooting_timesteps=0):
@@ -1421,7 +1424,7 @@ class Simulation():
 
         if asteroids_shot < 0:
             # This is to signal that we won't hit anything ever if we're staying here, so we should defer to the maneuver subcontroller to force a move
-            print(f"Deferring to maneuver subcontroller! Forcing a move.")
+            debug_print(f"Deferring to maneuver subcontroller! Forcing a move.")
             asteroids_score = 1
         else:
             if asteroids_shot == 0:
@@ -1541,9 +1544,12 @@ class Simulation():
                 assert abs(current_ship_state['velocity'][0]) < grain and abs(current_ship_state['velocity'][1]) < grain
             ship_state_after_aiming_from_sim = simulate_ship_movement_with_inputs(self.game_state, current_ship_state, aiming_move_sequence)
             ship_state_after_aiming = current_ship_state
+            #print(f"\nOld heading: {ship_state_after_aiming['heading']}, add error: {target_asteroid_shooting_angle_error_deg}")
             ship_state_after_aiming['heading'] = (ship_state_after_aiming['heading'] + target_asteroid_shooting_angle_error_deg)%360
+            #print('\nsim:', ship_state_after_aiming_from_sim, 'shortcut:', ship_state_after_aiming)
+            
             if enable_assertions:
-                assert math.isclose(ship_state_after_aiming_from_sim['heading'], ship_state_after_aiming['heading'])
+                assert math.isclose(ship_state_after_aiming_from_sim['heading']%360, ship_state_after_aiming['heading']%360)
             #print('SHIP STTAT AFTER AIMING')
             #print(ship_state_after_aiming)
             # TODO: Maybe we can't ignore the variable of whether the ship was safe?
