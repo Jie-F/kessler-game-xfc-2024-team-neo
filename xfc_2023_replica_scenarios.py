@@ -382,8 +382,8 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y
 adv_multi_ring_closing_both_inside = Scenario(
     name="adv_multi_ring_closing_both_inside",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                 {"position": ship_position_2, 'angle': 90, 'lives': 30, 'team': 2, "mines_remaining": 1}],
+    ship_states=[{"position": ship_position, 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 2},
+                 {"position": ship_position_2, 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 2}],
     time_limit=60,
 )
 
@@ -419,7 +419,7 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed, 'size': 
 adv_multi_ring_closing_both_inside_fast = Scenario(
     name="adv_multi_ring_closing_both_inside_fast",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                 {"position": ship_position_2, 'angle': 90, 'lives': 30, 'team': 2, "mines_remaining": 1}],
+    ship_states=[{"position": ship_position, 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 2},
+                 {"position": ship_position_2, 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 2}],
     time_limit=30,
 )

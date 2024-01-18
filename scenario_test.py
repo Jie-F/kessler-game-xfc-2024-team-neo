@@ -96,17 +96,17 @@ iterations = 0
 
 xfc2023 = [
     ex_adv_four_corners_pt1,
-    #ex_adv_asteroids_down_up_pt1,
-    #ex_adv_asteroids_down_up_pt2,
-    #ex_adv_direct_facing,
-    #ex_adv_two_asteroids_pt1,
-    #ex_adv_two_asteroids_pt2,
-    #ex_adv_ring_pt1,
-    #adv_random_big_1,
-    #adv_random_big_3,
-    #adv_multi_wall_bottom_hard_1,
-    #adv_multi_wall_right_hard_1,
-    #adv_multi_ring_closing_left,
+    ex_adv_asteroids_down_up_pt1,
+    ex_adv_asteroids_down_up_pt2,
+    ex_adv_direct_facing,
+    ex_adv_two_asteroids_pt1,
+    ex_adv_two_asteroids_pt2,
+    ex_adv_ring_pt1,
+    adv_random_big_1,
+    adv_random_big_3,
+    adv_multi_wall_bottom_hard_1,
+    adv_multi_wall_right_hard_1,
+    adv_multi_ring_closing_left,
     adv_multi_ring_closing_right,
     adv_multi_two_rings_closing,
     avg_multi_ring_closing_both2,
@@ -115,10 +115,10 @@ xfc2023 = [
 ]
 
 custom = [
-    target_priority_optimization1,
-    closing_ring_scenario,
-    easy_closing_ring_scenario,
-    more_intense_closing_ring_scenario,
+    #target_priority_optimization1,
+    #closing_ring_scenario,
+    #easy_closing_ring_scenario,
+    #more_intense_closing_ring_scenario,
     rotating_square_scenario,
     rotating_square_2_overlap,
     falling_leaves_scenario,
@@ -133,18 +133,20 @@ custom = [
     dancing_ring,
     dancing_ring_2,
     intersecting_lines_scenario,
-    exploding_grid_scenario
+    exploding_grid_scenario,
+    grid_formation_explosion_scenario,
+    aspect_ratio_grid_formation_scenario
 ]
 
 #for i in range(0, len(seeds)):
 #while True:
-
+score = None
 died = False
 #for sc in xfc2023:
-#while died or not missed:
-for i in range(1):
+while died or not missed:
+#for i in range(1):
     iterations += 1
-    randseed = 123#random.randint(1, 1000000000)
+    randseed = random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -153,8 +155,8 @@ for i in range(1):
                                     position_range_y=(0, height),
                                     speed_range=(-300, 1000, 0),
                                     angle_range=(0, 360),
-                                    size_range=(1, 3)
-                                )
+                                    size_range=(1, 4)
+                                )*random.choice([1, 2])
 
     # Define game scenario
     my_test_scenario = Scenario(name='Test Scenario',
@@ -174,23 +176,28 @@ for i in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])')
+    #cProfile.run('game.run(scenario=sc, controllers=[Neo(), NeoController()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    #score, perf_data = game.run(scenario=adv_multi_ring_closing_both_inside, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=rotating_square_2_overlap, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
-    color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
-    color_print(score.stop_reason, 'green')
-    color_print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]), 'green')
-    color_print('Deaths: ' + str([team.deaths for team in score.teams]), 'green')
-    if [team.deaths for team in score.teams][0] == 1:
-        died = True
-    color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
-    color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
-    if score.teams[0].accuracy < 1:
-        color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
-        missed = True
+    if score:
+        color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
+        color_print(score.stop_reason, 'green')
+        color_print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]), 'green')
+        color_print('Deaths: ' + str([team.deaths for team in score.teams]), 'green')
+        if [team.deaths for team in score.teams][0] >= 1:
+            died = True
+        else:
+            died = False
+        color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
+        color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
+        if score.teams[0].accuracy < 1:
+            color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
+            missed = True
+        else:
+            missed = False
 color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')

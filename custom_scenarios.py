@@ -797,3 +797,134 @@ exploding_grid_scenario = Scenario(
     map_size=(width, height),
     seed=0
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+width, height = 1920, 1080
+center = (width // 2, height // 2)
+grid_size = 14
+time_to_form_grid = 5  # Time in seconds after which the grid is formed
+grid_spacing = 100  # Spacing between asteroids in the grid
+
+asteroid_states = []
+
+# Calculate the initial velocity for each asteroid to form a grid
+for i in range(grid_size):
+    for j in range(grid_size):
+        # Target position in the grid
+        target_x = center[0] + (i - grid_size // 2) * grid_spacing
+        target_y = center[1] + (j - grid_size // 2) * grid_spacing
+        target_position = (target_x, target_y)
+
+        # Calculate velocity to reach the target position in the specified time
+        velocity_x = (target_position[0] - center[0]) / time_to_form_grid
+        velocity_y = (target_position[1] - center[1]) / time_to_form_grid
+
+        # Convert velocity to polar coordinates (angle and speed)
+        speed = np.sqrt(velocity_x**2 + velocity_y**2)
+        angle = np.degrees(np.arctan2(velocity_y, velocity_x)) % 360
+
+        asteroid_states.append({
+            'position': center,
+            'speed': speed,
+            'angle': angle,
+            'size': 1
+        })
+
+# Ship state
+ship_state = [{'position': (0, 0), 'angle': 45, 'lives': 3, 'team': 1, 'mines_remaining': 3}]
+
+# Creating the Grid Formation Explosion scenario
+grid_formation_explosion_scenario = Scenario(
+    name='grid_formation_explosion_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=ship_state,
+    map_size=(width, height),
+    seed=0
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+width, height = 1920, 1080
+center = (width // 2, height // 2)
+time_to_form_grid = 4  # Time in seconds after which the grid is formed
+
+# Calculate the number of asteroids based on aspect ratio
+aspect_ratio = width / height
+num_asteroids_width = 14  # Define the number of asteroids in width
+num_asteroids_height = int(num_asteroids_width / aspect_ratio)  # Calculate the number in height based on aspect ratio
+
+# Calculate grid spacing
+grid_spacing_x = width / num_asteroids_width
+grid_spacing_y = height / num_asteroids_height
+
+asteroid_states = []
+
+# Calculate the initial velocity for each asteroid to form a grid
+for i in range(num_asteroids_width):
+    for j in range(num_asteroids_height):
+        # Target position in the grid
+        target_x = (i * grid_spacing_x) + (grid_spacing_x / 2)
+        target_y = (j * grid_spacing_y) + (grid_spacing_y / 2)
+        target_position = (target_x, target_y)
+
+        # Calculate velocity to reach the target position in the specified time
+        velocity_x = (target_position[0] - center[0]) / time_to_form_grid
+        velocity_y = (target_position[1] - center[1]) / time_to_form_grid
+
+        # Convert velocity to polar coordinates (angle and speed)
+        speed = np.sqrt(velocity_x**2 + velocity_y**2)
+        angle = np.degrees(np.arctan2(velocity_y, velocity_x)) % 360
+
+        asteroid_states.append({
+            'position': center,
+            'speed': speed,
+            'angle': angle,
+            'size': 2
+        })
+
+# Ship state
+ship_state = [{'position': center, 'angle': 0, 'lives': 4, 'team': 1, 'mines_remaining': 3}]
+
+# Creating the Aspect Ratio Grid Formation scenario
+aspect_ratio_grid_formation_scenario = Scenario(
+    name='aspect_ratio_grid_formation_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=ship_state,
+    map_size=(width, height),
+    seed=0
+)
+
