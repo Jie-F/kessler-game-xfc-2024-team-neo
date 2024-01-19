@@ -153,10 +153,10 @@ while died or not missed:
                                     num_asteroids=10,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(-300, 1000, 0),
+                                    speed_range=(-300, 600, 0),
                                     angle_range=(0, 360),
                                     size_range=(1, 4)
-                                )*random.choice([1, 2])
+                                )*random.choice([1])
 
     # Define game scenario
     my_test_scenario = Scenario(name='Test Scenario',
@@ -181,7 +181,7 @@ while died or not missed:
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=rotating_square_2_overlap, controllers=[Neo(), RController()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:
