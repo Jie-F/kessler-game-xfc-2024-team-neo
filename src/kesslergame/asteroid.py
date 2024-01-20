@@ -120,8 +120,11 @@ class Asteroid:
                     angle += 360
                 while angle > 360:
                     angle -= 360
-
-            return [Asteroid(position=self.position, size=self.size-1, speed=v, angle=angle) for angle in angles]
+            new_asts = [Asteroid(position=self.position, size=self.size-1, speed=v, angle=angle) for angle in angles]
+            for a in new_asts:
+                if a.velocity[0] == 225.6786865174815:
+                    print("\n\n\n\n\nBAMMO")
+            return new_asts
 
                 # Old method of doing random splits
                 # return [Asteroid(position=self.position, size=self.size-1) for _ in range(self.num_children)]
