@@ -1,28 +1,28 @@
+import numpy as np
+import math
 import timeit
 
-# Number of repetitions for each operation
-repetitions = 1000000
+# Generating 10 million random positive floating point numbers
+num_samples = 10_000_000
+random_numbers = np.random.random_sample(num_samples) * 100
 
-# Operations to benchmark
-operations = {
-    "Floating Point Addition": "3.14 + 1.59",
-    "Floating Point Multiplication": "3.14 * 1.59",
-    "Floating Point Division": "3.14 / 1.59",
-    "Square Root": "math.sqrt(3.14)",
-    "Exponent": "math.exp(1.59)",
-    "Logarithm": "math.log(3.14)",
-    "Sine": "math.sin(3.14)",
-    "Cosine": "math.cos(1.59)"
-}
+# Function to benchmark np.sqrt
+def benchmark_np_sqrt():
+    for num in random_numbers:
+        np.sqrt(num)
 
-# Importing math module for square root, exponent, logarithm, sine, and cosine
-setup_code = "import math"
+# Function to benchmark math.sqrt
+def benchmark_math_sqrt():
+    for num in random_numbers:
+        math.sqrt(num)
 
-# Benchmarking each operation
-benchmark_results = {}
-for operation, code in operations.items():
-    time_taken = timeit.timeit(code, setup=setup_code, number=repetitions)
-    benchmark_results[operation] = time_taken
+# Number of runs for each benchmark
+num_runs = 3
 
-print(benchmark_results)
+# Using timeit to measure execution time
+np_time_taken = timeit.timeit(benchmark_np_sqrt, number=num_runs) / num_runs
+math_time_taken = timeit.timeit(benchmark_math_sqrt, number=num_runs) / num_runs
 
+# Print results
+print(f"Average time taken for np.sqrt in a loop (over {num_runs} runs): {np_time_taken} seconds")
+print(f"Average time taken for math.sqrt in a loop (over {num_runs} runs): {math_time_taken} seconds")

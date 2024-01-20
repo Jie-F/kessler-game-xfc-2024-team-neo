@@ -122,8 +122,12 @@ class Asteroid:
                     angle -= 360
             new_asts = [Asteroid(position=self.position, size=self.size-1, speed=v, angle=angle) for angle in angles]
             for a in new_asts:
-                if a.velocity[0] == 225.6786865174815:
+                if a.velocity[0] == -120.00000000000003:
                     print("\n\n\n\n\nBAMMO")
+                    print(f"Bullet vel: {impactor_vx} {impactor_vy}")
+                    print(f"vfx: {vfx} vfy: {vfy}")
+                    
+                    #raise Exception("BAMMO")
             return new_asts
 
                 # Old method of doing random splits

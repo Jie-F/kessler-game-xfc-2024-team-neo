@@ -4,7 +4,7 @@
 # this source code package.
 
 import time
-
+import math
 import numpy as np
 from typing import Dict, Any, List
 from enum import Enum
@@ -186,11 +186,23 @@ class KesslerGame:
                     if offset < 0 or offset > bound:
                         ship.position[idx] += bound * np.sign(offset)
             for asteroid in asteroids:
+                #if asteroid.position == (-2.6645352591003757e-15, 77.14285714285627):
+                flag = False
+                if math.isclose(asteroid.position[0], -2.6645352591003757e-15) and math.isclose(asteroid.position[1], 77.14285714285627):
+                    print("\n\n\n\n\n\nBAMAMOSJKDFDSMOFMOSDFMOSDMFSDOMDF")
+                    print(asteroid.position)
+                    flag = True
                 for idx, pos in enumerate(asteroid.position):
                     bound = scenario.map_size[idx]
                     offset = bound - pos
+                    if flag:
+                        print(f"offset: {offset}, bound: {bound}")
                     if offset < 0 or offset > bound:
+                        # bound < pos or pos < 0
+                        # bound - pos > bound
                         asteroid.position[idx] += bound * np.sign(offset)
+                if flag:
+                    print(asteroid.position)
 
             # Update performance tracker with
             if self.perf_tracker:
