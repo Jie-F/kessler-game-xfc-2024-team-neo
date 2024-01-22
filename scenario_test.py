@@ -146,11 +146,11 @@ died = False
 while died or not missed:
 #for i in range(1):
     iterations += 1
-    randseed = 77255297#random.randint(1, 1000000000)
+    randseed = random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=10,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),

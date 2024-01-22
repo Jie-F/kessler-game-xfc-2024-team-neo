@@ -7,7 +7,7 @@ from typing import Tuple, Dict, List, Any
 import random
 import numpy as np
 from .mines import Mine
-
+import math
 
 class Asteroid:
     """ Sprite that represents an asteroid. """
@@ -89,10 +89,10 @@ class Asteroid:
             if isinstance(impactor, Mine):
                 dist = np.sqrt((impactor.position[0] - self.position[0])**2 + (impactor.position[1] - self.position[1])**2)
                 F = impactor.calculate_blast_force(dist=dist, obj=self)
-                a = F/self.mass
+                acc = F/self.mass
                 # calculate "impulse" based on acc
-                vfx = self.vx + a*(self.position[0] - impactor.position[0])/dist
-                vfy = self.vy + a*(self.position[1] - impactor.position[1])/dist
+                vfx = self.vx + acc*(self.position[0] - impactor.position[0])/dist
+                vfy = self.vy + acc*(self.position[1] - impactor.position[1])/dist
             else:
                 # Calculating new velocity vector of asteroid children based on bullet-asteroid collision/momentum
                 # Currently collisions are considered perfectly inelastic i.e. the bullet is absorbed by the asteroid
@@ -122,9 +122,10 @@ class Asteroid:
                     angle -= 360
             new_asts = [Asteroid(position=self.position, size=self.size-1, speed=v, angle=angle) for angle in angles]
             for a in new_asts:
-                if a.velocity[0] == -120.00000000000003:
+                if math.isclose(a.velocity[0], 82.3102):
                     print("\n\n\n\n\nBAMMO")
-                    print(f"Bullet vel: {impactor_vx} {impactor_vy}")
+                    #print(f"Bullet vel: {impactor_vx} {impactor_vy}")
+                    print(f"{self.vx} + {acc}*({self.position[0]} - {impactor.position[0]})/{dist}")
                     print(f"vfx: {vfx} vfy: {vfy}")
                     
                     #raise Exception("BAMMO")

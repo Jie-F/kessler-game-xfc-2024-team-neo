@@ -10,7 +10,6 @@ target_priority_optimization1 = Scenario(name='Target priority optimization 1',
                                 {'position': (width//2, height//2), 'angle': 0, 'lives': 1, 'team': 1, "mines_remaining": 3},
                             ],
                             map_size=(width, height),
-                            #seed=2,
                             time_limit=30,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
@@ -36,8 +35,7 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y
 closing_ring_scenario = Scenario(
     name="closing_ring_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'lives': 10, 'team': 1, "mines_remaining": 3}],
-    seed=0
+    ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 0}],
 )
 
 
@@ -70,7 +68,6 @@ easy_closing_ring_scenario = Scenario(
     name="easy_closing_ring_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{"position": ship_position, 'lives': 5, 'team': 1, "mines_remaining": 1}],
-    seed=0
 )
 
 
@@ -106,7 +103,6 @@ more_intense_closing_ring_scenario = Scenario(
         "team": 1, 
         "mines_remaining": 3
     }],
-    seed=0
 )
 
 
@@ -149,7 +145,6 @@ rotating_square_scenario = Scenario(
     name="rotating_square_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{"position": center, 'lives': 3, 'mines_remaining': 1}],  # Add additional ship states as needed
-    seed=0
 )
 
 
@@ -198,7 +193,6 @@ rotating_square_2_overlap = Scenario(
     name="rotating_square_2_overlap",
     asteroid_states=asteroid_states,
     ship_states=[{"position": center, 'lives': 3, 'mines_remaining': 2}],  # Add additional ship states as needed
-    seed=0
 )
 
 
@@ -242,7 +236,6 @@ falling_leaves_scenario = Scenario(
     name="falling_leaves_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{"position": (500, 400)}],  # Update with your ship's initial position
-    seed=0
 )
 
 
@@ -281,7 +274,6 @@ zigzag_motion_scenario = Scenario(
     name="zigzag_motion_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{"position": (500, 400), 'lives': 5, 'mines_remaining': 3}],  # Update with your ship's initial position
-    seed=0
 )
 
 
@@ -329,7 +321,6 @@ shearing_pattern_scenario = Scenario(
     name="shearing_pattern_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{"position": (500, 400), "lives": 3, "mines_remaining": 3}],
-    seed=0
 )
 
 
@@ -387,7 +378,6 @@ super_fast_asteroid = Scenario(name='Test Scenario',
                                 #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                             ],
                             map_size=(width, height),
-                            #seed=2,
                             time_limit=np.inf,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
@@ -405,7 +395,6 @@ edge_asteroid = Scenario(name='Test Scenario',
                                 #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                             ],
                             map_size=(width, height),
-                            #seed=2,
                             time_limit=np.inf,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
@@ -437,7 +426,6 @@ wonky_ring = Scenario(
     name="wonky_ring",
     asteroid_states=asteroid_states,
     ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 3}],
-    seed=0
 )
 
 
@@ -492,7 +480,6 @@ moving_ring_scenario = Scenario(
     asteroid_states=asteroid_states,
     ship_states=[{'position': ship_position, 'angle': 0, 'lives': 3, 'mines_remaining': 3}],
     map_size=(1920, 1080),
-    seed=0
 )
 
 
@@ -549,7 +536,6 @@ shifting_square_scenario = Scenario(
     asteroid_states=asteroid_states,
     ship_states=[{'position': ship_position, 'angle': 0, 'lives': 5, 'mines_remaining': 3}],
     map_size=(1920, 1080),
-    seed=0
 )
 
 
@@ -659,7 +645,6 @@ dancing_ring = Scenario(
     name="dancing_ring",
     asteroid_states=asteroid_states,
     ship_states=[{"position": ship_position, 'lives': 10, 'team': 1, "mines_remaining": 1}],
-    seed=0
 )
 
 
@@ -689,7 +674,6 @@ dancing_ring_2 = Scenario(
     name="dancing_ring_2",
     asteroid_states=asteroid_states,
     ship_states=[{"position": ship_position, 'lives': 5, 'team': 1, "mines_remaining": 0}],
-    seed=0
 )
 
 
@@ -737,7 +721,6 @@ minecrash = Scenario(name='Mine Crash',
                                 #{'position': (1920*2//3, 1080//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                             ],
                             map_size=(width, height),
-                            #seed=2,
                             time_limit=500,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
@@ -795,7 +778,6 @@ exploding_grid_scenario = Scenario(
     asteroid_states=asteroid_states,
     ship_states=ship_state,
     map_size=(width, height),
-    seed=0
 )
 
 
@@ -860,7 +842,6 @@ grid_formation_explosion_scenario = Scenario(
     asteroid_states=asteroid_states,
     ship_states=ship_state,
     map_size=(width, height),
-    seed=0
 )
 
 
@@ -925,7 +906,6 @@ aspect_ratio_grid_formation_scenario = Scenario(
     asteroid_states=asteroid_states,
     ship_states=ship_state,
     map_size=(width, height),
-    seed=0
 )
 
 
