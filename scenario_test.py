@@ -82,7 +82,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 0,
+                 'realtime_multiplier': 3,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -95,16 +95,16 @@ missed = False
 iterations = 0
 
 xfc2023 = [
-    ex_adv_four_corners_pt1,
-    ex_adv_asteroids_down_up_pt1,
-    ex_adv_asteroids_down_up_pt2,
-    ex_adv_direct_facing,
-    ex_adv_two_asteroids_pt1,
-    ex_adv_two_asteroids_pt2,
-    ex_adv_ring_pt1,
-    adv_random_big_1,
-    adv_random_big_3,
-    adv_multi_wall_bottom_hard_1,
+    #ex_adv_four_corners_pt1,
+    #ex_adv_asteroids_down_up_pt1,
+    #ex_adv_asteroids_down_up_pt2,
+    #ex_adv_direct_facing,
+    #ex_adv_two_asteroids_pt1,
+    #ex_adv_two_asteroids_pt2,
+    #ex_adv_ring_pt1,
+    #adv_random_big_1,
+    #adv_random_big_3,
+    #adv_multi_wall_bottom_hard_1,
     adv_multi_wall_right_hard_1,
     adv_multi_ring_closing_left,
     adv_multi_ring_closing_right,
@@ -142,8 +142,8 @@ custom = [
 #while True:
 score = None
 died = False
-#for sc in xfc2023:
-while died or not missed:
+for sc in xfc2023:
+#while died or not missed:
 #for i in range(1):
     iterations += 1
     randseed = random.randint(1, 1000000000)
@@ -180,8 +180,8 @@ while died or not missed:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=closing_ring_scenario, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=sc, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:
