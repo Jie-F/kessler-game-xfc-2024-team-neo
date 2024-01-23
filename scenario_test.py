@@ -12,6 +12,7 @@ import numpy as np
 import cProfile
 import sys
 from r_controller import RController
+from null_controller import NullController
 
 
 from ctypes import windll
@@ -82,7 +83,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 4,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -142,11 +143,11 @@ custom = [
 #while True:
 score = None
 died = False
-for sc in xfc2023:
+#for sc in xfc2023:
 #while died or not missed:
-#for i in range(1):
+for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000)
+    randseed = 213980962#random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
@@ -167,7 +168,7 @@ for sc in xfc2023:
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
                                     {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
+                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -176,12 +177,12 @@ for sc in xfc2023:
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])')
+    #cProfile.run('game.run(scenario=adv_multi_ring_closing_left, controllers=[Neo(), Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=sc, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=adv_multi_ring_closing_left, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:
