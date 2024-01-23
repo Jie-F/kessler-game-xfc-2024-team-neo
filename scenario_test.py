@@ -142,15 +142,15 @@ custom = [
 #while True:
 score = None
 died = False
-for sc in xfc2023:
+#for sc in xfc2023:
 #while died or not missed:
-#for i in range(1):
+for i in range(1):
     iterations += 1
-    randseed = random.randint(1, 1000000000)
+    randseed = 1#random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=15,
+                                    num_asteroids=10,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
@@ -167,7 +167,7 @@ for sc in xfc2023:
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
                                     {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 1},
+                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -180,8 +180,8 @@ for sc in xfc2023:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=sc, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #print(f"Evaluating scenario {sc.name}")
+    score, perf_data = game.run(scenario=adv_random_big_1, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:
@@ -200,4 +200,5 @@ for sc in xfc2023:
             missed = True
         else:
             missed = False
-color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
+if missed:
+    color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
