@@ -10,6 +10,7 @@
 # TODO: Use fitness function for target selection, so the sorting becomes smoother.
 # TODO: Replace immutable lists with tuples
 # TODO: Show stats at the end
+# TODO: Use mine fis before creating the sim, not inside of it
 
 import random
 import math
@@ -50,7 +51,7 @@ slow_down_game_after_second = math.inf
 slow_down_game_pause_time = 2
 
 # These can trade off to get better performance at the expense of safety
-ENABLE_ASSERTIONS = False
+ENABLE_ASSERTIONS = True
 PRUNE_SIM_STATE_SEQUENCE = True
 VALIDATE_SIMULATED_KEY_STATES = False
 VALIDATE_ALL_SIMULATED_STATES = False
@@ -2515,8 +2516,8 @@ class Simulation():
             rad_heading = pi*self.ship_state['heading']/180
             cos_heading = cos(rad_heading)
             sin_heading = sin(rad_heading)
-            bullet_x = self.ship_state['position'][0] + SHIP_RADIUS*cos(radians(self.ship_state['heading'])) # SHIP_RADIUS*cos_heading
-            bullet_y = self.ship_state['position'][1] + SHIP_RADIUS*sin(radians(self.ship_state['heading'])) # SHIP_RADIUS*sin_heading
+            bullet_x = self.ship_state['position'][0] + SHIP_RADIUS*cos_heading#SHIP_RADIUS*cos(radians(self.ship_state['heading'])) # SHIP_RADIUS*cos_heading
+            bullet_y = self.ship_state['position'][1] + SHIP_RADIUS*sin_heading#SHIP_RADIUS*sin(radians(self.ship_state['heading'])) # SHIP_RADIUS*sin_heading
             # Make sure the bullet isn't being fired out into the void
             if check_coordinate_bounds(self.game_state, bullet_x, bullet_y):
                 vx = BULLET_SPEED*cos_heading
@@ -2574,7 +2575,13 @@ class Simulation():
         #thrust = min(max(-SHIP_MAX_THRUST, thrust), SHIP_MAX_THRUST)
         # Apply thrust
         self.ship_state['speed'] += thrust*DELTA_TIME
+        if self.ship_state['speed'] > SHIP_MAX_SPEED:
+            self.ship_state['speed'] = SHIP_MAX_SPEED
+        elif self.ship_state['speed'] < -SHIP_MAX_SPEED:
+            self.ship_state['speed'] = -SHIP_MAX_SPEED
         if ENABLE_ASSERTIONS:
+            if not (-SHIP_MAX_SPEED <= self.ship_state['speed'] <= SHIP_MAX_SPEED):
+                print(self.ship_state['speed'])
             assert -SHIP_MAX_SPEED <= self.ship_state['speed'] <= SHIP_MAX_SPEED
         #self.ship_state['speed'] = min(max(-SHIP_MAX_SPEED, self.ship_state['speed']), SHIP_MAX_SPEED)
         if ENABLE_ASSERTIONS:
@@ -2982,7 +2989,7 @@ class Neo(KesslerController):
         self.best_fitness_this_planning_period = math.inf
         self.best_fitness_this_planning_period_index = None
 
-    def plan_action(self, other_ships_exist: bool):
+    def plan_action(self, other_ships_exist: bool, iterations_boost: bool=False):
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
         # We simulate both options, and take the one with the higher fitness score
@@ -3167,6 +3174,8 @@ class Neo(KesslerController):
                     search_iterations = 3
             max_cruise_seconds = 1
             #next_imminent_collision_time = math.inf
+            if iterations_boost:
+                search_iterations = min(80, (search_iterations + 1)*10)
 
             if self.game_state_to_base_planning['ship_state']['lives_remaining'] == 1:
                 # When down to our last life, try twice as hard to survive
@@ -3254,12 +3263,11 @@ class Neo(KesslerController):
         #print("thrust is " + str(thrust) + "\n" + "turn rate is " + str(turn_rate) + "\n" + "fire is " + str(fire) + "\n")
         #if not (self.last_respawn_maneuver_timestep_range[0] <= self.current_timestep <= self.last_respawn_maneuver_timestep_range[1]):
             # We're not in the process of doing our respawn maneuver
-        
+        iterations_boost = False
         if self.other_ships_exist:
             # We cannot use deterministic mode to plan ahead
             # We can still try to plan ahead, but we need to compare the predicted state with the actual state
             # Note that there is the possibility we switch from this case, to the case where other ships don't exist, if they die
-
 
             # Since other ships exist and the game isn't deterministic, we can die at any time even during the middle of a planned maneuver where we SHOULD survive.
             # Check for that case:
@@ -3275,6 +3283,7 @@ class Neo(KesslerController):
                 self.best_fitness_this_planning_period_index = 0
                 self.best_fitness_this_planning_period = math.inf
                 unexpected_death = True
+                iterations_boost = True
             
             # Set up the actions planning
             if not self.game_state_to_base_planning:
@@ -3292,7 +3301,7 @@ class Neo(KesslerController):
                 if self.game_state_to_base_planning['respawning']:
                     self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state['lives_remaining'])
             
-            self.plan_action(self.other_ships_exist) # TODO: If suddenly died, add a burst to the planning iterations
+            self.plan_action(self.other_ships_exist, iterations_boost) # TODO: If suddenly died, add a burst to the planning iterations
             if not self.action_queue:
                 #self.plan_action(self.other_ships_exist)
                 # TODO: Combine preprocessing game state
@@ -3305,6 +3314,8 @@ class Neo(KesslerController):
                 # Set up the actions planning
                 if ENABLE_ASSERTIONS:
                     assert self.current_timestep == 0
+                if self.current_timestep == 0:
+                    iterations_boost = True
                 # TODO: On the first timestep, spend more time planning actions in case we need to immediately evade!
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
@@ -3318,7 +3329,7 @@ class Neo(KesslerController):
                     'fire_next_timestep_flag': False,
                 }
             # No matter what, spend some time evaluating the best action from the next predicted state
-            self.plan_action(self.other_ships_exist)
+            self.plan_action(self.other_ships_exist, iterations_boost)
 
             if not self.action_queue:
                 # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
