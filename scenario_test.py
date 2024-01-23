@@ -167,7 +167,7 @@ for i in range(1):
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
                                     {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
+                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -176,12 +176,12 @@ for i in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    #cProfile.run('game.run(scenario=sc, controllers=[Neo(), NeoController()])')
+    cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), NeoController()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=adv_random_big_1, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:
