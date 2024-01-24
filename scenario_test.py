@@ -147,11 +147,11 @@ died = False
 #while died or not missed:
 for i in range(1):
     iterations += 1
-    randseed = 213980962#random.randint(1, 1000000000)
+    randseed = 46001754#random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=10,
+                                    num_asteroids=20,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
@@ -182,7 +182,7 @@ for i in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=adv_multi_ring_closing_left, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:

@@ -1501,8 +1501,8 @@ class Simulation():
         self.ship_pending_moves = []
         self.state_sequence = []
         self.asteroids_shot = 0
-        self.asteroids_pending_death = {timestep: list[:] for timestep, list in asteroids_pending_death.items()}
-        self.forecasted_asteroid_splits = [dict(a) for a in forecasted_asteroid_splits]
+        self.asteroids_pending_death = copy.deepcopy(asteroids_pending_death)#{timestep: list[:] for timestep, list in asteroids_pending_death.items()}
+        self.forecasted_asteroid_splits = copy.deepcopy(forecasted_asteroid_splits)#[dict(a) for a in forecasted_asteroid_splits]
         #self.timesteps_to_not_check_collision_for = timesteps_to_not_check_collision_for
         self.halt_shooting = halt_shooting
         self.fire_next_timestep_flag = False
@@ -2830,6 +2830,7 @@ class Neo(KesslerController):
         self.sims_this_planning_period = [] # The first sim in the list is stationary targetting, and the rest is maneuvers
         self.best_fitness_this_planning_period = math.inf
         self.best_fitness_this_planning_period_index = None
+        self.stationary_targetting_sim_index = None
         self.game_state_to_base_planning = None
         self.set_of_base_gamestate_timesteps = set()
         self.base_gamestates = {} # Key is timestep, value is the state
@@ -2885,35 +2886,45 @@ class Neo(KesslerController):
         # first_nonnone_index is just a unique dummy variable since I don't want my none values being compared and crashing my script ughh
         heapq.heappush(self.action_queue, (timestep, first_nonnone_index, thrust, turn_rate, fire, drop_mine))
 
-    def decide_next_action(self, simulated_state_correction: bool, game_state: dict=None, ship_state: dict=None):
+    def decide_next_action(self, game_state: dict=None, ship_state: dict=None):
+        assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['respawning']
         debug_print(f"Deciding next action! Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
         # Go through the list of planned maneuvers and pick the one with the best fitness function score
         # Update the state to base planning off of, so Neo can get to work on planning the next set of moves while this current set of moves executes
         #print('Going through sorted sims list to pick the best action')
-        if simulated_state_correction:
+        if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'predicted':
+            assert game_state is not None and ship_state is not None
             # Since the game is non-deterministic, we need to apply our simulated moves onto the actual corrected state, so errors don't build up
             best_action_sim_predicted: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
+            debug_print(f"\nPredicted best action sim first state:", best_action_sim_predicted.get_state_sequence()[0])
             best_action_fitness_predicted = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
             assert self.current_timestep == self.game_state_to_base_planning['timestep']
             assert game_state is not None
             best_predicted_sim_fire_next_timestep_flag = best_action_sim_predicted.get_fire_next_timestep_flag()
             debug_print(f"best_predicted_sim_fire_next_timestep_flag: {best_predicted_sim_fire_next_timestep_flag}, self.game_state_to_base_planning['fire_next_timestep_flag']: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
             # self.game_state_to_base_planning['fire_next_timestep_flag'] is whether we fire at the BEGINNING of the period, while best_action_sim_predicted.get_fire_next_timestep_flag() is whether we fire AFTER this period
+            debug_print('DECIDE NEXT ACTION REDO sim ast pending deah:')
+            debug_print(self.game_state_to_base_planning['asteroids_pending_death'])
             best_action_sim = Simulation(game_state, ship_state, self.current_timestep, self.game_state_to_base_planning['ship_respawn_timer'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['last_timestep_fired'], self.game_state_to_base_planning['respawning'], self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
             best_action_sim_predicted_move_sequence = best_action_sim_predicted.get_move_sequence()
             debug_print(best_action_sim_predicted_move_sequence)
             best_action_sim.apply_move_sequence(best_action_sim_predicted_move_sequence)
             best_action_sim.set_fire_next_timestep_flag(best_predicted_sim_fire_next_timestep_flag)
             best_action_fitness = best_action_sim.get_fitness()
+            debug_print(f"\nActual best action first state:", best_action_sim.get_state_sequence()[0])
             debug_print(f"\nUpdated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness: {best_action_fitness}")
+            if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['type'] == 'targetting':
+                # The targetting sim was done with the true state, so this should be the exact same and redundant
+                assert best_action_fitness_predicted == best_action_fitness
         else:
+            assert self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'exact'
             best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         if best_action_fitness >= 10:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
             debug_print("RIP, I'm gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.")
             print_explanation("RIP, I'm gonna die.", self.current_timestep)
-            self.best_fitness_this_planning_period_index = 0
+            self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
             best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         stationary_safety_messages = self.sims_this_planning_period[0]['sim'].get_safety_messages()
@@ -2934,6 +2945,7 @@ class Neo(KesslerController):
         #print('state seq:', best_action_sim_state_sequence)
         debug_print('Best move seq:', best_move_sequence)
         debug_print(f"Best sim index: {self.best_fitness_this_planning_period_index}")
+        print(f"Choosing action: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['type']} with fitness {best_action_fitness}")
         #print('all sims this planning period:')
         #print(self.sims_this_planning_period)
         if not best_action_sim_state_sequence:
@@ -3015,8 +3027,9 @@ class Neo(KesslerController):
         self.sims_this_planning_period.clear()
         self.best_fitness_this_planning_period = math.inf
         self.best_fitness_this_planning_period_index = None
+        self.stationary_targetting_sim_index = None
 
-    def plan_action(self, other_ships_exist: bool, iterations_boost: bool=False):
+    def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool=False, plan_stationary: bool=False):
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
         # We simulate both options, and take the one with the higher fitness score
@@ -3025,7 +3038,7 @@ class Neo(KesslerController):
         # The third scenario is that even if we're safe where we are, we may be able to be on the offensive and seek out asteroids to lay mines, so that can also increase the fitness function of moving, making it better than staying still
         # Our number one priority is to stay alive. Second priority is to shoot as much as possible. And if we can, lay mines without putting ourselves in danger.
         if self.game_state_to_base_planning['respawning']:
-            debug_print("Planning respawn maneuver")
+            print("Planning respawn maneuver")
             # Simulate and look for a good move
             #print(f"Checking for imminent danger. We're currently at position {ship_state['position'][0]} {ship_state['position'][1]}")
             #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
@@ -3090,7 +3103,9 @@ class Neo(KesslerController):
                 self.sims_this_planning_period.append({
                     'sim': maneuver_sim,
                     'fitness': maneuver_fitness,
-                    'maneuver_length': maneuver_length,
+                    #'maneuver_length': maneuver_length,
+                    'type': 'respawn',
+                    'state_type': 'exact' if base_state_is_exact else 'predicted',
                 })
                 if maneuver_fitness < self.best_fitness_this_planning_period:
                     #print("MANEUVER IS BETTER THAN STATIONAERY")
@@ -3124,9 +3139,8 @@ class Neo(KesslerController):
             #print(f"Did {search_iterations_count} search iterations to find a respawn maneuver where we're safe for {best_safe_time_after_maneuver}s afterwards and has a fitness of {best_maneuver_fitness_found}. Moving to coordinates {best_maneuver_sim.get_state_sequence()[-1]['position'][0]} {best_maneuver_sim.get_state_sequence()[-1]['position'][1]} at timestep {best_maneuver_sim.get_state_sequence()[-1]['timestep']}")
             #print_explanation(f"Found respawn maneuver where we're safe for {best_safe_time_after_maneuver:0.1f} s afterwards.", self.current_timestep)
         else:
-            debug_print("Planning regular move")
             # Stationary targetting simulation
-            best_stationary_targetting_fitness = math.inf # The lower the better
+            #best_stationary_targetting_fitness = math.inf # The lower the better
             #debug_print('Before sim, asteroids shot at:')
             #debug_print(self.asteroids_pending_death)
             #debug_print('And asteroids:')
@@ -3138,10 +3152,12 @@ class Neo(KesslerController):
             #write_to_json(self.asteroids_pending_death, 'BEFORE SIM.txt')
             #write_to_json(self.forecasted_asteroid_splits, 'BEFORE SIM.txt')
             #print(f"Simming stationary targetting, and fire_first_timestep is {self.fire_next_timestep_flag}")
-            if not self.sims_this_planning_period:
+            if plan_stationary:
                 # The first list element is the stationary targetting
                 #print('game state to base planning:')
                 #print(self.game_state_to_base_planning)
+                debug_print('Stationary sim ast pending deah:')
+                debug_print(self.game_state_to_base_planning['asteroids_pending_death'])
                 stationary_targetting_sim = Simulation(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['ship_respawn_timer'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['last_timestep_fired'], False, self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
                 #print('\nAST PENDING DEATH AND FORECASTED SPLITS AFTER THE SIM')
                 #print(self.asteroids_pending_death)
@@ -3166,18 +3182,27 @@ class Neo(KesslerController):
                     best_stationary_targetting_fitness += 10
                     #print(f"We got hit by the ship, yikes, so the fitness for sim id {stationary_targetting_sim.get_sim_id()} is being set to {best_stationary_targetting_fitness}")
                 #print(f"Stationary targetting fitness: {best_stationary_targetting_fitness}")
-                self.best_fitness_this_planning_period = best_stationary_targetting_fitness
-                self.best_fitness_this_planning_period_index = 0
 
                 self.sims_this_planning_period.append({
                     'sim': stationary_targetting_sim,
                     'fitness': best_stationary_targetting_fitness,
+                    'type': 'targetting',
+                    'state_type': 'exact' if base_state_is_exact else 'predicted',
                 })
+                self.stationary_targetting_sim_index = len(self.sims_this_planning_period) - 1
+                if best_stationary_targetting_fitness < self.best_fitness_this_planning_period:
+                    self.best_fitness_this_planning_period = best_stationary_targetting_fitness
+                    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
+
+                print(f"Planning targetting, and got fitness {best_stationary_targetting_fitness}")
 
             # Try moving! Run a simulation and find a course of action to put me to safety
             if other_ships_exist:
-                if self.best_fitness_this_planning_period < 0.45:
-                    search_iterations = 0
+                if math.isinf(self.best_fitness_this_planning_period):
+                    # This is the first timestep we're planning for this period, so we don't really know how many iterations to use. Don't go all out on this first one in case it's an easy one.
+                    search_iterations = 2
+                elif self.best_fitness_this_planning_period < 0.45:
+                    search_iterations = 1
                 elif self.best_fitness_this_planning_period < 0.85:
                     search_iterations = 1
                 elif self.best_fitness_this_planning_period < 1:
@@ -3191,8 +3216,12 @@ class Neo(KesslerController):
                 else:
                     search_iterations = 6
             else:
-                if self.best_fitness_this_planning_period < 0.45:
-                    search_iterations = 0
+                if math.isinf(self.best_fitness_this_planning_period):
+                    raise Exception("If there's no ships, why don't we have any sims this planning period yet? We should have done stationary first.")
+                    # This is the first timestep we're planning for this period, so we don't really know how many iterations to use. Don't go all out on this first one in case it's an easy one.
+                    search_iterations = 2
+                elif self.best_fitness_this_planning_period < 0.45:
+                    search_iterations = 1
                 elif self.best_fitness_this_planning_period < 1.5:
                     search_iterations = 1
                 elif self.best_fitness_this_planning_period < 5:
@@ -3201,6 +3230,11 @@ class Neo(KesslerController):
                     search_iterations = 3
             max_cruise_seconds = 1
             #next_imminent_collision_time = math.inf
+
+            #if not self.sims_this_planning_period:
+            #    assert other_ships_exist
+            #    search_iterations = min(search_iterations, 2)
+
             if iterations_boost:
                 search_iterations = min(80, (search_iterations + 1)*10)
 
@@ -3227,9 +3261,9 @@ class Neo(KesslerController):
                 maneuver_preview.cruise(random_ship_cruise_timesteps, random_ship_cruise_turn_rate)
                 maneuver_preview.accelerate(0)
                 preview_move_sequence = maneuver_preview.get_move_sequence()
-                end_time = time.time()
+                #end_time = time.time()
                 #print(f'Cheap preview took {end_time - start_time} s. NOW DOING EXPENSIVE MANEUVER SIM')
-                start_time = time.time()
+                #start_time = time.time()
                 #print(f"Mines before going into the polan action sim:", self.game_state_to_base_planning['game_state']['mines'])
                 #print("Simming actual maneuver")
                 #if self.game_state_to_base_planning['timestep'] == 42:
@@ -3243,7 +3277,7 @@ class Neo(KesslerController):
                 else:
                     # The ship crashed somewhere before reaching the final resting spot
                     maneuver_complete_without_crash = False
-                end_time = time.time()
+                #end_time = time.time()
                 #print(f"Expensive sim took {end_time - start_time} s")
                 #move_sequence = maneuver_sim.get_move_sequence()
                 #state_sequence = maneuver_sim.get_state_sequence()
@@ -3263,9 +3297,12 @@ class Neo(KesslerController):
                 self.sims_this_planning_period.append({
                     'sim': maneuver_sim,
                     'fitness': maneuver_fitness,
+                    'type': 'maneuver',
+                    'state_type': 'exact' if base_state_is_exact else 'predicted',
                     #'safe_time_after_maneuver': safe_time_after_maneuver,
                     #'maneuver_length': maneuver_length,
                 })
+                print(f"Planning random maneuver, and got fitness {maneuver_fitness}")
                 if maneuver_fitness < self.best_fitness_this_planning_period:
                     #print("MANEUVER IS BETTER THAN STATIONAERY")
                     self.best_fitness_this_planning_period = maneuver_fitness
@@ -3282,7 +3319,7 @@ class Neo(KesslerController):
             print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", self.current_timestep)
             print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.", self.current_timestep)
             evaluate_scenario(game_state, ship_state)
-        debug_print(f"\n\nTimestep {self.current_timestep}, ship is at {ship_state['position'][0]} {ship_state['position'][1]}")
+        print(f"\n\nTimestep {self.current_timestep}, ship id {ship_state['id']} is at {ship_state['position'][0]} {ship_state['position'][1]}")
 
         if not self.init_done:
             self.finish_init(game_state, ship_state)
@@ -3291,6 +3328,8 @@ class Neo(KesslerController):
         #if not (self.last_respawn_maneuver_timestep_range[0] <= self.current_timestep <= self.last_respawn_maneuver_timestep_range[1]):
             # We're not in the process of doing our respawn maneuver
         iterations_boost = False
+        if self.current_timestep == 0:
+            iterations_boost = True
         if self.other_ships_exist:
             # We cannot use deterministic mode to plan ahead
             # We can still try to plan ahead, but we need to compare the predicted state with the actual state
@@ -3307,7 +3346,7 @@ class Neo(KesslerController):
                 self.fire_next_timestep_flag = False # If we were planning on shooting this timestep but we unexpectedly got hit, DO NOT SHOOT! Actually even if we didn't reset this variable here, we'd only shoot after the respawn maneuver is done and then we'd miss a shot. And yes that was a bug that I fixed lmao
                 self.game_state_to_base_planning = None
                 self.sims_this_planning_period.clear()
-                self.best_fitness_this_planning_period_index = 0
+                self.best_fitness_this_planning_period_index = None
                 self.best_fitness_this_planning_period = math.inf
                 unexpected_death = True
                 iterations_boost = True
@@ -3328,11 +3367,30 @@ class Neo(KesslerController):
                 if self.game_state_to_base_planning['respawning']:
                     self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state['lives_remaining'])
             
-            self.plan_action(self.other_ships_exist, iterations_boost) # TODO: If suddenly died, add a burst to the planning iterations
-            if not self.action_queue:
-                #self.plan_action(self.other_ships_exist)
-                # TODO: Combine preprocessing game state
-                self.decide_next_action(True, preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
+            
+            if self.action_queue:
+                self.plan_action(self.other_ships_exist, False, iterations_boost, False)
+            else:
+                # Refresh the base state now that we have the true base state!
+                print('REFRESHING BASE STATE FOR STATIONARY ON TS', self.current_timestep)
+                self.game_state_to_base_planning['ship_state'] = ship_state
+                self.game_state_to_base_planning['game_state'] = preprocess_bullets_in_gamestate(game_state)
+                '''
+                self.game_state_to_base_planning = {
+                    'timestep': self.current_timestep,
+                    'respawning': ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for,
+                    'ship_state': ship_state,
+                    'game_state': preprocess_bullets_in_gamestate(game_state),
+                    'ship_respawn_timer': 3 if unexpected_death else 0, # We actually don't know exactly when we took damage lmao
+                    'asteroids_pending_death': self.game_state_to_base_planning['asteroids_pending_death'],
+                    'forecasted_asteroid_splits': self.game_state_to_base_planning['forecasted_asteroid_splits'],
+                    'last_timestep_fired': self.game_state_to_base_planning['last_timestep_fired'],
+                    'fire_next_timestep_flag': self.game_state_to_base_planning['fire_next_timestep_flag'],
+                }
+                '''
+                self.plan_action(self.other_ships_exist, True, iterations_boost, True)
+                assert self.current_timestep == self.game_state_to_base_planning['timestep']
+                self.decide_next_action(preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
                 if len(self.get_other_ships(game_state)) == 0:
                     print_explanation("I'm alone. We can see into the future perfectly now!", self.current_timestep)
                     self.other_ships_exist = False
@@ -3356,12 +3414,16 @@ class Neo(KesslerController):
                     'fire_next_timestep_flag': False,
                 }
             # No matter what, spend some time evaluating the best action from the next predicted state
-            self.plan_action(self.other_ships_exist, iterations_boost)
-
+            # When no ships are around, the stationary targetting is the first thing done
+            if not self.sims_this_planning_period:
+                self.plan_action(self.other_ships_exist, True, iterations_boost, True)
+            else:
+                self.plan_action(self.other_ships_exist, True, iterations_boost, False)
             if not self.action_queue:
                 # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
+                assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 debug_print("Decide the next action.")
-                self.decide_next_action(False)
+                self.decide_next_action()
         
         # Execute the actions in the queue for this timestep
         # Initialize defaults. If a component of the action is missing, then the default value will be returned
