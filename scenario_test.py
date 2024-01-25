@@ -83,7 +83,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 0,
+                 'realtime_multiplier': 1,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -106,12 +106,12 @@ xfc2023 = [
     #adv_random_big_1,
     #adv_random_big_3,
     #adv_multi_wall_bottom_hard_1,
-    adv_multi_wall_right_hard_1,
-    adv_multi_ring_closing_left,
-    adv_multi_ring_closing_right,
-    adv_multi_two_rings_closing,
-    avg_multi_ring_closing_both2,
-    adv_multi_ring_closing_both_inside,
+    #adv_multi_wall_right_hard_1,
+    #adv_multi_ring_closing_left,
+    #adv_multi_ring_closing_right,
+    #adv_multi_two_rings_closing,
+    #avg_multi_ring_closing_both2,
+    #adv_multi_ring_closing_both_inside,
     adv_multi_ring_closing_both_inside_fast
 ]
 
@@ -120,22 +120,22 @@ custom = [
     #closing_ring_scenario,
     #easy_closing_ring_scenario,
     #more_intense_closing_ring_scenario,
-    rotating_square_scenario,
-    rotating_square_2_overlap,
-    falling_leaves_scenario,
-    zigzag_motion_scenario,
-    shearing_pattern_scenario,
-    super_hard_wrap,
-    wonky_ring,
-    moving_ring_scenario,
-    shifting_square_scenario,
-    delayed_closing_ring_scenario,
-    spiral_assault_scenario,
-    dancing_ring,
-    dancing_ring_2,
-    intersecting_lines_scenario,
-    exploding_grid_scenario,
-    grid_formation_explosion_scenario,
+    #rotating_square_scenario,
+    #rotating_square_2_overlap,
+    #falling_leaves_scenario,
+    #zigzag_motion_scenario,
+    #shearing_pattern_scenario,
+    #super_hard_wrap,
+    #wonky_ring,
+    #moving_ring_scenario,
+    #shifting_square_scenario,
+    #delayed_closing_ring_scenario,
+    #spiral_assault_scenario,
+    #dancing_ring,
+    #dancing_ring_2,
+    #intersecting_lines_scenario,
+    #exploding_grid_scenario,
+    #grid_formation_explosion_scenario,
     aspect_ratio_grid_formation_scenario
 ]
 
@@ -143,20 +143,20 @@ custom = [
 #while True:
 score = None
 died = False
-#for sc in xfc2023:
+#for sc in custom:
 #while died or not missed:
 for i in range(1):
     iterations += 1
-    randseed = 46001754#random.randint(1, 1000000000)
+    randseed = random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=20,
+                                    num_asteroids=150,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
                                     angle_range=(0, 360),
-                                    size_range=(1, 4)
+                                    size_range=(1, 1)
                                 )*random.choice([1])
 
     # Define game scenario
@@ -177,12 +177,13 @@ for i in range(1):
                                 stop_if_no_ammo=False)
 
     pre = time.perf_counter()
-    #cProfile.run('game.run(scenario=adv_multi_ring_closing_left, controllers=[Neo(), Neo()])')
+    #print(f"Evaluating scenario {sc.name}")
+    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #print(f"Evaluating scenario {sc.name}")
-    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    
+    score, perf_data = game.run(scenario=wrapping_nightmare_fast, controllers=[Neo(), Neo()])#, GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:

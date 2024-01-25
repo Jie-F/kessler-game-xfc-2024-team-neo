@@ -918,5 +918,65 @@ aspect_ratio_grid_formation_scenario = Scenario(
 
 
 
+width, height = 1000, 800
+
+adv_asteroid_stealing = Scenario(
+    name='adv_asteroid_stealing',
+    asteroid_states=[{'position': (width*0.15, height*0.25), 'angle': 90.0, 'speed': 100, 'size': 3},
+                     {'position': (width*0.85, height*0.75), 'angle': 270.0, 'speed': 100, 'size': 3},],
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
+    time_limit=20,
+    map_size=(width, height),
+)
 
 
+
+
+
+
+
+
+
+
+widths = np.linspace(0, width, 10)
+heights = np.linspace(0, height, 10)
+
+wrapping_nightmare = Scenario(
+    name='wrapping_nightmare',
+    asteroid_states=[{'position': (w, 0), 'angle': 180.0, 'speed': 100, 'size': 3} for w in widths] + 
+                    [{'position': (w, height), 'angle': 0.0, 'speed': 100, 'size': 3} for w in widths] +
+                    [{'position': (0, h), 'angle': 90.0, 'speed': 100, 'size': 3} for h in heights] +
+                    [{'position': (width, h), 'angle': -90.0, 'speed': 100, 'size': 3} for h in heights],
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
+    time_limit=60,
+    map_size=(width, height),
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+widths = np.linspace(0, width, 10)
+heights = np.linspace(0, height, 10)
+
+wrapping_nightmare_fast = Scenario(
+    name='wrapping_nightmare_fast',
+    asteroid_states=[{'position': (w, 0), 'angle': 180.0, 'speed': 800, 'size': 2} for w in widths] + 
+                    [{'position': (w, height), 'angle': 0.0, 'speed': 800, 'size': 2} for w in widths] +
+                    [{'position': (0, h), 'angle': 90.0, 'speed': 800, 'size': 2} for h in heights] +
+                    [{'position': (width, h), 'angle': -90.0, 'speed': 800, 'size': 2} for h in heights],
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
+    time_limit=60,
+    map_size=(width, height),
+)

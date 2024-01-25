@@ -652,75 +652,73 @@ def predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, s
             next_imminent_collision_time = start_collision_time
     return next_imminent_collision_time
 
-def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: float=10) -> list:
-    def calculate_border_crossings(x0, y0, vx, vy, W, H, c):
-        # Initialize lists to hold crossing times
-        x_crossings_times = []
-        y_crossings_times = []
+def calculate_border_crossings(x0, y0, vx, vy, W, H, c):
+    # Initialize lists to hold crossing times
+    x_crossings_times = []
+    y_crossings_times = []
 
+    # Calculate crossing times for x (if vx is not zero to avoid division by zero)
+    if vx != 0:
+        # Calculate time to first x-boundary crossing based on direction of vx
         x_crossing_interval = W/abs(vx)
+        time_to_first_x_crossing = ((W - x0)/vx if vx > 0 else x0/-vx)
+        x_crossings_times.append(time_to_first_x_crossing)
+        # Add additional crossings until time c is reached
+        while x_crossings_times[-1] + x_crossing_interval <= c:
+            x_crossings_times.append(x_crossings_times[-1] + x_crossing_interval)
+
+    # Calculate crossing times for y (if vy is not zero)
+    if vy != 0:
+        # Calculate time to first y-boundary crossing based on direction of vy
         y_crossing_interval = H/abs(vy)
+        time_to_first_y_crossing = ((H - y0)/vy if vy > 0 else y0/-vy)
+        y_crossings_times.append(time_to_first_y_crossing)
+        # Add additional crossings until time c is reached
+        while y_crossings_times[-1] + y_crossing_interval <= c:
+            y_crossings_times.append(y_crossings_times[-1] + y_crossing_interval)
 
-        # Calculate crossing times for x (if vx is not zero to avoid division by zero)
-        if vx != 0:
-            # Calculate time to first x-boundary crossing based on direction of vx
-            time_to_first_x_crossing = ((W - x0)/vx if vx > 0 else x0/-vx)
-            x_crossings_times.append(time_to_first_x_crossing)
-            # Add additional crossings until time c is reached
-            while x_crossings_times[-1] + x_crossing_interval <= c:
-                x_crossings_times.append(x_crossings_times[-1] + x_crossing_interval)
+    # Merge the two lists while tracking the origin of each time
+    merged_times = []
+    sequence = []
+    i = j = 0
 
-        # Calculate crossing times for y (if vy is not zero)
-        if vy != 0:
-            # Calculate time to first y-boundary crossing based on direction of vy
-            time_to_first_y_crossing = ((H - y0)/vy if vy > 0 else y0/-vy)
-            y_crossings_times.append(time_to_first_y_crossing)
-            # Add additional crossings until time c is reached
-            while y_crossings_times[-1] + y_crossing_interval <= c:
-                y_crossings_times.append(y_crossings_times[-1] + y_crossing_interval)
-
-        # Merge the two lists while tracking the origin of each time
-        merged_times = []
-        sequence = []
-        i = j = 0
-
-        while i < len(x_crossings_times) and j < len(y_crossings_times):
-            if x_crossings_times[i] < y_crossings_times[j]:
-                merged_times.append(x_crossings_times[i])
-                sequence.append('x')
-                i += 1
-            else:
-                merged_times.append(y_crossings_times[j])
-                sequence.append('y')
-                j += 1
-
-        # Add any remaining times from the x_crossings_times list
-        while i < len(x_crossings_times):
+    while i < len(x_crossings_times) and j < len(y_crossings_times):
+        if x_crossings_times[i] < y_crossings_times[j]:
             merged_times.append(x_crossings_times[i])
             sequence.append('x')
             i += 1
-
-        # Add any remaining times from the y_crossings_times list
-        while j < len(y_crossings_times):
+        else:
             merged_times.append(y_crossings_times[j])
             sequence.append('y')
             j += 1
 
-        # Initialize current universe coordinates and list of visited universes
-        current_universe_x, current_universe_y = 0, 0
-        universes = [(current_universe_x, current_universe_y)]
+    # Add any remaining times from the x_crossings_times list
+    while i < len(x_crossings_times):
+        merged_times.append(x_crossings_times[i])
+        sequence.append('x')
+        i += 1
 
-        # Iterate through merged crossing times and sequence
-        for time, crossing in zip(merged_times, sequence):
-            if time <= c:
-                if crossing == 'x':
-                    current_universe_x += 1 if vx > 0 else -1
-                else:  # crossing == 'y'
-                    current_universe_y += 1 if vy > 0 else -1
-                universes.append((current_universe_x, current_universe_y))
+    # Add any remaining times from the y_crossings_times list
+    while j < len(y_crossings_times):
+        merged_times.append(y_crossings_times[j])
+        sequence.append('y')
+        j += 1
 
-        return universes
+    # Initialize current universe coordinates and list of visited universes
+    current_universe_x, current_universe_y = 0, 0
+    universes = [(current_universe_x, current_universe_y)]
 
+    # Iterate through merged crossing times and sequence
+    for time, crossing in zip(merged_times, sequence):
+        if time <= c:
+            if crossing == 'x':
+                current_universe_x += 1 if vx > 0 else -1
+            else:  # crossing == 'y'
+                current_universe_y += 1 if vy > 0 else -1
+            universes.append((current_universe_x, current_universe_y))
+    return universes
+
+def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: float=10) -> list:
     if abs(asteroid['velocity'][0]) < EPS and abs(asteroid['velocity'][1]) < EPS:
         return [asteroid]
 
@@ -964,7 +962,7 @@ def calculate_timesteps_until_bullet_hits_asteroid(time_until_asteroid_center_s,
     # We have to add 1, because it takes 1 timestep for the bullet to originate at the start, before it starts moving
     return 1 + ceil((time_until_asteroid_center_s*BULLET_SPEED - asteroid_radius - SHIP_RADIUS)/BULLET_SPEED/DELTA_TIME)
 
-@line_profiler.profile
+#@line_profiler.profile
 def asteroid_bullet_collision(bullet_head_position, bullet_tail_position, asteroid_center, asteroid_radius):
     # This is an optimized version of circle_line_collision() from the Kessler source code
     # First, do a rough check if there's no chance the collision can occur
@@ -2149,7 +2147,7 @@ class Simulation():
             #print(f"Sim id {self.sim_id} is returning from target sim with success value {sim_complete_without_crash}")
             return sim_complete_without_crash
 
-    @line_profiler.profile
+    #@line_profiler.profile
     def bullet_target_sim(self, ship_state: dict=None, fire_first_timestep: bool=False, fire_after_timesteps: int=0, skip_half_of_first_cycle: bool=False, current_move_index: int=None, whole_move_sequence: list=None, timestep_limit: int=math.inf):
         # Assume we shoot on the next timestep, so we'll create a bullet and then track it and simulate it to see what it hits, if anything
         # This sim doesn't modify the state of the simulation class. Everything here is discarded after the sim is over, and this is just to see what my bullet hits, if anything.
@@ -2216,9 +2214,11 @@ class Simulation():
                 
                 for m in mines:
                     m['remaining_time'] -= DELTA_TIME
-                # Use an inline approximate wrap instead of the completely accurate but slower Kessler wrap. This is good enough 99.99% of the time, except for contrived edge cases. But for random asteroids, the chance of this going wrong is basically 0.
+                
                 for a in asteroids:
-                    a['position'] = ((a['position'][0] + a['velocity'][0]*DELTA_TIME)%self.game_state['map_size'][0], (a['position'][1] + a['velocity'][1]*DELTA_TIME)%self.game_state['map_size'][1])
+                    # Use an inline approximate wrap instead of the completely accurate but slower Kessler wrap. This is good enough 99.99% of the time, except for contrived edge cases. But for random asteroids, the chance of this going wrong is basically 0.
+                    #a['position'] = ((a['position'][0] + a['velocity'][0]*DELTA_TIME)%self.game_state['map_size'][0], (a['position'][1] + a['velocity'][1]*DELTA_TIME)%self.game_state['map_size'][1])
+                    a['position'] = wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME), self.game_state['map_size'])
             
             #debug_print(f"TS ahead of sim end: {timesteps_until_bullet_hit_asteroid}")
             #debug_print(asteroids)
@@ -2945,7 +2945,7 @@ class Neo(KesslerController):
         #print('state seq:', best_action_sim_state_sequence)
         debug_print('Best move seq:', best_move_sequence)
         debug_print(f"Best sim index: {self.best_fitness_this_planning_period_index}")
-        print(f"Choosing action: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['type']} with fitness {best_action_fitness}")
+        debug_print(f"Choosing action: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['type']} with fitness {best_action_fitness}")
         #print('all sims this planning period:')
         #print(self.sims_this_planning_period)
         if not best_action_sim_state_sequence:
@@ -2972,7 +2972,7 @@ class Neo(KesslerController):
             if (self.game_state_to_base_planning['respawning'] or new_fire_next_timestep_flag):
                 print(f"We haven't done a respawn maneuver for having {new_ship_state['lives_remaining']} lives left")
                 print(f"self.game_state_to_base_planning['respawning']: {self.game_state_to_base_planning['respawning']}, new_fire_next_timestep_flag: {new_fire_next_timestep_flag}")
-            assert not (self.game_state_to_base_planning['respawning'] or new_fire_next_timestep_flag)
+            #assert not (self.game_state_to_base_planning['respawning'] or new_fire_next_timestep_flag)
         self.game_state_to_base_planning = {
             'timestep': best_action_sim_last_state['timestep'],
             'respawning': new_ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for and new_ship_state['is_respawning'],
@@ -3038,7 +3038,7 @@ class Neo(KesslerController):
         # The third scenario is that even if we're safe where we are, we may be able to be on the offensive and seek out asteroids to lay mines, so that can also increase the fitness function of moving, making it better than staying still
         # Our number one priority is to stay alive. Second priority is to shoot as much as possible. And if we can, lay mines without putting ourselves in danger.
         if self.game_state_to_base_planning['respawning']:
-            print("Planning respawn maneuver")
+            debug_print("Planning respawn maneuver")
             # Simulate and look for a good move
             #print(f"Checking for imminent danger. We're currently at position {ship_state['position'][0]} {ship_state['position'][1]}")
             #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
@@ -3194,7 +3194,7 @@ class Neo(KesslerController):
                     self.best_fitness_this_planning_period = best_stationary_targetting_fitness
                     self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
 
-                print(f"Planning targetting, and got fitness {best_stationary_targetting_fitness}")
+                debug_print(f"Planning targetting, and got fitness {best_stationary_targetting_fitness}")
 
             # Try moving! Run a simulation and find a course of action to put me to safety
             if other_ships_exist:
@@ -3302,7 +3302,7 @@ class Neo(KesslerController):
                     #'safe_time_after_maneuver': safe_time_after_maneuver,
                     #'maneuver_length': maneuver_length,
                 })
-                print(f"Planning random maneuver, and got fitness {maneuver_fitness}")
+                debug_print(f"Planning random maneuver, and got fitness {maneuver_fitness}")
                 if maneuver_fitness < self.best_fitness_this_planning_period:
                     #print("MANEUVER IS BETTER THAN STATIONAERY")
                     self.best_fitness_this_planning_period = maneuver_fitness
@@ -3319,7 +3319,7 @@ class Neo(KesslerController):
             print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", self.current_timestep)
             print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.", self.current_timestep)
             evaluate_scenario(game_state, ship_state)
-        print(f"\n\nTimestep {self.current_timestep}, ship id {ship_state['id']} is at {ship_state['position'][0]} {ship_state['position'][1]}")
+        debug_print(f"\n\nTimestep {self.current_timestep}, ship id {ship_state['id']} is at {ship_state['position'][0]} {ship_state['position'][1]}")
 
         if not self.init_done:
             self.finish_init(game_state, ship_state)
