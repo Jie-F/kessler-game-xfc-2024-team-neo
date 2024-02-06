@@ -55,8 +55,8 @@ slow_down_game_pause_time = 2
 # These can trade off to get better performance at the expense of safety
 ENABLE_ASSERTIONS = True
 PRUNE_SIM_STATE_SEQUENCE = True
-VALIDATE_SIMULATED_KEY_STATES = True
-VALIDATE_ALL_SIMULATED_STATES = True
+VALIDATE_SIMULATED_KEY_STATES = False
+VALIDATE_ALL_SIMULATED_STATES = False
 
 # Strategic variables
 UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON = 8
@@ -315,6 +315,15 @@ def wrap_position(position: tuple, bounds: tuple):
         y += y_bound
 
     return x, y
+
+def wrap_position_slow(position: tuple, bounds: tuple):
+    position = list(position)
+    for idx, pos in enumerate(position):
+        bound = bounds[idx]
+        offset = bound - pos
+        if offset < 0 or offset > bound:
+            position[idx] += bound * np.sign(offset)
+    return tuple(position)
 
 def preprocess_bullets(bullets):
     for b in bullets:
@@ -658,25 +667,27 @@ def calculate_border_crossings(x0, y0, vx, vy, W, H, c):
     y_crossings_times = []
 
     # Calculate crossing times for x (if vx is not zero to avoid division by zero)
-    if vx != 0:
+    if abs(vx) > EPS:
         # Calculate time to first x-boundary crossing based on direction of vx
         x_crossing_interval = W/abs(vx)
+        #print(f"x_crossing_interval: {x_crossing_interval}")
         time_to_first_x_crossing = ((W - x0)/vx if vx > 0 else x0/-vx)
         x_crossings_times.append(time_to_first_x_crossing)
         # Add additional crossings until time c is reached
         while x_crossings_times[-1] + x_crossing_interval <= c:
             x_crossings_times.append(x_crossings_times[-1] + x_crossing_interval)
-
+    #print(f"x crossing times: {x_crossings_times}")
     # Calculate crossing times for y (if vy is not zero)
-    if vy != 0:
+    if abs(vy) > EPS:
         # Calculate time to first y-boundary crossing based on direction of vy
         y_crossing_interval = H/abs(vy)
+        #print(f"y_crossing_interval: {y_crossing_interval}")
         time_to_first_y_crossing = ((H - y0)/vy if vy > 0 else y0/-vy)
         y_crossings_times.append(time_to_first_y_crossing)
         # Add additional crossings until time c is reached
         while y_crossings_times[-1] + y_crossing_interval <= c:
             y_crossings_times.append(y_crossings_times[-1] + y_crossing_interval)
-
+    #print(f"y crossing times: {y_crossings_times}")
     # Merge the two lists while tracking the origin of each time
     merged_times = []
     sequence = []
@@ -733,10 +744,18 @@ def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: 
         unwrapped_asteroid = dict(asteroid)
         unwrapped_asteroid['position'] = (unwrapped_asteroid['position'][0] + dx, unwrapped_asteroid['position'][1] + dy)
         unwrapped_asteroids.append(unwrapped_asteroid)
+    #print(f"Returning unwrapped asteroids: {unwrapped_asteroids}")
     return unwrapped_asteroids
 
 def check_coordinate_bounds(game_state, x, y):
     if 0 <= x <= game_state['map_size'][0] and 0 <= y <= game_state['map_size'][1]:
+        return True
+    else:
+        return False
+
+def check_coordinate_bounds_exact(game_state, x, y):
+    wrapped = wrap_position((x, y), game_state['map_size'])
+    if math.isclose(x, wrapped[0]) and math.isclose(y, wrapped[1]):
         return True
     else:
         return False
@@ -1843,7 +1862,7 @@ class Simulation():
 
         aiming_underturn_allowance_deg = 10
         # First, find the most imminent asteroid
-        
+        #print('\nGOING INTO FUNCTION TO GET ALL FEASIBLE TARGETS FOR ASTEROIDS')
         target_asteroids_list = []
         dummy_ship_state = {'speed': 0, 'position': self.ship_state['position'], 'velocity': (0, 0), 'heading': self.ship_state['heading'], 'bullets_remaining': 0, 'lives_remaining': 1}
         if self.fire_first_timestep:
@@ -1883,6 +1902,7 @@ class Simulation():
                     imminent_collision_time_s = math.inf
                     for a in unwrapped_asteroids:
                         imminent_collision_time_s = min(imminent_collision_time_s, predict_next_imminent_collision_time_with_asteroid(self.ship_state['position'][0], self.ship_state['position'][1], self.ship_state['velocity'][0], self.ship_state['velocity'][1], SHIP_RADIUS, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'] + COLLISION_CHECK_PAD))
+                    #print("APPENDING ASTERODI TO TARGETS LIST!!! SUCCESS!!")
                     target_asteroids_list.append({
                         'asteroid': dict(asteroid), # Record the canonical asteroid even if we're shooting at an unwrapped one
                         'feasible': feasible, # Will be True
@@ -2528,8 +2548,10 @@ class Simulation():
             rad_heading = pi*self.ship_state['heading']/180
             cos_heading = cos(rad_heading)
             sin_heading = sin(rad_heading)
-            bullet_x = self.ship_state['position'][0] + SHIP_RADIUS*cos_heading#SHIP_RADIUS*cos(radians(self.ship_state['heading'])) # SHIP_RADIUS*cos_heading
-            bullet_y = self.ship_state['position'][1] + SHIP_RADIUS*sin_heading#SHIP_RADIUS*sin(radians(self.ship_state['heading'])) # SHIP_RADIUS*sin_heading
+            #bullet_x = self.ship_state['position'][0] + SHIP_RADIUS*cos_heading#SHIP_RADIUS*cos(radians(self.ship_state['heading'])) # SHIP_RADIUS*cos_heading
+            #bullet_y = self.ship_state['position'][1] + SHIP_RADIUS*sin_heading#SHIP_RADIUS*sin(radians(self.ship_state['heading'])) # SHIP_RADIUS*sin_heading
+            bullet_x = self.ship_state['position'][0] + SHIP_RADIUS*cos(radians(self.ship_state['heading'])) # Exact
+            bullet_y = self.ship_state['position'][1] + SHIP_RADIUS*sin(radians(self.ship_state['heading']))
             # Make sure the bullet isn't being fired out into the void
             if check_coordinate_bounds(self.game_state, bullet_x, bullet_y):
                 vx = BULLET_SPEED*cos_heading
@@ -3486,7 +3508,7 @@ class Neo(KesslerController):
                     assert game_states_match
             else:
                 print(f"Timestep not in list of states!!!")
-        if not VALIDATE_ALL_SIMULATED_STATES and VALIDATE_SIMULATED_KEY_STATES and self.current_timestep in self.set_of_base_gamestate_timesteps and not self.other_ships_exist:
+        if (not VALIDATE_ALL_SIMULATED_STATES or PRUNE_SIM_STATE_SEQUENCE) and VALIDATE_SIMULATED_KEY_STATES and self.current_timestep in self.set_of_base_gamestate_timesteps and not self.other_ships_exist:
             debug_print(f"Validating KEY game state for timestep {self.current_timestep}")
             game_states_match = compare_gamestates(game_state, self.base_gamestates[self.current_timestep]['game_state'])
             if not game_states_match:
