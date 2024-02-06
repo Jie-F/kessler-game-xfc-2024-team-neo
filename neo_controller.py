@@ -5,12 +5,9 @@
 
 # TODO: ASCII art for ship
 # TODO: Add heuristic FIS for maneuvering
-# TODO: Tolerance in shooting for target sim
-# TODO: Potential closing ring strat: drop the mine at a time where the ring becomes stationary
-# TODO: Use fitness function for target selection, so the sorting becomes smoother.
-# TODO: Replace immutable lists with tuples
 # TODO: Show stats at the end
 # TODO: Use mine fis before creating the sim, not inside of it
+# TODO: Move recording
 
 import random
 import math
@@ -51,6 +48,8 @@ start_gamestate_plotting_at_second = None
 new_target_plot_pause_time_s = 0.5
 slow_down_game_after_second = math.inf
 slow_down_game_pause_time = 2
+#move_recording = True
+#recorded_list_of_moves
 
 # These can trade off to get better performance at the expense of safety
 ENABLE_ASSERTIONS = True
@@ -1466,7 +1465,7 @@ def time_travel_asteroid(asteroid, timesteps, game_state=None, wrap=False):
     return asteroid
 
 def check_mine_opportunity(ship_state, game_state):
-    if ship_state['mines_remaining'] == 0 or game_state['mines']:# or 'lives_remaining' not in ship_state:
+    if ship_state['mines_remaining'] == 0 or len(game_state['mines']) > 1:# or 'lives_remaining' not in ship_state:
         return False
     #average_asteroid_density = len(game_state['asteroids'])/(game_state['map_size'][0]*game_state['map_size'][1])
     #average_asteroids_inside_blast_radius = average_asteroid_density*pi*MINE_BLAST_RADIUS**2
@@ -2852,6 +2851,8 @@ class Neo(KesslerController):
         self.sims_this_planning_period = [] # The first sim in the list is stationary targetting, and the rest is maneuvers
         self.best_fitness_this_planning_period = math.inf
         self.best_fitness_this_planning_period_index = None
+        self.second_best_fitness_this_planning_period = math.inf
+        self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
         self.game_state_to_base_planning = None
         self.set_of_base_gamestate_timesteps = set()
@@ -2915,13 +2916,15 @@ class Neo(KesslerController):
         # Update the state to base planning off of, so Neo can get to work on planning the next set of moves while this current set of moves executes
         #print('Going through sorted sims list to pick the best action')
         if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'predicted':
-            assert game_state is not None and ship_state is not None
+            if ENABLE_ASSERTIONS:
+                assert game_state is not None and ship_state is not None
             # Since the game is non-deterministic, we need to apply our simulated moves onto the actual corrected state, so errors don't build up
             best_action_sim_predicted: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             debug_print(f"\nPredicted best action sim first state:", best_action_sim_predicted.get_state_sequence()[0])
             best_action_fitness_predicted = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
-            assert self.current_timestep == self.game_state_to_base_planning['timestep']
-            assert game_state is not None
+            if ENABLE_ASSERTIONS:
+                assert self.current_timestep == self.game_state_to_base_planning['timestep']
+                assert game_state is not None
             best_predicted_sim_fire_next_timestep_flag = best_action_sim_predicted.get_fire_next_timestep_flag()
             debug_print(f"best_predicted_sim_fire_next_timestep_flag: {best_predicted_sim_fire_next_timestep_flag}, self.game_state_to_base_planning['fire_next_timestep_flag']: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
             # self.game_state_to_base_planning['fire_next_timestep_flag'] is whether we fire at the BEGINNING of the period, while best_action_sim_predicted.get_fire_next_timestep_flag() is whether we fire AFTER this period
@@ -2935,8 +2938,30 @@ class Neo(KesslerController):
             best_action_fitness = best_action_sim.get_fitness()
             debug_print(f"\nActual best action first state:", best_action_sim.get_state_sequence()[0])
             debug_print(f"\nUpdated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness: {best_action_fitness}")
+            if best_action_fitness > best_action_fitness_predicted + 0.1:
+                print(f"\n\n\n\nDANGERRRRR!!!!! Updated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness IS MUCH WORSE!!!!!!!: {best_action_fitness}")
+                if self.second_best_fitness_this_planning_period_index is not None:
+                    # The best action sim's reality is worse than expected. Try our second best as a backup and hopefully this will be better, and go according to plan!
+                    second_best_action_sim_predicted: Simulation = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['sim']
+                    second_best_action_fitness_predicted = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['fitness']
+                    if ENABLE_ASSERTIONS:
+                        assert second_best_action_fitness_predicted == self.second_best_fitness_this_planning_period
+                    second_best_predicted_sim_fire_next_timestep_flag = second_best_action_sim_predicted.get_fire_next_timestep_flag()
+                    second_best_action_sim = Simulation(game_state, ship_state, self.current_timestep, self.game_state_to_base_planning['ship_respawn_timer'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['last_timestep_fired'], self.game_state_to_base_planning['respawning'], self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
+                    second_best_action_sim_predicted_move_sequence = second_best_action_sim_predicted.get_move_sequence()
+                    second_best_action_sim.apply_move_sequence(second_best_action_sim_predicted_move_sequence)
+                    second_best_action_sim.set_fire_next_timestep_flag(second_best_predicted_sim_fire_next_timestep_flag)
+                    second_best_action_fitness = second_best_action_sim.get_fitness()
+                    if second_best_action_fitness < best_action_fitness:
+                        print(f"HOORAY, the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} is better than the best!")
+                        best_action_fitness = second_best_action_fitness
+                        best_action_sim = second_best_action_sim
+                    else:
+                        print(f"CRAP, even the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} isn't better than the first, so we'll just have to go with what we have and maybe get screwed.")
+
             if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['type'] == 'targetting':
                 # The targetting sim was done with the true state, so this should be the exact same and redundant
+                raise Exception("WHY THE HECK IS IT IN HERE")
                 assert best_action_fitness_predicted == best_action_fitness
         else:
             assert self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'exact'
@@ -3049,6 +3074,8 @@ class Neo(KesslerController):
         self.sims_this_planning_period.clear()
         self.best_fitness_this_planning_period = math.inf
         self.best_fitness_this_planning_period_index = None
+        self.second_best_fitness_this_planning_period = math.inf
+        self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
 
     def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool=False, plan_stationary: bool=False):
@@ -3130,7 +3157,9 @@ class Neo(KesslerController):
                     'state_type': 'exact' if base_state_is_exact else 'predicted',
                 })
                 if maneuver_fitness < self.best_fitness_this_planning_period:
-                    #print("MANEUVER IS BETTER THAN STATIONAERY")
+                    self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
+                    self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
+
                     self.best_fitness_this_planning_period = maneuver_fitness
                     self.best_fitness_this_planning_period_index = len(self.sims_this_planning_period) - 1
 
@@ -3213,6 +3242,9 @@ class Neo(KesslerController):
                 })
                 self.stationary_targetting_sim_index = len(self.sims_this_planning_period) - 1
                 if best_stationary_targetting_fitness < self.best_fitness_this_planning_period:
+                    self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
+                    self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
+
                     self.best_fitness_this_planning_period = best_stationary_targetting_fitness
                     self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
 
@@ -3326,7 +3358,9 @@ class Neo(KesslerController):
                 })
                 debug_print(f"Planning random maneuver, and got fitness {maneuver_fitness}")
                 if maneuver_fitness < self.best_fitness_this_planning_period:
-                    #print("MANEUVER IS BETTER THAN STATIONAERY")
+                    self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
+                    self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
+
                     self.best_fitness_this_planning_period = maneuver_fitness
                     self.best_fitness_this_planning_period_index = len(self.sims_this_planning_period) - 1
 
@@ -3370,6 +3404,8 @@ class Neo(KesslerController):
                 self.sims_this_planning_period.clear()
                 self.best_fitness_this_planning_period_index = None
                 self.best_fitness_this_planning_period = math.inf
+                self.second_best_fitness_this_planning_period_index = None
+                self.second_best_fitness_this_planning_period = math.inf
                 unexpected_death = True
                 iterations_boost = True
             
@@ -3394,7 +3430,7 @@ class Neo(KesslerController):
                 self.plan_action(self.other_ships_exist, False, iterations_boost, False)
             else:
                 # Refresh the base state now that we have the true base state!
-                print('REFRESHING BASE STATE FOR STATIONARY ON TS', self.current_timestep)
+                debug_print('REFRESHING BASE STATE FOR STATIONARY ON TS', self.current_timestep)
                 self.game_state_to_base_planning['ship_state'] = ship_state
                 self.game_state_to_base_planning['game_state'] = preprocess_bullets_in_gamestate(game_state)
                 '''
