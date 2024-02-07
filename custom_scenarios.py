@@ -546,7 +546,7 @@ shifting_square_scenario = Scenario(
 
 
 # Parameters for the ring of asteroids
-R_initial = 800  # Initial radius of the ring, large enough to enclose the ship
+R_initial = 1200  # Initial radius of the ring, large enough to enclose the ship
 num_asteroids = 20  # Number of asteroids in the ring
 speed = 40  # Speed at which asteroids close in
 
@@ -577,6 +577,9 @@ delayed_closing_ring_scenario = Scenario(
 
 
 
+
+
+
 def spiral_position(center, radius, angle):
     """Calculate the x, y position for a given angle along a spiral."""
     x = center[0] + radius * np.cos(angle)
@@ -589,11 +592,11 @@ def calculate_spiral_movement(angle, tightness):
     return movement_angle
 
 # Parameters for the Spiral Assault scenario
-center = (960, 540)
-initial_radius = 600
+center = (500, 400)
+initial_radius = 400
 num_asteroids = 50
 spiral_tightness = 0.5  # Adjust for desired spiral tightness
-asteroid_speed = 20  # Can be constant or variable
+asteroid_speed = 50  # Can be constant or variable
 
 # Calculate initial positions for the asteroids
 asteroid_states = []
@@ -609,7 +612,7 @@ spiral_assault_scenario = Scenario(
     name='spiral_assault_scenario',
     asteroid_states=asteroid_states,
     ship_states=[{'position': center, 'angle': 0, 'lives': 3, 'mines_remaining': 2}],
-    map_size=(1920, 1080),
+    map_size=(1000, 800),
 )
 
 
@@ -629,7 +632,7 @@ num_asteroids = 20  # Number of asteroids in the ring
 speed = 40  # Speed at which asteroids close in
 
 # Ship's initial position (center of the screen)
-ship_position = (500, 400)
+#ship_position = (500, 400)
 
 # Calculating initial positions and angles for the asteroids
 theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
@@ -644,7 +647,8 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y
 dancing_ring = Scenario(
     name="dancing_ring",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'lives': 10, 'team': 1, "mines_remaining": 1}],
+    ship_states=[{"position": (450, 400), 'lives': 3, 'team': 1, "mines_remaining": 1},
+                 {"position": (550, 400), 'lives': 3, 'team': 2, "mines_remaining": 1}],
 )
 
 
@@ -705,10 +709,18 @@ asteroid_states = line1 + line2
 intersecting_lines_scenario = Scenario(
     name='intersecting_lines_scenario',
     asteroid_states=asteroid_states,
-    ship_states=[{'position': (width/4, height/2), 'angle': 0, 'lives': 3, 'mines_remaining': 1}],#
-                 #{'position': (width*3/4, height/2), 'angle': 0, 'lives': 3, 'mines_remaining': 1}],
+    ship_states=[{'position': (width/4, height/2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 1},
+                 {'position': (width*3/4, height/2), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 1}],
     map_size=(width, height),
 )
+
+
+
+
+
+
+
+
 
 
 
@@ -924,8 +936,8 @@ adv_asteroid_stealing = Scenario(
     name='adv_asteroid_stealing',
     asteroid_states=[{'position': (width*0.15, height*0.25), 'angle': 90.0, 'speed': 100, 'size': 3},
                      {'position': (width*0.85, height*0.75), 'angle': 270.0, 'speed': 100, 'size': 3},],
-    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
-                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 1}],
     time_limit=20,
     map_size=(width, height),
 )
@@ -948,8 +960,8 @@ wrapping_nightmare = Scenario(
                     [{'position': (w, height), 'angle': 0.0, 'speed': 100, 'size': 3} for w in widths] +
                     [{'position': (0, h), 'angle': 90.0, 'speed': 100, 'size': 3} for h in heights] +
                     [{'position': (width, h), 'angle': -90.0, 'speed': 100, 'size': 3} for h in heights],
-    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
-                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}],
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 1}],
     time_limit=60,
     map_size=(width, height),
 )
@@ -979,8 +991,8 @@ wrapping_nightmare_fast = Scenario(
                     [{'position': (w, height), 'angle': 0.0, 'speed': -800, 'size': 2} for w in widths] +
                     [{'position': (0, h), 'angle': 90.0, 'speed': -800, 'size': 2} for h in heights] +
                     [{'position': (width, h), 'angle': -90.0, 'speed': -800, 'size': 2} for h in heights],
-    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 0},
-                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 0}
+    ship_states=[{'position': (width*0.35, height*0.75), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                 {'position': (width*0.65, height*0.25), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 1}
                  ],
     time_limit=60,
     map_size=(width, height),
