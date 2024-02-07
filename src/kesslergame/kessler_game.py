@@ -4,6 +4,7 @@
 # this source code package.
 
 import time
+import json
 import math
 import numpy as np
 from typing import Dict, Any, List
@@ -72,6 +73,8 @@ class KesslerGame:
         step = 0
         time_limit = scenario.time_limit if scenario.time_limit else self.time_limit
 
+        move_record = [[] for _ in range(len(ships))]
+
         # Assign controllers to each ship
         for controller, ship in zip(controllers, ships):
             controller.ship_id = ship.id
@@ -123,6 +126,7 @@ class KesslerGame:
                     if controllers[idx].ship_id != ship.id:
                         raise RuntimeError("Controller and ship ID do not match")
                     ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine = controllers[idx].actions(ship.ownstate, game_state)
+                    move_record[idx].append((ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine))
 
                 # Update controller evaluation time if performance tracking
                 if self.perf_tracker:
@@ -357,6 +361,37 @@ class KesslerGame:
 
         # Finalize score class before returning
         score.finalize(sim_time, stop_reason, ships)
+
+        # Dump the move record
+        for ind, movelist in enumerate(move_record):
+            #with open(f'Controller {ind} Actions.json', 'w') as f:
+            #    # Dump the list to the file in JSON format
+            #    json.dump(movelist, f, indent=4)
+            controller_script_content = f"""# -*- coding: utf-8 -*-
+from typing import Dict, Tuple
+
+class ReplayController{ind}:
+    def __init__(self):
+        self.recorded_actions = {movelist}
+        self.current_step = 0
+
+    def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
+        if self.current_step < len(self.recorded_actions):
+            action = self.recorded_actions[self.current_step]
+            self.current_step += 1
+            return tuple(action)
+        else:
+            return 0.0, 0.0, False, False  # Default action if out of recorded actions
+
+    @property
+    def name(self) -> str:
+        return "Replay Controller {ind}"
+            """
+
+            # Save this content to a .py file
+            file_path = f'controller_{ind}.py'
+            with open(file_path, 'w') as file:
+                file.write(controller_script_content)
 
         # Return the score and stop condition
         return score, perf_list
