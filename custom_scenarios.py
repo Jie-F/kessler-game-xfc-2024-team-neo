@@ -320,7 +320,8 @@ for y_position in range(0, screen_height, vertical_spacing):
 shearing_pattern_scenario = Scenario(
     name="shearing_pattern_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": (500, 400), "lives": 3, "mines_remaining": 3}],
+    ship_states=[{"position": (250, 400), "lives": 3, 'team': 1, "mines_remaining": 3},
+                 {"position": (750, 400), "lives": 3, 'team': 2, "mines_remaining": 3}],
 )
 
 
@@ -368,6 +369,11 @@ super_hard_wrap = Scenario(
 
 
 
+
+
+
+
+
 super_fast_asteroid = Scenario(name='Test Scenario',
                             #num_asteroids=200,
                             asteroid_states=[{'position': (width/2, height*2/3), 'speed': 100+width*30, 'angle': 0, 'size': 3}],
@@ -385,6 +391,10 @@ super_fast_asteroid = Scenario(name='Test Scenario',
 
 
 
+
+
+
+
 edge_asteroid = Scenario(name='Test Scenario',
                             #num_asteroids=200,
                             asteroid_states=[{'position': (0, 0), 'speed': 0, 'angle': 0, 'size': 1}],
@@ -398,6 +408,9 @@ edge_asteroid = Scenario(name='Test Scenario',
                             time_limit=np.inf,
                             ammo_limit_multiplier=0,
                             stop_if_no_ammo=False)
+
+
+
 
 
 
