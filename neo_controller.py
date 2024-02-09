@@ -140,6 +140,7 @@ rules = [
 mine_dropping_control = ctrl.ControlSystem(rules)
 mine_dropping_fis = ctrl.ControlSystemSimulation(mine_dropping_control)
 
+@lru_cache()
 def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int):
     if num_mines_left == 0 or num_asteroids_hit < 8:
         return False
@@ -887,7 +888,7 @@ def forecast_asteroid_ship_splits(asteroid, timesteps_until_appearance, ship_vel
 
 def forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, game_state=None, wrap=False):
     # Calculate speed of resultant asteroid(s) based on velocity vector
-    v = sqrt(vfx**2 + vfy**2) # TODO: Should be safe to revert to x*x
+    v = sqrt(vfx**2 + vfy**2) # TODO: Should be safe to revert to x*x, if not then use vfx**2 and vfy**2
     # Calculate angle of center asteroid for split (degrees)
     theta = atan2(vfy, vfx)*180/pi#degrees(atan2(vfy, vfx))
     # Split angle is the angle off of the new velocity vector for the two asteroids to the sides, the center child
@@ -896,14 +897,6 @@ def forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, game_state
     angles = [theta + split_angle, theta, theta - split_angle]
     # This is wacky because we're back-extrapolation the position of the asteroid BEFORE IT WAS BORN!!!!11!
 
-    '''
-    for angle in angles:
-        while angle < 0:
-            angle += 360
-        while angle > 360:
-            angle -= 360
-    '''
-
     forecasted_asteroids = [{'position': wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME), game_state['map_size']) if game_state and wrap else (a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME),
                              'velocity': (v*cos(radians(angle)), v*sin(radians(angle))),
                              'size': a['size'] - 1,
@@ -911,11 +904,6 @@ def forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, game_state
                              'radius': ASTEROID_RADII_LOOKUP[a['size'] - 1],
                              'timesteps_until_appearance': timesteps_until_appearance}
                                for angle in angles]
-    for a in forecasted_asteroids:
-        if math.isclose(a['velocity'][0], 8290563106):
-            print("\n\n\n\n\nBAMMO IN NEO")
-            print(f"vfx: {vfx} vfy: {vfy}")
-            #raise Exception("BAMMO IN NEO")
     return forecasted_asteroids
 
 def maintain_forecasted_asteroids(forecasted_asteroid_splits, game_state=None, wrap=False):
@@ -1049,6 +1037,7 @@ def simulate_ship_movement_with_inputs(game_state, ship_state, move_sequence):
 def get_adversary_interception_time_lower_bound(asteroid, adversary_ships, game_state):
     if not adversary_ships:
         return math.inf
+    print('YES ADVERSARY')
     feasible, _, aiming_timesteps_required, interception_time_s, _, _, _ = solve_interception(asteroid, adversary_ships[0], game_state, 0)
     if feasible:
         #print(f"ADVERSARY INTERCEPT TIME: {interception_time_s + aiming_timesteps_required*DELTA_TIME}")
@@ -1543,12 +1532,9 @@ class Simulation():
         return self.respawn_timer
 
     def get_ship_state(self):
-        #return {'position': self.ship_state['position'], 'velocity': self.ship_state['velocity'], 'speed': self.ship_state['speed'], 'heading': self.ship_state['heading'], 'bullets_remaining': self.ship_state['bullets_remaining'], 'mines_remaining': self.ship_state['mines_remaining'], 'lives_remaining': self.ship_state['lives_remaining']}
         return dict(self.ship_state)
     
     def get_game_state(self):
-        # TODO: Might need a deepcopy for this to not bug out
-        #return {key: copy.copy(val) for key, val in self.game_state.items()}
         return dict(self.game_state)
 
     def get_fire_next_timestep_flag(self):
@@ -1684,7 +1670,7 @@ class Simulation():
             displacement = dist(ship_start_position, ship_end_position)
         else:
             displacement = 0
-        displacement_score = displacement/1000 # TODO: If wrapped, this score will be disporportionately big. Ideally account for that by unwrapping somehow
+        #displacement_score = displacement/1000 # TODO: If wrapped, this score will be disporportionately big. Ideally account for that by unwrapping somehow
         displacement_score = 0
 
         if displacement < EPS:
@@ -1801,7 +1787,7 @@ class Simulation():
             # This is unavoidable, and we just have to choose targets that don't do this.
             # If the asteroids are moving slow enough, this should be rare, but especially if small asteroids are moving very quickly, this issue is common.
             # A simulation will easily show whether this will happen or not
-            # TODO: CULLING
+            # TODO: CULLING?
             debug_print(f"The last timestep fired is {self.last_timestep_fired}")
             aiming_move_sequence = self.get_rotate_heading_move_sequence(target_asteroid_shooting_angle_error_deg)
             if self.fire_first_timestep:
@@ -2017,8 +2003,6 @@ class Simulation():
             if target_asteroids_list:
                 debug_print("Shooting at asteroid with least shot delay since there aren't imminent asteroids")
                 self.explanation_messages.append("Shooting at asteroid with least shot delay since no asteroids are about to hit me.")
-                # TODO: Can sort tiebreakers like key=lambda a: (a['aiming_timesteps_required'], a['size'], a['distance']))
-                # Once I get more prioritization, I can make use of this choice to prioritize small asteroids, or ones that are far from me, or whatever!
                 #print('BEFOER AND AFTER SORTING')
                 #print(target_asteroids_list)
                 # Sort by just convenience (and anything else I'd like)
@@ -2171,9 +2155,7 @@ class Simulation():
     def bullet_target_sim(self, ship_state: dict=None, fire_first_timestep: bool=False, fire_after_timesteps: int=0, skip_half_of_first_cycle: bool=False, current_move_index: int=None, whole_move_sequence: list=None, timestep_limit: int=math.inf):
         # Assume we shoot on the next timestep, so we'll create a bullet and then track it and simulate it to see what it hits, if anything
         # This sim doesn't modify the state of the simulation class. Everything here is discarded after the sim is over, and this is just to see what my bullet hits, if anything.
-        asteroids = [dict(a) for a in self.game_state['asteroids']] # TODO: CULL ASTEROIDS? But then we won't be considering other bullets so maybe this is a bad idea. Maybe cull for all bullets and mines combined? Remember to unwrap the asteroids!
-        #if ship_state and math.isclose(ship_state['heading'], 76.54927196048133, abs_tol=0.000000001):
-        #    print('messed up asties', asteroids)
+        asteroids = [dict(a) for a in self.game_state['asteroids']]
         mines = [dict(m) for m in self.game_state['mines']]
         bullets = [dict(b) for b in self.game_state['bullets']]
         initial_ship_state = self.get_ship_state()
@@ -2269,7 +2251,6 @@ class Simulation():
                 else:
                     bullet_fired_from_ship_heading = self.ship_state['heading']
                     bullet_fired_from_ship_position = self.ship_state['position']
-                # TODO: LRU CACHE THE SIN AND COS FUNCTIONS OR JUST MODIFY THE BULLET DICT TO INCLUDE VELS AND PROBABLY ALSO THE TAIL
                 rad_heading = radians(bullet_fired_from_ship_heading)
                 cos_heading = cos(rad_heading)
                 sin_heading = sin(rad_heading)
@@ -3039,8 +3020,6 @@ class Neo(KesslerController):
             'fire_next_timestep_flag': new_fire_next_timestep_flag,
         }
         if ENABLE_ASSERTIONS:
-            pass
-            # TODO: FALSE BECUZ SEED 889195328 2024-01-23 12:33 AM
             if not (bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']):
                 print(f"self.game_state_to_base_planning['ship_respawn_timer']: {self.game_state_to_base_planning['ship_respawn_timer']}, self.game_state_to_base_planning['ship_state']['is_respawning']: {self.game_state_to_base_planning['ship_state']['is_respawning']}")
             assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']
@@ -3123,7 +3102,7 @@ class Neo(KesslerController):
                     random_ship_accel_turn_rate = 0
                     random_ship_cruise_speed = 0
                     random_ship_cruise_turn_rate = 0
-                    random_ship_cruise_timesteps = 1 # TODO: SET TO 0 LATER
+                    random_ship_cruise_timesteps = 0
                 else:
                     random_ship_heading_angle = random.uniform(-20.0, 20.0)
                     random_ship_accel_turn_rate = random.uniform(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)
