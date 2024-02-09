@@ -863,7 +863,7 @@ def forecast_asteroid_mine_splits(asteroid, timesteps_until_appearance, mine, ga
     #dist = dist_slow
     delta_x = mine['position'][0] - asteroid['position'][0]
     delta_y = mine['position'][1] - asteroid['position'][1]
-    dist = sqrt(delta_x*delta_x + delta_y*delta_y)
+    dist = sqrt(delta_x**2 + delta_y**2) # OMG this can't be x*x, it has to be x**2 because they're slightly different!
     #if enable_assertions:
     #    assert math.isclose(dist, dist_slow)
     F = (-dist/MINE_BLAST_RADIUS + 1)*MINE_BLAST_PRESSURE*2*asteroid['radius']
@@ -874,7 +874,7 @@ def forecast_asteroid_mine_splits(asteroid, timesteps_until_appearance, mine, ga
         return []
     vfx = asteroid['velocity'][0] + a*(asteroid['position'][0] - mine['position'][0])/dist
     vfy = asteroid['velocity'][1] + a*(asteroid['position'][1] - mine['position'][1])/dist
-    #debug_print(f"{asteroid['velocity'][0]} + {a}*({asteroid['position'][0]} - {mine['position'][0]})/{dist}")
+    #print(f"{asteroid['velocity'][0]} + {a}*({asteroid['position'][0]} - {mine['position'][0]})/{dist}")
     return forecast_asteroid_splits(asteroid, timesteps_until_appearance, vfx, vfy, game_state, wrap)
 
 def forecast_asteroid_ship_splits(asteroid, timesteps_until_appearance, ship_velocity, game_state=None, wrap=False):
