@@ -7,7 +7,7 @@
 # TODO: Add heuristic FIS for maneuvering
 # TODO: Show stats at the end
 # TODO: Use mine fis before creating the sim, not inside of it
-# TODO: Move recording
+# TODO: Test with bullet limit and stuff
 
 import random
 import math
@@ -85,7 +85,7 @@ SHIP_RADIUS = 20.0 # px
 SHIP_MASS = 300 # kg
 TIMESTEPS_UNTIL_SHIP_ACHIEVES_MAX_SPEED = ceil(SHIP_MAX_SPEED/(SHIP_MAX_THRUST - SHIP_DRAG)/DELTA_TIME) # Should be 18 timesteps
 COLLISION_CHECK_PAD = EPS # px
-ASTEROID_AIM_BUFFER_PIXELS = 7 # px
+ASTEROID_AIM_BUFFER_PIXELS = 1 # px
 COORDINATE_BOUND_CHECK_PADDING = 1 # px
 MINE_BLAST_RADIUS = 150 # px
 MINE_RADIUS = 12 # px
@@ -831,7 +831,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
         if asteroid_r < asteroid_dist:
             shot_heading_tolerance_rad = asin((asteroid_r - ASTEROID_AIM_BUFFER_PIXELS)/asteroid_dist)
         else:
-            shot_heading_tolerance_rad = pi/4
+            shot_heading_tolerance_rad = pi/2
         solutions.append((feasible, angle_difference_rad(theta, theta_0), shot_heading_tolerance_rad, t, intercept_x, intercept_y, asteroid_dist))
 
     return solutions
@@ -1037,7 +1037,6 @@ def simulate_ship_movement_with_inputs(game_state, ship_state, move_sequence):
 def get_adversary_interception_time_lower_bound(asteroid, adversary_ships, game_state):
     if not adversary_ships:
         return math.inf
-    print('YES ADVERSARY')
     feasible, _, aiming_timesteps_required, interception_time_s, _, _, _ = solve_interception(asteroid, adversary_ships[0], game_state, 0)
     if feasible:
         #print(f"ADVERSARY INTERCEPT TIME: {interception_time_s + aiming_timesteps_required*DELTA_TIME}")
@@ -1675,8 +1674,8 @@ class Simulation():
 
         if displacement < EPS:
             # Stationary
-            # Only has to be safe for 3 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
-            asteroid_safe_time_score = max(0, min(5, 5 - 5/3*next_extrapolated_asteroid_collision_time))
+            # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
+            asteroid_safe_time_score = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time))
         else:
             # Maneuvering
             asteroid_safe_time_score = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time))
@@ -1686,7 +1685,7 @@ class Simulation():
         else:
             next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
             assert -EPS <= next_extrapolated_mine_collision_time <= 3 + EPS
-            mine_safe_time_score = 5 - (5 - 1.5)/3*next_extrapolated_mine_collision_time
+            mine_safe_time_score = 5 - (5 - 2)/3*next_extrapolated_mine_collision_time
 
         other_ship_proximity_score = 0
         ship_proximity_max_penalty = 6
@@ -3081,7 +3080,7 @@ class Neo(KesslerController):
             # Check for danger
             #max_search_iterations = 60
             #min_search_iterations = 6
-            search_iterations = 10
+            search_iterations = 50
             max_cruise_seconds = 1 + 26*DELTA_TIME
             #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
             #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
@@ -3093,7 +3092,7 @@ class Neo(KesslerController):
             #while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
             for _ in range(search_iterations):
                 search_iterations_count += 1
-                if search_iterations_count%5 == 0:
+                if search_iterations_count%1 == 0:
                     debug_print(f"Respawn search iteration {search_iterations_count}")
                     pass
                 if not self.sims_this_planning_period:
