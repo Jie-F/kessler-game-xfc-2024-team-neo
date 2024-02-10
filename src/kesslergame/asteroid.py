@@ -122,12 +122,13 @@ class Asteroid:
                     angle -= 360
             new_asts = [Asteroid(position=self.position, size=self.size-1, speed=v, angle=angle) for angle in angles]
             for a in new_asts:
-                if math.isclose(a.velocity[0], 82.3102):
+                if math.isclose(a.velocity[0], 77):
                     print("\n\n\n\n\nBAMMO")
                     #print(f"Bullet vel: {impactor_vx} {impactor_vy}")
                     print(f"{self.vx} + {acc}*({self.position[0]} - {impactor.position[0]})/{dist}")
                     print(f"vfx: {vfx} vfy: {vfy}")
-                    
+                    if isinstance(impactor, Mine):
+                        print("IMPACTOR WAS A MINE")
                     #raise Exception("BAMMO")
             return new_asts
 
