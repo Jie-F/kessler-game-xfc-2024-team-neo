@@ -3385,7 +3385,7 @@ class Neo(KesslerController):
                 self.action_queue.clear()
                 self.actioned_timesteps.clear() # If we don't clear it, we'll have duplicated moves since we have to overwrite our planned moves to get to safety, which means enqueuing moves on timesteps we already enqueued moves for.
                 self.fire_next_timestep_flag = False # If we were planning on shooting this timestep but we unexpectedly got hit, DO NOT SHOOT! Actually even if we didn't reset this variable here, we'd only shoot after the respawn maneuver is done and then we'd miss a shot. And yes that was a bug that I fixed lmao
-                self.game_state_to_base_planning = None
+                #self.game_state_to_base_planning = None
                 self.sims_this_planning_period.clear()
                 self.best_fitness_this_planning_period_index = None
                 self.best_fitness_this_planning_period = math.inf
@@ -3395,13 +3395,40 @@ class Neo(KesslerController):
                 iterations_boost = True
             
             # Set up the actions planning
-            if not self.game_state_to_base_planning:
+            if unexpected_death:
+                # We need to refresh the state if we died unexpectedly
+                self.game_state_to_base_planning['timestep'] = self.current_timestep
+                self.game_state_to_base_planning['respawning'] = ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for
+                self.game_state_to_base_planning['ship_state'] = ship_state
+                self.game_state_to_base_planning['game_state'] = preprocess_bullets_in_gamestate(game_state)
+                self.game_state_to_base_planning['ship_respawn_timer'] = 3
+                self.game_state_to_base_planning['asteroids_pending_death'] = {}
+                self.game_state_to_base_planning['forecasted_asteroid_splits'] = []
+                self.game_state_to_base_planning['fire_next_timestep_flag'] = False
+                
+                '''
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
                     'respawning': ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for,
                     'ship_state': ship_state,
                     'game_state': preprocess_bullets_in_gamestate(game_state),
-                    'ship_respawn_timer': 3 if unexpected_death else 0,
+                    'ship_respawn_timer': 3,
+                    'asteroids_pending_death': {},
+                    'forecasted_asteroid_splits': [],
+                    'last_timestep_fired': -math.inf,#self.current_timestep - 1, # TODO: WHY is this not -math.inf? Did I do this due to safety, if it fires too soon? Check for this edgecase!
+                    'last_timestep_mined': -math.inf,
+                    'fire_next_timestep_flag': False,
+                }
+                '''
+                if self.game_state_to_base_planning['respawning']:
+                    self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state['lives_remaining'])
+            elif not self.game_state_to_base_planning:
+                self.game_state_to_base_planning = {
+                    'timestep': self.current_timestep,
+                    'respawning': ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for,
+                    'ship_state': ship_state,
+                    'game_state': preprocess_bullets_in_gamestate(game_state),
+                    'ship_respawn_timer': 0,
                     'asteroids_pending_death': {},
                     'forecasted_asteroid_splits': [],
                     'last_timestep_fired': -math.inf,#self.current_timestep - 1, # TODO: WHY is this not -math.inf? Did I do this due to safety, if it fires too soon? Check for this edgecase!
