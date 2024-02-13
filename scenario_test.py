@@ -13,8 +13,8 @@ import cProfile
 import sys
 from r_controller import RController
 from null_controller import NullController
-from controller_0 import ReplayController0
-from controller_1 import ReplayController1
+#from controller_0 import ReplayController0
+#from controller_1 import ReplayController1
 
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
@@ -83,8 +83,8 @@ width, height = (1000, 800)
 
 # Define Game Settings
 game_settings = {'perf_tracker': True,
-                 'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter
-                 'realtime_multiplier': 10,
+                 'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter,NoGraphics
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30}
 
@@ -137,7 +137,7 @@ custom = [
     #intersecting_lines_scenario,
     #exploding_grid_scenario,
     #grid_formation_explosion_scenario,
-    aspect_ratio_grid_formation_scenario
+    #aspect_ratio_grid_formation_scenario
 ]
 
 #for i in range(0, len(seeds)):
@@ -146,17 +146,18 @@ score = None
 died = False
 #for sc in xfc2023:
 #while died or not missed:
-for i in range(1):
+#for i in range(1):
+while True:
     iterations += 1
     randseed = random.randint(1, 1000000000)
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=20,
+                                    num_asteroids=15,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
-                                    angle_range=(0, 360),
+                                    angle_range=(-1, 361),
                                     size_range=(1, 4)
                                 )*random.choice([1])
 
@@ -168,8 +169,8 @@ for i in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 1},
+                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 2, 'team': 1, "mines_remaining": 2},
+                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 2, 'team': 2, "mines_remaining": 2},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -179,12 +180,12 @@ for i in range(1):
 
     pre = time.perf_counter()
     #print(f"Evaluating scenario {sc.name}")
-    #cProfile.run('game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])')
+    #cProfile.run('game.run(scenario=zigzag_motion_scenario, controllers=[Neo(), Neo()])')
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     
-    score, perf_data = game.run(scenario=wrapping_nightmare_fast, controllers=[ReplayController0(), ReplayController1()])#, [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    score, perf_data = game.run(scenario=my_test_scenario, controllers=[Neo(), Neo()])#, [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     
     # Print out some general info about the result
     if score:

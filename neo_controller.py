@@ -1489,8 +1489,8 @@ class Simulation():
         #print(other_ships)
         #self.other_ships = [dict(s) for s in other_ships]
         #self.game_state['bullets'] = [dict(b) for b in bullets]
-		if ENABLE_ASSERTIONS:
-			assert (ship_state['is_respawning'] == bool(respawn_timer))
+        if ENABLE_ASSERTIONS:
+            assert (ship_state['is_respawning'] == bool(respawn_timer))
         self.game_state = dict(game_state)
         self.ship_state = dict(ship_state)
         self.game_state['asteroids'] = [dict(a) for a in game_state['asteroids']]
