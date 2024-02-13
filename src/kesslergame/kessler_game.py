@@ -107,7 +107,8 @@ class KesslerGame:
                 'mines': [mine.state for mine in mines],
                 'map_size': scenario.map_size,
                 'time': sim_time,
-                'time_step': step
+                'delta_time': self.time_step,
+                'sim_frame': step
             }
 
             # Initialize controller time recording in performance tracker
@@ -156,31 +157,11 @@ class KesslerGame:
                         mines.append(new_mine)
 
             # Cull any bullets past the map edge
-            '''
             bullets = [bullet
                        for bullet
                        in bullets
                        if 0 <= bullet.position[0] <= scenario.map_size[0]
                        and 0 <= bullet.position[1] <= scenario.map_size[1]]
-            '''
-
-            # List to store bullets to be removed
-            bullets_to_remove = []
-
-            # Check each bullet to see if it's outside the map boundaries
-            for i, bullet in enumerate(bullets):
-                if not (0 <= bullet.position[0] <= scenario.map_size[0] and 0 <= bullet.position[1] <= scenario.map_size[1]):
-                    # Add index or bullet to the removal list
-                    bullets_to_remove.append(i)
-
-            # Iterate in reverse order to avoid index shifting issues while removing bullets
-            for i in reversed(bullets_to_remove):
-                # Print bullet information
-                print(f"Bullet leaving map: Pos: ({bullets[i].position[0]}, {bullets[i].position[1]}), vel: ({bullets[i].velocity[0]}, {bullets[i].velocity[1]}), heading: {bullets[i].heading}")  # Replace .info() with the method or attribute that provides the desired bullet information
-                
-                # Remove the bullet from the list
-                del bullets[i]
-
 
             # Wrap ships and asteroids to other side of map
             for ship in liveships:
@@ -190,23 +171,11 @@ class KesslerGame:
                     if offset < 0 or offset > bound:
                         ship.position[idx] += bound * np.sign(offset)
             for asteroid in asteroids:
-                #if asteroid.position == (-2.6645352591003757e-15, 77.14285714285627):
-                flag = False
-                if math.isclose(asteroid.position[0], -2.6645352591003757e-15) and math.isclose(asteroid.position[1], 77.14285714285627):
-                    print("\n\n\n\n\n\nBAMAMOSJKDFDSMOFMOSDFMOSDMFSDOMDF")
-                    print(asteroid.position)
-                    flag = True
                 for idx, pos in enumerate(asteroid.position):
                     bound = scenario.map_size[idx]
                     offset = bound - pos
-                    if flag:
-                        print(f"offset: {offset}, bound: {bound}")
                     if offset < 0 or offset > bound:
-                        # bound < pos or pos < 0
-                        # bound - pos > bound
                         asteroid.position[idx] += bound * np.sign(offset)
-                if flag:
-                    print(asteroid.position)
 
             # Update performance tracker with
             if self.perf_tracker:
@@ -243,7 +212,6 @@ class KesslerGame:
             new_asteroids = []
             for idx_mine, mine in enumerate(mines):
                 if mine.detonating:
-                    print(f"\nMINE IS DETONATING IN KESSLER CODE, the ship is at {ship.position}")
                     for idx_ast, asteroid in enumerate(asteroids):
                         dist = np.sqrt((asteroid.position[0] - mine.position[0]) ** 2 + (asteroid.position[1] - mine.position[1]) ** 2)
                         if dist <= mine.blast_radius + asteroid.radius:
