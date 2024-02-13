@@ -1016,7 +1016,7 @@ def asteroid_bullet_collision(bullet_head_position, bullet_tail_position, astero
 
 @lru_cache() # This function gets called with the same params all the time, so just cache the return value the first time
 def get_simulated_ship_max_range(max_cruise_seconds):
-    dummy_game_state = {'time_step': 0}
+    dummy_game_state = {'sim_frame': 0}
     dummy_ship_state = {'speed': 0, 'position': (0, 0), 'velocity': (0, 0), 'heading': 0, 'bullets_remaining': 0, 'lives_remaining': 1}
     max_ship_range_test = Simulation(dummy_game_state, dummy_ship_state, 0)
     max_ship_range_test.accelerate(SHIP_MAX_SPEED)
@@ -1029,7 +1029,7 @@ def get_simulated_ship_max_range(max_cruise_seconds):
     return ship_random_range, ship_random_max_maneuver_length
 
 def simulate_ship_movement_with_inputs(game_state, ship_state, move_sequence):
-    dummy_game_state = {'asteroids': [], 'mines': [], 'map_size': game_state['map_size'], 'time_step': 0}
+    dummy_game_state = {'asteroids': [], 'mines': [], 'map_size': game_state['map_size'], 'sim_frame': 0}
     ship_movement_sim = Simulation(dummy_game_state, ship_state, 0, 0, {}, [], -math.inf, -math.inf, False, False)
     ship_movement_sim.apply_move_sequence(move_sequence)
     return ship_movement_sim.get_ship_state()
@@ -1466,6 +1466,97 @@ def check_mine_opportunity(ship_state, game_state):
     #    return True
     #else:
     #    return False
+
+class AsteroidSpatialHash:
+    # TODO: Make a separate function for each type of object input, so the code doesn't have to waste time deciding which type it is
+    def __init__(self, cell_size=10.0):
+        self.cell_size = float(cell_size)
+        self.d = {}
+
+    def show_d(self):
+        """Show the current state of the spatial hash dictionary."""
+        return self.d
+
+    def _bbox_for_circle(self, position, radius):
+        """Calculate the bounding box for a circle."""
+        x1 = position[0] - radius
+        x2 = position[0] + radius
+        y1 = position[1] - radius
+        y2 = position[1] + radius
+        return x1, y1, x2, y2
+    
+    def _bbox_for_bullet(self, position, tail_delta):
+        if tail_delta[0] >= 0:
+            x1 = position[0]
+            x2 = position[0] + tail_delta[0]
+        else:
+            x2 = position[0]
+            x1 = position[0] + tail_delta[0]
+
+        if tail_delta[1] >= 0:
+            y1 = position[1]
+            y2 = position[1] + tail_delta[1]
+        else:
+            y2 = position[1]
+            y1 = position[1] + tail_delta[1]
+
+        return x1, y1, x2, y2
+
+    def _bbox_for_mine(self, position):
+        x1 = position[0] - MINE_BLAST_RADIUS
+        x2 = position[0] + MINE_BLAST_RADIUS
+        y1 = position[1] - MINE_BLAST_RADIUS
+        y2 = position[1] + MINE_BLAST_RADIUS
+        return x1, y1, x2, y2
+
+    def _bbox_for_object(self, object):
+        """Determine the bounding box for any object.
+        This can be extended to handle different types of objects differently."""
+        if 'radius' in object and 'position' in object:
+            return self._bbox_for_circle(object['position'], object['radius'])
+        elif 'tail_delta' in object and 'position' in object:
+            return self._bbox_for_bullet(object['position'], object['tail_delta'])
+        elif 'remaining_time' in object:
+            return self._bbox_for_mine(object['position'])
+        # Add more conditions here for different types of objects
+        # Example for a rectangle:
+        # if 'width' in object and 'height' in object:
+        #     return self._bbox_for_rectangle(object['position'], object['width'], object['height'])
+        raise ValueError("Unsupported object type")
+
+    def _cell_coords_for_object(self, object):
+        """Calculate the cell coordinates for an object based on its bounding box."""
+        x1, y1, x2, y2 = self._bbox_for_object(object)
+        cells = set()
+        cy_start = int(y1 // self.cell_size)
+        cy_end = int(y2 // self.cell_size)
+        cx_start = int(x1 // self.cell_size)
+        cx_end = int(x2 // self.cell_size)
+        cells = {(cx, cy) for cy in range(cy_start, cy_end + 1) for cx in range(cx_start, cx_end + 1)}
+        return cells
+
+    def add_asteroid(self, asteroid_index, asteroid):
+        """Add an asteroid by index."""
+        cells = self._cell_coords_for_object(asteroid)
+        #print(cells)
+        for c in cells:
+            self.d.setdefault(c, set()).add(asteroid_index)
+
+    def remove_asteroid(self, asteroid_index, asteroid):
+        """Remove an asteroid by index."""
+        cells = self._cell_coords_for_object(asteroid)
+        for c in cells:
+            if c in self.d:
+                self.d[c].discard(asteroid_index)  # Use discard to avoid KeyError if the item is not found
+
+    def potential_collisions(self, object):
+        """Get a set of all asteroid indices that potentially intersect the given object."""
+        cells = self._cell_coords_for_object(object)
+        potentials = set()
+        for c in cells:
+            if c in self.d:
+                potentials.update(self.d[c])
+        return potentials
 
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
@@ -2424,7 +2515,7 @@ class Simulation():
                 return False
         return True
 
-    def update(self, thrust=0, turn_rate=0, fire=None, whole_move_sequence: list=None) -> bool:
+    def update(self, thrust: float=0.0, turn_rate: float=0.0, fire: bool=None, whole_move_sequence: list=None) -> bool:
         # This is a highly optimized simulation of what kessler_game.py does, and should match exactly its behavior
         # Being even one timestep off is the difference between life and death!!!
         return_value = None
@@ -2455,6 +2546,8 @@ class Simulation():
             flattened_asteroids_pending_death = [ast for ast_list in self.asteroids_pending_death.values() for ast in ast_list]
             self.game_state_plotter.update_plot(self.game_state['asteroids'], self.ship_state, self.game_state['bullets'], [], [], flattened_asteroids_pending_death, self.forecasted_asteroid_splits, self.game_state['mines'], True, 0.1, f'SIM UPDATE TS {self.initial_timestep + self.future_timesteps}')
 
+        asteroid_remove_idxs = set()
+
         # Simulate dynamics of bullets
         # Kessler will move bullets and cull them in different steps, but we combine them in one operation here
         # So we need to detect when the bullets are crossing the boundary, and delete them if they try to
@@ -2481,12 +2574,19 @@ class Simulation():
             # If the timer is below eps, it'll detonate this timestep
             #print('AFTER UPDATING MINES', self.game_state['mines'])
 
+        # Create the spatial hashing for the asteroids
+        ash = AsteroidSpatialHash(100)
+
         # Simulate dynamics of asteroids
         # Wrap the asteroid positions in the same operation
         #if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
-        for a in self.game_state['asteroids']:
+        #startt = time.time()
+        for ast_idx, a in enumerate(self.game_state['asteroids']):
             a['position'] = wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME), self.game_state['map_size'])
-
+            ash.add_asteroid(ast_idx, a)
+        #print(f"Took this long: {time.time() - startt}")
+        #print('\n\n\n')
+        #print(ash.show_d())
         # Simulate the ship!
         # Bullet firing happens before we turn the ship
         # Check whether we want to shoot a simulated bullet
@@ -2633,31 +2733,40 @@ class Simulation():
         
         # Check bullet/asteroid collisions
         bullet_remove_idxs = []
-        asteroid_remove_idxs = []
         for b_idx, b in enumerate(self.game_state['bullets']):
             b_tail = (b['position'][0] + b['tail_delta'][0], b['position'][1] + b['tail_delta'][1])
-            for a_idx, a in enumerate(self.game_state['asteroids']):
+            potential_b_a_coll_indices = list(ash.potential_collisions(b).difference(asteroid_remove_idxs))
+            potential_b_a_coll_indices.sort()
+            #print(potential_b_a_coll_indices)
+            for a_idx in potential_b_a_coll_indices:
+                a = self.game_state['asteroids'][a_idx]
+            #for a_idx, a in enumerate(self.game_state['asteroids']):
+            #    if a_idx in asteroid_remove_idxs:
+            #        continue
                 # If collision occurs
                 #print(f"BULLET COLLIDED WITH AST:", b, ast_to_string(a))
                 if asteroid_bullet_collision(b['position'], b_tail, a['position'], a['radius']):
                     # Mark bullet for removal
                     bullet_remove_idxs.append(b_idx)
                     # Create asteroid splits and mark it for removal
-                    self.game_state['asteroids'].extend(forecast_asteroid_bullet_splits(a, 0, bullet_velocity=b['velocity']))
-                    asteroid_remove_idxs.append(a_idx)
+                    new_asteroids = forecast_asteroid_bullet_splits(a, 0, bullet_velocity=b['velocity'])
+                    for i, new_a in enumerate(new_asteroids):
+                        ash.add_asteroid(len(self.game_state['asteroids']) + i, new_a)
+                    self.game_state['asteroids'].extend(new_asteroids)
+                    asteroid_remove_idxs.add(a_idx)
                     # Stop checking this bullet
                     break
         # Cull bullets and asteroids that are marked for removal
         if bullet_remove_idxs:
             self.game_state['bullets'] = [bullet for idx, bullet in enumerate(self.game_state['bullets']) if idx not in bullet_remove_idxs]
-        if asteroid_remove_idxs:
-            self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
+        #if asteroid_remove_idxs:
+        #    self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
 
         self.ship_move_sequence.append({'timestep': self.initial_timestep + self.future_timesteps, 'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire_this_timestep, 'drop_mine': drop_mine_this_timestep})
 
         # Check mine/asteroid and mine/ship collisions
         mine_remove_idxs = []
-        asteroid_remove_idxs = set() # Use a set, since this is the only case where we may have many asteroids removed at once
+        #asteroid_remove_idxs = set() # Use a set, since this is the only case where we may have many asteroids removed at once
         new_asteroids = []
         #if self.game_state['mines']:
         #    debug_print('mines:', self.game_state['mines'])
@@ -2668,7 +2777,15 @@ class Simulation():
                 # Mine is detonating
                 debug_print(f"\nSIM ID {self.sim_id}, MINE NUMBER {idx_mine} IS DETONATING IN THE SIM ON TIMESTEP: {self.initial_timestep + self.future_timesteps}, the ship is at {self.ship_state['position']}")
                 mine_remove_idxs.append(idx_mine)
-                for a_idx, asteroid in enumerate(self.game_state['asteroids']):
+                potential_m_a_coll_indices = list(ash.potential_collisions(mine).difference(asteroid_remove_idxs))
+                potential_m_a_coll_indices.sort()
+                #print(potential_m_a_coll_indices)
+                for a_idx in potential_m_a_coll_indices:
+                    asteroid = self.game_state['asteroids'][a_idx]
+                #for a_idx, asteroid in enumerate(self.game_state['asteroids']):
+                #    if a_idx in asteroid_remove_idxs:
+                #        continue
+
                     if check_collision(asteroid['position'][0], asteroid['position'][1], asteroid['radius'], mine['position'][0], mine['position'][1], MINE_BLAST_RADIUS):
                         #print(asteroid)
                         new_asteroids.extend(forecast_asteroid_mine_splits(asteroid, 0, mine, self.game_state, True))
@@ -2688,23 +2805,34 @@ class Simulation():
                 #assert not self.forecasted_asteroid_splits
         if mine_remove_idxs:
             self.game_state['mines'] = [mine for idx, mine in enumerate(self.game_state['mines']) if idx not in mine_remove_idxs]
-        if asteroid_remove_idxs:
-            self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
+        #if asteroid_remove_idxs:
+        #    self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
+        for i, new_a in enumerate(new_asteroids):
+            ash.add_asteroid(len(self.game_state['asteroids']) + i, new_a)
         self.game_state['asteroids'].extend(new_asteroids)
 
         # TODO: Might be edge case where ship collides with multiple things at the same frame. Make sure to check this! I don't handle this currently, but Kessler might do it differently, and cause desyncs.
 
         # Check ship/asteroid collisions
         if return_value is None and not self.ship_state['is_respawning']:
-            asteroid_remove_idxs = []
-            for a_idx, asteroid in enumerate(self.game_state['asteroids']):
+            #asteroid_remove_idxs = []
+            potential_s_a_coll_indices = list(ash.potential_collisions(self.ship_state).difference(asteroid_remove_idxs))
+            potential_s_a_coll_indices.sort()
+            #print(potential_s_a_coll_indices)
+            for a_idx in potential_s_a_coll_indices:
+                asteroid = self.game_state['asteroids'][a_idx]
+            #for a_idx, asteroid in enumerate(self.game_state['asteroids']):
+            #    if a_idx in asteroid_remove_idxs:
+            #        continue
                 if check_collision(self.ship_state['position'][0], self.ship_state['position'][1], SHIP_RADIUS, asteroid['position'][0], asteroid['position'][1], asteroid['radius']):
                     #if not (self.ship_state['velocity'][0] == 0 and self.ship_state['velocity'][1] == 0):
                     #    print(self.ship_state['velocity'])
                     #assert self.ship_state['velocity'][0] == 0 and self.ship_state['velocity'][1] == 0
                     new_asteroids_from_collision = forecast_asteroid_ship_splits(asteroid, 0, self.ship_state['velocity'], self.game_state, True)
+                    for i, new_a in enumerate(new_asteroids_from_collision):
+                        ash.add_asteroid(len(self.game_state['asteroids']) + i, new_a)
                     self.game_state['asteroids'].extend(new_asteroids_from_collision)
-                    asteroid_remove_idxs.append(a_idx)
+                    asteroid_remove_idxs.add(a_idx)
                     # Stop checking this ship's collisions. And also return saying the ship took damage!
                     if self.plot_this_sim:
                         print('THE SHIP TOOK DAMAGE1 RIPPPPPPPP')
@@ -2715,9 +2843,9 @@ class Simulation():
                     self.ship_state['speed'] = 0
                     self.respawn_timer = 3
                     break
-            # Cull asteroids marked for removal
-            if asteroid_remove_idxs:
-                self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
+        # Cull asteroids marked for removal
+        if asteroid_remove_idxs:
+            self.game_state['asteroids'] = [asteroid for idx, asteroid in enumerate(self.game_state['asteroids']) if idx not in asteroid_remove_idxs]
 
         # Check ship/ship collisions
         if return_value is None and not self.ship_state['is_respawning']:
@@ -2732,7 +2860,7 @@ class Simulation():
         self.forecasted_asteroid_splits = maintain_forecasted_asteroids(self.forecasted_asteroid_splits, self.game_state, True)
 
         self.future_timesteps += 1
-        self.game_state['time_step'] += 1
+        self.game_state['sim_frame'] += 1
         if return_value is None:
             #print(f"Update returning TRUE")
             return True
@@ -2930,7 +3058,7 @@ class Neo(KesslerController):
             if ENABLE_ASSERTIONS:
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 assert game_state is not None
-                assert game_state['time_step'] == self.current_timestep
+                assert game_state['sim_frame'] == self.current_timestep
             best_predicted_sim_fire_next_timestep_flag = best_action_sim_predicted.get_fire_next_timestep_flag()
             debug_print(f"best_predicted_sim_fire_next_timestep_flag: {best_predicted_sim_fire_next_timestep_flag}, self.game_state_to_base_planning['fire_next_timestep_flag']: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
             # self.game_state_to_base_planning['fire_next_timestep_flag'] is whether we fire at the BEGINNING of the period, while best_action_sim_predicted.get_fire_next_timestep_flag() is whether we fire AFTER this period
@@ -3318,7 +3446,7 @@ class Neo(KesslerController):
                 # First do a dummy simulation just to go through the motion, so we have the list of moves
                 start_time = time.time()
                 #print("Simming maneuver preview")
-                dummy_game_state = {'asteroids': [], 'mines': [], 'ships': [], 'bullets': [], 'map_size': self.game_state_to_base_planning['game_state']['map_size'], 'time_step': 0}
+                dummy_game_state = {'asteroids': [], 'mines': [], 'ships': [], 'bullets': [], 'map_size': self.game_state_to_base_planning['game_state']['map_size'], 'sim_frame': 0}
                 maneuver_preview = Simulation(dummy_game_state, self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['ship_respawn_timer'], {}, [], -math.inf, -math.inf, True, False)
                 maneuver_preview.rotate_heading(random_ship_heading_angle)
                 maneuver_preview.accelerate(random_ship_cruise_speed, random_ship_accel_turn_rate)
