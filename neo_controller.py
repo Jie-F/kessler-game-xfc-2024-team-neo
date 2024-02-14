@@ -7,6 +7,7 @@
 # TODO: Add heuristic FIS for maneuvering
 # TODO: Show stats at the end
 # TODO: Test with bullet limit and stuff
+# TODO: If extrapolating into the future to get fitness, maybe run update() until mines are exploded. That'll make it so the mines blasting asteroids aren't a surprise!
 
 import random
 import math
@@ -116,10 +117,11 @@ mines_left['many'] = fuzz.trimf(mines_left.universe, [1.5, 3, 3])
 lives_left['few'] = fuzz.trimf(lives_left.universe, [1, 1, 2])
 lives_left['many'] = fuzz.trimf(lives_left.universe, [1.5, 3, 3])
 #asteroids_hit.automf(3, names=['few', 'okay', 'many'])
-asteroids_hit_okay_center = 15
+asteroids_hit_okay_center = 12
+asteroids_hit_very_good = 40
 asteroids_hit['few'] = fuzz.trimf(asteroids_hit.universe, [0, 0, asteroids_hit_okay_center])
-asteroids_hit['okay'] = fuzz.trimf(asteroids_hit.universe, [0, asteroids_hit_okay_center, 50])
-asteroids_hit['many'] = fuzz.trimf(asteroids_hit.universe, [asteroids_hit_okay_center, 50, 50])
+asteroids_hit['okay'] = fuzz.trimf(asteroids_hit.universe, [0, asteroids_hit_okay_center, asteroids_hit_very_good])
+asteroids_hit['many'] = fuzz.trimf(asteroids_hit.universe, [asteroids_hit_okay_center, asteroids_hit_very_good, asteroids_hit_very_good])
 
 drop_mine['no'] = fuzz.trimf(drop_mine.universe, [0, 0, 5])
 drop_mine['yes'] = fuzz.trimf(drop_mine.universe, [5, 10, 10])
@@ -965,8 +967,9 @@ def count_asteroids_in_mine_blast_radius(game_state, mine_x, mine_y, future_chec
 def predict_ship_mine_collision(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, mine, future_timesteps=0):
     if mine['remaining_time'] >= future_timesteps*DELTA_TIME:
         # Project the ship to its future location when the mine is blowing up
-        ship_pos_x += ship_vel_x*(mine['remaining_time'] - future_timesteps*DELTA_TIME)
-        ship_pos_y += ship_vel_y*(mine['remaining_time'] - future_timesteps*DELTA_TIME)
+        # TODO: THIS SEEMS SKETCH! Gonna not do the projection anymore.
+        #ship_pos_x += ship_vel_x*(mine['remaining_time'] - future_timesteps*DELTA_TIME)
+        #ship_pos_y += ship_vel_y*(mine['remaining_time'] - future_timesteps*DELTA_TIME)
         if check_collision(ship_pos_x, ship_pos_y, SHIP_RADIUS, mine['position'][0], mine['position'][1], MINE_BLAST_RADIUS, COLLISION_CHECK_PAD):
             #print(f"\nMINE WILL COLLID IN {mine['remaining_time']} s")
             return mine['remaining_time']
@@ -1758,7 +1761,15 @@ class Simulation():
         else:
             next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
             assert -EPS <= next_extrapolated_mine_collision_time <= 3 + EPS
-            mine_safe_time_score = 5 - (5 - 2)/3*next_extrapolated_mine_collision_time
+            closest_mine_dist_square = math.inf
+            for m in self.game_state['mines']:
+                d = dist(self.ship_state['position'], m['position'])
+                if d < closest_mine_dist_square:
+                    closest_mine_dist_square = d
+            # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
+            # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
+            mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - d)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*3
+            mine_safe_time_score = 5 - (5 - 2)/3*next_extrapolated_mine_collision_time + mine_ground_zero_fudge
 
         other_ship_proximity_score = 0
         ship_proximity_max_penalty = 6
@@ -1800,7 +1811,7 @@ class Simulation():
         
         debug_print(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score + crash_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
         #self.explanation_messages.append(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, mine safe time score: {mine_safe_time_score}, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
-        debug_print(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score + crash_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, mine safe time score: {mine_safe_time_score}, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
+        debug_print(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score + crash_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, mine safe time score: {mine_safe_time_score}, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}, edge_proximity_score: {edge_proximity_score}, crash_score: {crash_score}")
         if asteroid_safe_time_score > 3:
             self.safety_messages.append("I'm dangerously close to being hit by asteroids. Trying my hardest to maneuver out of this situation.")
         elif asteroid_safe_time_score > 2:
@@ -3418,8 +3429,7 @@ class Neo(KesslerController):
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         if best_action_fitness >= 10:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
-            debug_print("RIP, I'm gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.")
-            print_explanation("RIP, I'm gonna die.", self.current_timestep)
+            print_explanation("RIP, I'm gonna die. I'll stay put and accept my fate.", self.current_timestep)
             if self.stationary_targetting_sim_index:
                 self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
                 best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
@@ -3429,6 +3439,7 @@ class Neo(KesslerController):
             print_explanation(message, self.current_timestep)
         debug_print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness}")
         best_move_sequence = best_action_sim.get_move_sequence()
+        debug_print(f"Best move seq with fitness {best_action_fitness}:", best_move_sequence)
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
         debug_print(f"The action we're taking is from timestep {best_action_sim_state_sequence[0]['timestep']} to {best_action_sim_state_sequence[-1]['timestep']}")
         if VALIDATE_ALL_SIMULATED_STATES and not PRUNE_SIM_STATE_SEQUENCE:
@@ -3559,12 +3570,26 @@ class Neo(KesslerController):
             for _ in range(search_iterations):
                 search_iterations_count += 1
                 if search_iterations_count%1 == 0:
-                    debug_print(f"Respawn search iteration {search_iterations_count}")
+                    #print(f"Respawn search iteration {search_iterations_count}")
                     pass
                 if not self.sims_this_planning_period:
                     # On the first iteration, try the null action. For ring scenarios, it may be best to stay at the center of the ring.
                     random_ship_heading_angle = 0
                     random_ship_accel_turn_rate = 0
+                    random_ship_cruise_speed = 0
+                    random_ship_cruise_turn_rate = 0
+                    random_ship_cruise_timesteps = 0
+                elif len(self.sims_this_planning_period) == 1:
+                    # On the second iteration, try staying still for 1 second (and just turn a little bit so we can use the same framework to do this null movement with a wait)
+                    random_ship_heading_angle = 180
+                    random_ship_accel_turn_rate = 180
+                    random_ship_cruise_speed = 0
+                    random_ship_cruise_turn_rate = 0
+                    random_ship_cruise_timesteps = 0
+                elif len(self.sims_this_planning_period) == 2:
+                    # On the third iteration, try staying still for 2 seconds (and just turn a little bit so we can use the same framework to do this null movement with a wait)
+                    random_ship_heading_angle = 180
+                    random_ship_accel_turn_rate = 90
                     random_ship_cruise_speed = 0
                     random_ship_cruise_turn_rate = 0
                     random_ship_cruise_timesteps = 0
@@ -4046,6 +4071,7 @@ class Neo(KesslerController):
                 print("\nSimulated ship state:", self.base_gamestates[self.current_timestep]['ship_state'])
             assert ship_states_match
         self.reality_move_sequence.append({'thrust': thrust_combined, 'turn_rate': turn_rate_combined, 'fire': fire_combined, 'drop_mine': drop_mine_combined})
+        #print(f"TS: {self.current_timestep}, Thrust: {thrust_combined}, Turn Rate: {turn_rate_combined}, Fire: {fire_combined}, Drop Mine: {drop_mine_combined}")
         return thrust_combined, turn_rate_combined, fire_combined, drop_mine_combined
 
 if __name__ == '__main__':
