@@ -63,6 +63,7 @@ VALIDATE_ALL_SIMULATED_STATES = False
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE = 20 # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
+# TODO: Actually wait, doesn't the rotation timestep fudge just need to be 5, because each stationary targetting is just 5 timesteps long? So using 20 may be overkill!
 UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON = 8
 UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON = 3 # 1 second to turn, 2 seconds for bullet travel time
 asteroid_size_shot_priority = [math.nan, 1, 2, 3, 4] # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
@@ -3469,10 +3470,10 @@ class Neo(KesslerController):
         if best_action_fitness >= 10:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
             print_explanation("RIP, I'm gonna die. I'll stay put and accept my fate.", self.current_timestep)
-            if self.stationary_targetting_sim_index:
-                self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
-                best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
-                best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
+            #if self.stationary_targetting_sim_index:
+            #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
+            #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
+            #    best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         stationary_safety_messages = self.sims_this_planning_period[0]['sim'].get_safety_messages()
         for message in stationary_safety_messages:
             print_explanation(message, self.current_timestep)
