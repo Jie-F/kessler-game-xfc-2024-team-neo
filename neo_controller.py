@@ -333,11 +333,11 @@ def preprocess_bullets(bullets):
         b['tail_delta'] = bullet_tail_delta
     return bullets
 
-def preprocess_bullets_in_gamestate(game_state):
+def preprocess_bullets_in_gamestate(game_state: dict):
     game_state['bullets'] = preprocess_bullets(game_state['bullets'])
     return game_state
 
-def print_explanation(message, current_timestep, time_threshold=EXPLANATION_MESSAGE_SILENCE_INTERVAL_S/DELTA_TIME):
+def print_explanation(message: str, current_timestep: int, time_threshold: float=EXPLANATION_MESSAGE_SILENCE_INTERVAL_S/DELTA_TIME):
     if not PRINT_EXPLANATIONS:
         return
     global explanation_messages_with_timestamps
@@ -352,10 +352,22 @@ def debug_print(*messages):
     if DEBUG_MODE:
         print(*messages)
 
-def evaluate_scenario(game_state, ship_state):
+def inspect_scenario(game_state, ship_state):
     asteroids = game_state['asteroids']
     width = game_state['map_size'][0]
     height = game_state['map_size'][1]
+    asteroids_count, current_count = asteroid_counter(asteroids)
+    if current_count == 0:
+        print_explanation("There's no asteroids on the screen! I'm lonely.")
+        return
+    print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", 0)
+    print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.", 0)
+    if ship_state['bullets_remaining'] == -1:
+        print_explanation(f"Yay I have unlimited bullets!", 0)
+    elif ship_state['bullets_remaining'] == 0:
+        print_explanation("Oh no, I haven't been given any bullets. I'll just hopefully put on a good show and dodge asteroids until the end of time.", 0)
+    else:
+        print_explanation(f"Bullets are limited to letting me shoot {ship_state['bullets_remaining']/asteroids_count:.0%} of the asteroids. If there's another ship, I'll be careful not to let them steal my shots! Otherwise, I'll shoot away!", 0)
 
     def asteroid_density():
         total_asteroid_coverage_area = 0
@@ -383,7 +395,7 @@ def evaluate_scenario(game_state, ship_state):
     current_asteroids, total_asteroids = asteroid_counter(asteroids)
     average_vel = average_velocity()
     avg_speed = average_speed()
-    print(f"Average asteroid density: {average_density}, average vel: {average_vel}, average speed: {avg_speed}")
+    #print(f"Average asteroid density: {average_density}, average vel: {average_vel}, average speed: {avg_speed}")
 
 def asteroid_counter(asteroids: list=None):
     if asteroids is None:
@@ -3812,10 +3824,7 @@ class Neo(KesslerController):
         self.current_timestep += 1
         if self.current_timestep == 0:
             # Only do these on the first timestep
-            asteroids_count, current_count = asteroid_counter(game_state['asteroids'])
-            print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", self.current_timestep)
-            print_explanation(f"At my max shot rate, it'll take {asteroids_count/6:.01f} seconds to clear the field.", self.current_timestep)
-            evaluate_scenario(game_state, ship_state)
+            inspect_scenario(game_state, ship_state)
         debug_print(f"\n\nTimestep {self.current_timestep}, ship id {ship_state['id']} is at {ship_state['position'][0]} {ship_state['position'][1]}")
 
         if not self.init_done:
