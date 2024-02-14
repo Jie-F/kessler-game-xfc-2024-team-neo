@@ -273,7 +273,8 @@ for row in range(num_rows):
 zigzag_motion_scenario = Scenario(
     name="zigzag_motion_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": (500, 400), 'lives': 5, 'mines_remaining': 3}],  # Update with your ship's initial position
+    ship_states=[{"position": (500, 600), 'lives': 5, 'mines_remaining': 3, 'team': 1},
+                 {"position": (500, 200), 'lives': 5, 'mines_remaining': 3, 'team': 2}],  # Update with your ship's initial position
 )
 
 
@@ -1010,3 +1011,35 @@ wrapping_nightmare_fast = Scenario(
     time_limit=60,
     map_size=(width, height),
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+purgatory = Scenario(
+    name='purgatory',
+    asteroid_states=[{'position': (0, 0), 'angle': 0.0, 'speed': 0, 'size': 1}],
+    ship_states=[{'position': (0, 0), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 1}],
+    time_limit=60,
+    map_size=(width, height),
+)
+
+
+
+
+
+
+
+
+
+
+
