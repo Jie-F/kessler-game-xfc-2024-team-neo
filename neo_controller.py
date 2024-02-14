@@ -148,8 +148,12 @@ mine_dropping_fis = ctrl.ControlSystemSimulation(mine_dropping_control)
 
 @lru_cache()
 def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int):
+    debug_print("Mine fis inputs", num_mines_left, num_lives_left, num_asteroids_hit)
     if num_mines_left == 0 or num_asteroids_hit < 8:
         return False
+    num_mines_left = min(num_mines_left, 3)
+    num_lives_left = min(num_lives_left, 3)
+    num_asteroids_hit = min(num_asteroids_hit, asteroids_hit_very_good)
     debug_print(f"Mine fis: Mines left: {num_mines_left}, lives left: {num_lives_left}, asteroids hit: {num_asteroids_hit}")
     mine_dropping_fis.input['mines_left'] = num_mines_left
     mine_dropping_fis.input['lives_left'] = num_lives_left
@@ -1479,7 +1483,11 @@ def check_mine_opportunity(ship_state, game_state):
     #    return True
     mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, ship_state['position'][0], ship_state['position'][1], round(MINE_FUSE_TIME/DELTA_TIME))
     #debug_print(f"Mine count inside: {mine_ast_count} compared to average density amount inside: {average_asteroids_inside_blast_radius}")
-    return mine_fis(ship_state['mines_remaining'], ship_state['lives_remaining'], mine_ast_count)
+    try:
+        return mine_fis(ship_state['mines_remaining'], ship_state['lives_remaining'], mine_ast_count)
+    except Exception as e:
+        print(f"EXCEPTION RAISED IN MINE FIS: {e}")
+        return False
     #if (len(game_state['asteroids']) > 40 and mine_ast_count > 1.5*average_asteroids_inside_blast_radius or mine_ast_count > 20 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
     #    return True
     #else:
