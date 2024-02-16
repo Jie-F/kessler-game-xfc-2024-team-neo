@@ -10,6 +10,7 @@
 # TODO: If extrapolating into the future to get fitness, maybe run update() until mines are exploded. That'll make it so the mines blasting asteroids aren't a surprise!
 # TODO: And do respawn maneuvers also factor in mines blowing up asteroids? I should.
 # TODO: Remove deepcopy
+# TODO: Detect unsurvivable scenarios, and then just tank a hit to avoid having to take more than 1 hit. Like inside a ring with mines
 
 import random
 import math
@@ -991,6 +992,32 @@ def calculate_timesteps_until_bullet_hits_asteroid(time_until_asteroid_center_s,
     # We have to add 1, because it takes 1 timestep for the bullet to originate at the start, before it starts moving
     return 1 + ceil((time_until_asteroid_center_s*BULLET_SPEED - asteroid_radius - SHIP_RADIUS)/BULLET_SPEED/DELTA_TIME)
 
+def asteroid_bullet_collision_orig(line_A, line_B, center, radius):
+    # Check if circle edge is within the outer bounds of the line segment (offset for radius)
+    # Not 100% accurate (some false positives) but fast and rare inaccuracies
+    x_bounds = [min(line_A[0], line_B[0])-radius, max(line_A[0], line_B[0])+radius]
+    if center[0] < x_bounds[0] or center[0] > x_bounds[1]:
+        return False
+    y_bounds = [min(line_A[1], line_B[1])-radius, max(line_A[1], line_B[1])+radius]
+    if center[1] < y_bounds[0] or center[1] > y_bounds[1]:
+        return False
+
+    # calculate side lengths of triangle formed from the line segment and circle center point
+    # round to 4 decimal places to prevent floating point error sqrt(-0) later
+    a = round(math.dist(line_A, center), 4)
+    b = round(math.dist(line_B, center), 4)
+    c = round(math.dist(line_A, line_B), 4)
+
+    # Heron's formula to calculate area of triangle and resultant height (distance from circle center to line segment)
+    s = 0.5 * (a + b + c)
+
+    cen_dist = 2 / c * np.sqrt(s * (s-a) * (s-b) * (s-c))
+
+    # If circle distance to line segment is less than circle radius, they are colliding
+    if cen_dist < radius:
+        return True
+    return False
+
 #@line_profiler.profile
 def asteroid_bullet_collision(bullet_head_position, bullet_tail_position, asteroid_center, asteroid_radius):
     # This is an optimized version of circle_line_collision() from the Kessler source code
@@ -1713,17 +1740,19 @@ class Simulation():
             #    debug_print(f"Inside extrapolated coll time checker. We already have a pending shot for this so we'll ignore this asteroid: {ast_to_string(asteroid)}")
         return next_imminent_asteroid_collision_time
 
-    def get_next_extrapolated_mine_collision_time(self):
-        next_imminent_mine_collision_time = math.inf
+    def get_next_extrapolated_mine_collision_times_and_pos(self) -> list[tuple[float, tuple[float, float]]]:
+        times_and_mine_pos = []
         for m in self.game_state['mines']:
-            next_imminent_mine_collision_time = min(next_imminent_mine_collision_time, predict_ship_mine_collision(self.ship_state['position'][0], self.ship_state['position'][1], self.ship_state['velocity'][0], self.ship_state['velocity'][1], m, 0))
-        return next_imminent_mine_collision_time
+            next_imminent_mine_collision_time = predict_ship_mine_collision(self.ship_state['position'][0], self.ship_state['position'][1], self.ship_state['velocity'][0], self.ship_state['velocity'][1], m, 0)
+            if not math.isinf(next_imminent_mine_collision_time):
+                times_and_mine_pos.append((next_imminent_mine_collision_time, m['position']))
+        return times_and_mine_pos
 
-    def get_next_extrapolated_collision_time(self):
-        next_imminent_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time()
-        next_imminent_mine_collision_time = self.get_next_extrapolated_mine_collision_time()
-        next_imminent_collision_time = min(next_imminent_asteroid_collision_time, next_imminent_mine_collision_time)
-        return next_imminent_collision_time
+    #def get_next_extrapolated_collision_time(self):
+    #    next_imminent_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time()
+    #    next_imminent_mine_collision_time = self.get_next_extrapolated_mine_collision_time()
+    #    next_imminent_collision_time = min(next_imminent_asteroid_collision_time, next_imminent_mine_collision_time)
+    #    return next_imminent_collision_time
 
     def coordinates_in_same_wrap(self, pos1, pos2):
         # Checks whether the coordinates are in the same universe
@@ -1737,22 +1766,22 @@ class Simulation():
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
         # The LOWER the fitness score, the BETTER!
         move_sequence_length_s = (self.get_sequence_length() - 1)*DELTA_TIME
-        next_extrapolated_mine_collision_time = self.get_next_extrapolated_mine_collision_time()
+        next_extrapolated_mine_collision_times = self.get_next_extrapolated_mine_collision_times_and_pos()
         # Regardless of stationary or maneuvering, the mine safe time score is calculated the same way
-        if math.isinf(next_extrapolated_mine_collision_time):
-            mine_safe_time_score = 0
-        else:
-            next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
-            assert -EPS <= next_extrapolated_mine_collision_time <= 3 + EPS
-            closest_mine_dist_square = math.inf
-            for m in self.game_state['mines']:
-                d = dist(self.ship_state['position'], m['position'])
-                if d < closest_mine_dist_square:
-                    closest_mine_dist_square = d
-            # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
-            # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
-            mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - d)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*3
-            mine_safe_time_score = 5 - (5 - 2)/3*next_extrapolated_mine_collision_time + mine_ground_zero_fudge
+        mine_safe_time_score = 0
+        next_extrapolated_mine_collision_time = math.inf
+        if next_extrapolated_mine_collision_times:
+            for mine_collision_time, mine_pos in next_extrapolated_mine_collision_times:
+                next_extrapolated_mine_collision_time = min(next_extrapolated_mine_collision_time, mine_collision_time)
+                #next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
+                if ENABLE_ASSERTIONS:
+                    assert -EPS <= mine_collision_time <= 3 + EPS
+                dist_to_ground_zero = dist(self.ship_state['position'], mine_pos)
+                # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
+                # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
+                mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*10
+                mine_safe_time_score += 15 - 5*mine_collision_time/3 + mine_ground_zero_fudge
+        
         # If mines still have yet to blow up, what we're gonna do is simulate the game until the mines blow up and we know how the mines will blast the asteroids
         # That way, we can accurately tell what the next extrapolated asteroid collision time is
         additional_timesteps_to_blow_up_mines = 0
@@ -2690,8 +2719,8 @@ class Simulation():
                         self.game_state['bullets'].append(new_bullet)
 
                 # Only drop mines at the beginning of the sim
-                # TODO: check the last timestep mined, and the -31 for off by one error. I think mines can be dropped every 31 frames but I'm not sure!
-                if self.future_timesteps == 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 31 and not self.halt_shooting:
+                # We can drop a mine once every 31 frames
+                if self.future_timesteps == 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 32 and not self.halt_shooting:
                     drop_mine_this_timestep = check_mine_opportunity(self.ship_state, self.game_state) # Read only access of the ship and game states
                 else:
                     drop_mine_this_timestep = False
@@ -3469,7 +3498,7 @@ class Neo(KesslerController):
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
         if best_action_fitness >= 10:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
-            print_explanation("RIP, I'm gonna die. I'll stay put and accept my fate.", self.current_timestep)
+            print_explanation("RIP, I'm gonna die", self.current_timestep)
             #if self.stationary_targetting_sim_index:
             #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
             #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
@@ -3591,7 +3620,7 @@ class Neo(KesslerController):
         # The third scenario is that even if we're safe where we are, we may be able to be on the offensive and seek out asteroids to lay mines, so that can also increase the fitness function of moving, making it better than staying still
         # Our number one priority is to stay alive. Second priority is to shoot as much as possible. And if we can, lay mines without putting ourselves in danger.
         if self.game_state_to_base_planning['respawning']:
-            debug_print("Planning respawn maneuver")
+            print("Planning respawn maneuver")
             # Simulate and look for a good move
             #print(f"Checking for imminent danger. We're currently at position {ship_state['position'][0]} {ship_state['position'][1]}")
             #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
@@ -3998,6 +4027,9 @@ class Neo(KesslerController):
                 '''
                 # When there's other ships, stationary targetting is the LAST thing done, just so it can be based off of the reality state
                 # The base state is exact on the final planning timestep, since the base state is the state we're on right now
+                if len(self.get_other_ships(game_state)) == 0:
+                    debug_print("\n\nWe're alone already. Injecting the following game state:")
+                    debug_print(game_state)
                 self.plan_action(self.other_ships_exist, True, iterations_boost, True)
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 self.decide_next_action(preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
