@@ -2312,10 +2312,12 @@ class Simulation():
 
             # Check bullet/asteroid collisions
             bullet_remove_idxs = []
-            asteroid_remove_idxs = []
+            asteroid_remove_idxs = set()
             for b_idx, b in enumerate(bullets + (bullet_created)*[my_bullet]):
                 b_tail = (b['position'][0] + b['tail_delta'][0], b['position'][1] + b['tail_delta'][1])
                 for a_idx, a in enumerate(asteroids):
+                    if a_idx in asteroid_remove_idxs:
+                        continue
                     # If collision occurs
                     if asteroid_bullet_collision(b['position'], b_tail, a['position'], a['radius']):
                         if b_idx == len(bullets):
@@ -2327,31 +2329,29 @@ class Simulation():
                             # Create asteroid splits and mark it for removal
                             new_asteroids_from_collision = forecast_asteroid_bullet_splits(a, 0, bullet_velocity=b['velocity'])
                             asteroids.extend(new_asteroids_from_collision)
-                            asteroid_remove_idxs.append(a_idx)
+                            asteroid_remove_idxs.add(a_idx)
                             # Stop checking this bullet
                             break
             # Remove bullets and asteroids
             if bullet_remove_idxs:
                 bullets = [bullet for idx, bullet in enumerate(bullets) if idx not in bullet_remove_idxs]
-            if asteroid_remove_idxs:
-                asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
 
             # Check mine/asteroid collisions
             mine_remove_idxs = []
-            asteroid_remove_idxs = set() # Use a set, since this is the only case where we may have many asteroids removed at once
             new_asteroids = []
             for m_idx, mine in enumerate(mines):
                 if mine['remaining_time'] < EPS:
                     # Mine is detonating
+                    print('MINE DETONIATGIN GGGG IN BULLET SIM')
                     mine_remove_idxs.append(m_idx)
                     for a_idx, asteroid in enumerate(asteroids):
+                        if a_idx in asteroid_remove_idxs:
+                            continue
                         if check_collision(asteroid['position'][0], asteroid['position'][1], asteroid['radius'], mine['position'][0], mine['position'][1], MINE_BLAST_RADIUS):
                             new_asteroids.extend(forecast_asteroid_mine_splits(a, 0, mine, self.game_state, True))
                             asteroid_remove_idxs.add(a_idx)
             if mine_remove_idxs:
                 mines = [mine for idx, mine in enumerate(mines) if idx not in mine_remove_idxs]
-            if asteroid_remove_idxs:
-                asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
             asteroids.extend(new_asteroids)
 
             # Check ship/asteroid collisions
@@ -2362,19 +2362,20 @@ class Simulation():
                     ship_position = ship_state['position']
                 else:
                     ship_position = self.ship_state['position']
-                asteroid_remove_idxs = []
                 for a_idx, asteroid in enumerate(asteroids):
+                    if a_idx in asteroid_remove_idxs:
+                        continue
                     if check_collision(ship_position[0], ship_position[1], SHIP_RADIUS, asteroid['position'][0], asteroid['position'][1], asteroid['radius']):
                         # TODO: ADD IN SHIP VELOCITY INSTEAD OF ASSUMING 0
                         new_asteroids_from_collision = forecast_asteroid_ship_splits(asteroid, 0, (0, 0), self.game_state, True)
                         asteroids.extend(new_asteroids_from_collision)
-                        asteroid_remove_idxs.append(a_idx)
+                        asteroid_remove_idxs.add(a_idx)
                         # Stop checking this ship's collisions. And also return saying the ship took damage!
                         ship_not_collided_with_asteroid = False
                         break
-                # Cull asteroids marked for removal
-                if asteroid_remove_idxs:
-                    asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
+            # Cull asteroids marked for removal
+            if asteroid_remove_idxs:
+                asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
 
     def apply_move_sequence(self, move_sequence: list=None):
         if move_sequence is None:
