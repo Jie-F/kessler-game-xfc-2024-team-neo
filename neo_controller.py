@@ -1438,6 +1438,7 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict, current_timestep: i
     return asteroids_pending_death
 
 def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(asteroids_pending_death: dict, current_timestep: int, game_state: dict, asteroid: dict, wrap: bool=True):
+    #print('\nEntering asteroid shot checker!')
     def verify_asteroid_does_not_appear_in_wrong_timestep(a):
         for timestep, asts_list in asteroids_pending_death.items():
             if is_asteroid_in_list(asts_list, a):
@@ -1516,7 +1517,6 @@ class Simulation():
         self.game_state['ships'] = [dict(s) for s in game_state['ships']]
         self.game_state['bullets'] = [dict(b) for b in game_state['bullets']]
         self.game_state['mines'] = [dict(m) for m in game_state['mines']]
-        # TODO: Comprehension
         self.other_ships = []
         for ship in game_state['ships']:
             if ship['id'] != ship_state['id']:
@@ -1603,7 +1603,7 @@ class Simulation():
             self.game_state['mines'] = [mine for idx, mine in enumerate(self.game_state['mines']) if idx not in mine_remove_idxs]
         return mine_collision
 
-    def get_next_extrapolated_asteroid_collision_time(self):
+    def get_next_extrapolated_asteroid_collision_time(self, additional_timesteps_to_blow_up_mines: int=0):
         #debug_print(f"Inside get fitness, we shot {self.asteroids_shot} asteroids. getting extrapolated collision time. The ship's velocity is: ({self.ship_state['velocity'][0]}, {self.ship_state['velocity'][1]})")
         # Assume constant velocity from here
         next_imminent_asteroid_collision_time = math.inf
@@ -1630,11 +1630,14 @@ class Simulation():
                     # There is no collision since the asteroid is born after our predicted collision time, and an unborn asteroid can't collide with anything
                     debug_print("There is no collision since the unborn asteroid can't collide with anything")
                 else:
-                    if not check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid):
+                    next_imminent_asteroid_collision_time = math.inf
+                    #print('CHECKING FROM GET EXTRAP COLL TIME')
+                    if not check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + additional_timesteps_to_blow_up_mines, self.game_state, asteroid):
                         # We're already shooting the asteroid. Check whether the imminent collision time is before or after the asteroid is eliminated
                         predicted_collision_ts = floor(predicted_collision_time/DELTA_TIME)
                         future_asteroid_during_imminent_collision_time = time_travel_asteroid(a, predicted_collision_ts, self.game_state, True)
-                        if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + predicted_collision_ts, self.game_state, future_asteroid_during_imminent_collision_time):
+                        #print('CHECKING FROM GET EXTRAP COLL TIME INNER')
+                        if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + additional_timesteps_to_blow_up_mines + predicted_collision_ts, self.game_state, future_asteroid_during_imminent_collision_time):
                             # In the future time the asteroid has already been eliminated, so there won't actually be a collision
                             debug_print("In the future time the asteroid has already been eliminated, so there won't actually be a collision")
                             continue
@@ -1708,7 +1711,7 @@ class Simulation():
             self.update(0, 0, 0, None, True)
         if additional_timesteps_to_blow_up_mines:
             debug_print(f"In get fitness, waited an additional {additional_timesteps_to_blow_up_mines} timesteps to blow up mines!")
-        next_extrapolated_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time() + additional_timesteps_to_blow_up_mines*DELTA_TIME
+        next_extrapolated_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time(additional_timesteps_to_blow_up_mines) + additional_timesteps_to_blow_up_mines*DELTA_TIME
         safe_time_after_maneuver_s = min(next_extrapolated_asteroid_collision_time, next_extrapolated_mine_collision_time)
         
         states = self.get_state_sequence()
@@ -1902,6 +1905,7 @@ class Simulation():
         asteroids_still_exist = False
         #print(self.forecasted_asteroid_splits)
         for asteroid in self.game_state['asteroids'] + self.forecasted_asteroid_splits:
+            #print('CHECKING FROM TARG SEL')
             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid):
                 asteroids_still_exist = True
                 #print(f"\nOn TS {self.initial_timestep + self.future_timesteps} We do not have a pending shot for the asteroid {ast_to_string(asteroid)}")
@@ -1984,8 +1988,9 @@ class Simulation():
                         assert most_imminent_asteroid_aiming_timesteps == timesteps_until_can_fire
                     # I can reach the imminent shot without wasting a shot opportunity, so do it
                     actual_asteroid_hit, aiming_move_sequence, target_asteroid, target_asteroid_shooting_angle_error_deg, target_asteroid_interception_time_s, target_asteroid_turning_timesteps, timesteps_until_bullet_hit_asteroid, ship_state_after_aiming = simulate_shooting_at_target(most_imminent_asteroid, most_imminent_asteroid_shooting_angle_error_deg, most_imminent_asteroid_interception_time_s, most_imminent_asteroid_aiming_timesteps)
-                    if actual_asteroid_hit:
+                    if actual_asteroid_hit is not None:
                         actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
+                        #print('CHECKING FROM TARG SELLLL')
                         if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing):
                             break
                     #    print(f"DANG IT, the most imminent shot exists but we'll miss if we shoot now!")
@@ -2019,7 +2024,7 @@ class Simulation():
                         #debug_print('As our target were choosing this one which will be on our way:')
                         #debug_print(target)
                         actual_asteroid_hit, aiming_move_sequence, target_asteroid, target_asteroid_shooting_angle_error_deg, target_asteroid_interception_time_s, target_asteroid_turning_timesteps, timesteps_until_bullet_hit_asteroid, ship_state_after_aiming = simulate_shooting_at_target(target['asteroid'], target['shooting_angle_error_deg'], target['interception_time_s'], target['aiming_timesteps_required'])
-                        if actual_asteroid_hit:
+                        if actual_asteroid_hit is not None:
                             actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
                             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing):
                                 break
@@ -2027,7 +2032,7 @@ class Simulation():
                     else:
                         # Just gonna have to waste shot opportunities and turn all the way
                         actual_asteroid_hit, aiming_move_sequence, target_asteroid, target_asteroid_shooting_angle_error_deg, target_asteroid_interception_time_s, target_asteroid_turning_timesteps, timesteps_until_bullet_hit_asteroid, ship_state_after_aiming = simulate_shooting_at_target(most_imminent_asteroid, most_imminent_asteroid_shooting_angle_error_deg, most_imminent_asteroid_interception_time_s, most_imminent_asteroid_aiming_timesteps)
-                        if actual_asteroid_hit:
+                        if actual_asteroid_hit is not None:
                             actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
                             if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing):
                                 break
@@ -2057,8 +2062,13 @@ class Simulation():
                     least_shot_delay_asteroid_interception_time_s = target['interception_time_s']
                     least_shot_delay_asteroid_aiming_timesteps = target['aiming_timesteps_required']
                     actual_asteroid_hit, aiming_move_sequence, target_asteroid, target_asteroid_shooting_angle_error_deg, target_asteroid_interception_time_s, target_asteroid_turning_timesteps, timesteps_until_bullet_hit_asteroid, ship_state_after_aiming = simulate_shooting_at_target(least_shot_delay_asteroid, least_shot_delay_asteroid_shooting_angle_error_deg, least_shot_delay_asteroid_interception_time_s, least_shot_delay_asteroid_aiming_timesteps)
-                    if actual_asteroid_hit is not None and check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, actual_asteroid_hit):
-                        break
+                    if actual_asteroid_hit is not None:
+                        actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
+                        if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing):
+                            break
+                    # TODO: Idk why before it was the following two lines and didn't back-extrapolate. But it seems fine anyway? Maybe it's not necessary to do here, but it is necessary in the other places above. Idk, my code's a mess.
+                    #if actual_asteroid_hit is not None and check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, actual_asteroid_hit):
+                    #    break
                 #if not actual_asteroid_hit:
                 #    print(f"DANG IT, we went through all asteroids with least shot delay and we'll miss them ALL!")
             else:
@@ -2098,7 +2108,7 @@ class Simulation():
         # Timestep [self.initial_timestep + self.future_timesteps + len(aiming_move_sequence)] gives us the timestep after we do our aiming, and when we shoot our bullet
         # Timestep [self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid] gives us the timestep the asteroid got hit
 
-        if actual_asteroid_hit:
+        if actual_asteroid_hit is not None:
             actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
         if actual_asteroid_hit is None or not check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing):
             self.fire_next_timestep_flag = False
@@ -2129,7 +2139,8 @@ class Simulation():
             #print(f"Asserting that we don't have a pending shot for asteroid {ast_to_string(actual_asteroid_hit_when_firing)} on timestep {self.initial_timestep + self.future_timesteps + len(aiming_move_sequence)}")
             if ENABLE_ASSERTIONS:
                 assert check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, actual_asteroid_hit_when_firing)
-            
+                #assert check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence) - 1, self.game_state, actual_asteroid_hit_when_firing)
+
             #actual_asteroid_hit_UNEXTRAPOLATED = dict(actual_asteroid_hit)
             # This back-extrapolates the asteroid to when we're firing our bullet
             
@@ -2149,11 +2160,11 @@ class Simulation():
             #print(f'\n\nTracking that we shot at the asteroid {ast_to_string(actual_asteroid_hit_at_present_time)} at the timestep after turning {self.initial_timestep + self.future_timesteps + len(aiming_move_sequence) - 1}')
             #print(self.asteroids_pending_death)
             #print(f"Move seq is len {len(aiming_move_sequence)} and is {aiming_move_sequence}")
-            if math.isclose(66.07210994416783, actual_asteroid_hit_when_firing['velocity'][0]):
-                print(f'\nboop! self.initial_timestep {self.initial_timestep} self.future_timesteps {self.future_timesteps} aiming_move_sequence {aiming_move_sequence}')
-            if math.isclose(-381.9747576672315, actual_asteroid_hit_when_firing['velocity'][0]):
+            if math.isclose(74.7312559153649, actual_asteroid_hit_when_firing['velocity'][0]):
+                print(f'\nboop! self.initial_timestep {self.initial_timestep} self.future_timesteps {self.future_timesteps} aiming_move_sequence {aiming_move_sequence}, asteroid on this initial plus future ts: {actual_asteroid_hit_when_firing}')
+            if math.isclose(80.34318969473944, actual_asteroid_hit_when_firing['velocity'][0]):
                 print(f'beep! self.initial_timestep {self.initial_timestep} self.future_timesteps {self.future_timesteps} aiming_move_sequence {aiming_move_sequence}')
-            self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence) - 1, self.game_state, timesteps_until_bullet_hit_asteroid - len(aiming_move_sequence), actual_asteroid_hit_when_firing)
+            self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + len(aiming_move_sequence), self.game_state, timesteps_until_bullet_hit_asteroid - len(aiming_move_sequence), actual_asteroid_hit_when_firing)
             #print(self.asteroids_pending_death)
             # Forecasted splits get progressed while doing the move sequence which includes rotation, so we need to start the forecast before the rotation even starts
             self.forecasted_asteroid_splits.extend(forecast_asteroid_bullet_splits(actual_asteroid_hit_at_present_time, timesteps_until_bullet_hit_asteroid, bullet_heading_deg=ship_state_after_aiming['heading'], game_state=self.game_state, wrap=True))
@@ -2187,6 +2198,7 @@ class Simulation():
         #asteroids = [dict(a) for a in self.game_state['asteroids']]
         #mines = [dict(m) for m in self.game_state['mines']]
         #bullets = [dict(b) for b in self.game_state['bullets']]
+        asteroid_update_count_sanity_check = 0
         asteroids = copy.deepcopy(self.game_state['asteroids'])
         mines = copy.deepcopy(self.game_state['mines'])
         bullets = copy.deepcopy(self.game_state['bullets'])
@@ -2237,6 +2249,7 @@ class Simulation():
                 for m in mines:
                     m['remaining_time'] -= DELTA_TIME
                 
+                asteroid_update_count_sanity_check += 1
                 for a in asteroids:
                     a['position'] = wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME), self.game_state['map_size'])
             
@@ -2331,6 +2344,7 @@ class Simulation():
                     if asteroid_bullet_collision(b['position'], b_tail, a['position'], a['radius']):
                         if b_idx == len(bullets):
                             # This bullet is my bullet!
+                            assert asteroid_update_count_sanity_check == timesteps_until_bullet_hit_asteroid
                             return a, timesteps_until_bullet_hit_asteroid, ship_not_collided_with_asteroid
                         else:
                             # Mark bullet for removal
@@ -2495,7 +2509,8 @@ class Simulation():
                         for asteroid in self.game_state['asteroids']:
                             if fire_this_timestep:
                                 break
-                            if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid):
+                            #print('CHECKING FROM UPDATE')
+                            if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                 unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON)
                                 for a in unwrapped_asteroids:
                                     if fire_this_timestep:
@@ -2512,12 +2527,15 @@ class Simulation():
                                             # TODO: Check to make sure this following statement is fine
                                             if actual_asteroid_hit is not None and ship_was_safe:
                                                 actual_asteroid_hit_at_fire_time = time_travel_asteroid(actual_asteroid_hit, -timesteps_until_bullet_hit_asteroid, self.game_state, True)
-                                                if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, actual_asteroid_hit_at_fire_time):
+                                                #print('CHECKING FROM UPDATE INNER LOP')
+                                                if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, actual_asteroid_hit_at_fire_time):
                                                     fire_this_timestep = True
                                                     self.asteroids_shot += 1
                                                     #print(f"Tracking that we shot at the asteroid {ast_to_string(asteroid)}")
                                                     self.forecasted_asteroid_splits.extend(forecast_asteroid_bullet_splits(actual_asteroid_hit_at_fire_time, timesteps_until_bullet_hit_asteroid, bullet_heading_deg=self.ship_state['heading'], game_state=self.game_state, wrap=True))
-                                                    self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
+                                                    if math.isclose(80.34318969473944, actual_asteroid_hit_at_fire_time['velocity'][0]):
+                                                        print(f'\nbLEEP! self.initial_timestep {self.initial_timestep} self.future_timesteps {self.future_timesteps}, asteroid on this initial plus future ts: {actual_asteroid_hit_at_fire_time}, ts until bull hits ast {timesteps_until_bullet_hit_asteroid}')
+                                                    self.asteroids_pending_death = track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
                                                     break
                     elif timesteps_until_can_fire == 1:
                         # We're able to fire on the next timestep. We can use this timestep to aim for an asteroid, and we have 6 degrees we're able to turn our ship to do that
@@ -2527,7 +2545,8 @@ class Simulation():
                         for asteroid in self.game_state['asteroids']:
                             if locked_in:
                                 break
-                            if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, asteroid):
+                            #print('CHECKING FROM UPDATE ONE TS UNTIL CAN FIRE')
+                            if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                 unwrapped_asteroids = unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON)
                                 for a in unwrapped_asteroids:
                                     if locked_in:
@@ -3439,7 +3458,6 @@ class Neo(KesslerController):
                     assert self.current_timestep == 0
                 if self.current_timestep == 0:
                     iterations_boost = True
-                # TODO: On the first timestep, spend more time planning actions in case we need to immediately evade!
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
                     'respawning': False, # On the first timestep 0, the is_respawning flag is ALWAYS false, even if we spawn inside asteroids.
@@ -3460,7 +3478,6 @@ class Neo(KesslerController):
             else:
                 self.plan_action(self.other_ships_exist, True, iterations_boost, False)
             if not self.action_queue:
-                # TODO: REENABLE THIS MIN ITERATIONS THING
                 while len(self.sims_this_planning_period) < 6:
                     debug_print("Planning extra iterations!")
                     self.plan_action(self.other_ships_exist, True, False, False)
