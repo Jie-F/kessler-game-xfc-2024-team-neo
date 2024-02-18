@@ -43,7 +43,7 @@ PRINT_EXPLANATIONS = True
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S = 5 # Repeated messages within this time window get silenced
 
 # State dumping for debug
-REALITY_STATE_DUMP = True
+REALITY_STATE_DUMP = False
 SIMULATION_STATE_DUMP = False
 KEY_STATE_DUMP = False
 gamestate_plotting = False
@@ -54,8 +54,6 @@ start_gamestate_plotting_at_second = None
 new_target_plot_pause_time_s = 0.5
 slow_down_game_after_second = math.inf
 slow_down_game_pause_time = 2
-
-USE_SPATIAL_HASHING = False
 
 # These can trade off to get better performance at the expense of safety
 ENABLE_ASSERTIONS = True
@@ -960,19 +958,18 @@ def forecast_asteroid_splits(a, timesteps_until_appearance: int, vfx, vfy, game_
 
 def maintain_forecasted_asteroids(forecasted_asteroid_splits, game_state=None, wrap=False):
     # Maintain the list of projected split asteroids by advancing the position, decreasing the timestep, and facilitate removal
-    new_forecasted_asteroids = []
-    for forecasted_asteroid in forecasted_asteroid_splits:
-        if forecasted_asteroid['timesteps_until_appearance'] > 1:
-            new_a = {
-                'position': wrap_position((forecasted_asteroid['position'][0] + forecasted_asteroid['velocity'][0]*DELTA_TIME, forecasted_asteroid['position'][1] + forecasted_asteroid['velocity'][1]*DELTA_TIME), game_state['map_size']) if wrap and game_state is not None else (forecasted_asteroid['position'][0] + forecasted_asteroid['velocity'][0]*DELTA_TIME, forecasted_asteroid['position'][1] + forecasted_asteroid['velocity'][1]*DELTA_TIME),
-                'velocity': forecasted_asteroid['velocity'],
-                'size': forecasted_asteroid['size'],
-                'mass': forecasted_asteroid['mass'],
-                'radius': forecasted_asteroid['radius'],
-                'timesteps_until_appearance': forecasted_asteroid['timesteps_until_appearance'] - 1,
-            }
-            new_forecasted_asteroids.append(new_a)
-    return new_forecasted_asteroids
+    return [{
+        'position': wrap_position((forecasted_asteroid['position'][0] + forecasted_asteroid['velocity'][0]*DELTA_TIME,
+            forecasted_asteroid['position'][1] + forecasted_asteroid['velocity'][1]*DELTA_TIME),
+            game_state['map_size']) if wrap and game_state is not None else (
+            forecasted_asteroid['position'][0] + forecasted_asteroid['velocity'][0]*DELTA_TIME,
+            forecasted_asteroid['position'][1] + forecasted_asteroid['velocity'][1]*DELTA_TIME),
+        'velocity': forecasted_asteroid['velocity'],
+        'size': forecasted_asteroid['size'],
+        'mass': forecasted_asteroid['mass'],
+        'radius': forecasted_asteroid['radius'],
+        'timesteps_until_appearance': forecasted_asteroid['timesteps_until_appearance'] - 1,
+    } for forecasted_asteroid in forecasted_asteroid_splits if forecasted_asteroid['timesteps_until_appearance'] > 1]
 
 def is_asteroid_in_list(list_of_asteroids: list[dict], a: dict, tolerance: float=EPS):
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
@@ -2495,6 +2492,8 @@ class Simulation():
         for a in self.game_state['asteroids']:
             a['position'] = wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME), self.game_state['map_size'])
         if not wait_out_mines:
+            self.forecasted_asteroid_splits = maintain_forecasted_asteroids(self.forecasted_asteroid_splits, self.game_state, True)
+        if not wait_out_mines:
             # Simulate the ship!
             # Bullet firing happens before we turn the ship
             # Check whether we want to shoot a simulated bullet
@@ -2524,7 +2523,6 @@ class Simulation():
                                             # Use the bullet sim to confirm that this will hit
                                             bullet_sim_timestep_limit = ceil(interception_time/DELTA_TIME) + 1
                                             actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit)
-                                            # TODO: Check to make sure this following statement is fine
                                             if actual_asteroid_hit is not None and ship_was_safe:
                                                 actual_asteroid_hit_at_fire_time = time_travel_asteroid(actual_asteroid_hit, -timesteps_until_bullet_hit_asteroid, self.game_state, True)
                                                 #print('CHECKING FROM UPDATE INNER LOP')
@@ -2731,9 +2729,6 @@ class Simulation():
                         self.ship_state['is_respawning'] = True
                         self.ship_state['speed'] = 0
                         self.respawn_timer = 3
-                # TODO: What is this?: As a bandaid, we'll just clear the list of predicted asteroids since the mine blowing up will completely affect this!
-                #self.forecasted_asteroid_splits.clear()
-                #assert not self.forecasted_asteroid_splits
         if mine_remove_idxs:
             self.game_state['mines'] = [mine for idx, mine in enumerate(self.game_state['mines']) if idx not in mine_remove_idxs]
         self.game_state['asteroids'].extend(new_asteroids)
@@ -2771,8 +2766,6 @@ class Simulation():
                     self.ship_state['is_respawning'] = True
                     self.ship_state['speed'] = 0
                     self.respawn_timer = 3
-
-            self.forecasted_asteroid_splits = maintain_forecasted_asteroids(self.forecasted_asteroid_splits, self.game_state, True)
             self.future_timesteps += 1
             self.game_state['sim_frame'] += 1
         if return_value is None:
@@ -3054,8 +3047,6 @@ class Neo(KesslerController):
         # Made this change, because if we're waiting out mines, that'll mess up the game state. But the state sequence still has the last actual game state, so we'll use that!
         #next_base_game_state = best_action_sim_last_state['game_state']
         #print(f'\nNext base game state for timestep {best_action_sim_last_state["timestep"]}:')
-        #print(next_base_game_state)
-        #forecasted_asteroid_splits = maintain_forecasted_asteroids(forecasted_asteroid_splits, game_state, True)
         self.set_of_base_gamestate_timesteps.add(best_action_sim_last_state['timestep'])
         new_ship_state = best_action_sim.get_ship_state()
         new_fire_next_timestep_flag = best_action_sim.get_fire_next_timestep_flag()
