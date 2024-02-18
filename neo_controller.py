@@ -946,14 +946,22 @@ def forecast_asteroid_splits(a, timesteps_until_appearance: int, vfx, vfy, game_
     split_angle = 15
     angles = [theta + split_angle, theta, theta - split_angle]
     # This is wacky because we're back-extrapolation the position of the asteroid BEFORE IT WAS BORN!!!!11!
-
-    forecasted_asteroids = [{'position': wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME), game_state['map_size']) if game_state and wrap else (a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME),
-                             'velocity': (v*cos(radians(angle)), v*sin(radians(angle))),
-                             'size': a['size'] - 1,
-                             'mass': ASTEROID_MASS_LOOKUP[a['size'] - 1],
-                             'radius': ASTEROID_RADII_LOOKUP[a['size'] - 1],
-                             'timesteps_until_appearance': timesteps_until_appearance}
-                               for angle in angles]
+    new_size = a['size'] - 1
+    if timesteps_until_appearance == 0:
+        forecasted_asteroids = [{'position': wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME), game_state['map_size']) if game_state and wrap else (a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME),
+                                'velocity': (v*cos(radians(angle)), v*sin(radians(angle))),
+                                'size': new_size,
+                                'mass': ASTEROID_MASS_LOOKUP[new_size],
+                                'radius': ASTEROID_RADII_LOOKUP[new_size]}
+                                for angle in angles]
+    else:
+        forecasted_asteroids = [{'position': wrap_position((a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME), game_state['map_size']) if game_state and wrap else (a['position'][0] + a['velocity'][0]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*cos(radians(angle))*v*DELTA_TIME, a['position'][1] + a['velocity'][1]*DELTA_TIME*timesteps_until_appearance - timesteps_until_appearance*sin(radians(angle))*v*DELTA_TIME),
+                                'velocity': (v*cos(radians(angle)), v*sin(radians(angle))),
+                                'size': a['size'] - 1,
+                                'mass': ASTEROID_MASS_LOOKUP[new_size],
+                                'radius': ASTEROID_RADII_LOOKUP[new_size],
+                                'timesteps_until_appearance': timesteps_until_appearance}
+                                for angle in angles]
     return forecasted_asteroids
 
 def maintain_forecasted_asteroids(forecasted_asteroid_splits, game_state=None, wrap=False):
@@ -1435,12 +1443,10 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict, current_timestep: i
     return asteroids_pending_death
 
 def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(asteroids_pending_death: dict, current_timestep: int, game_state: dict, asteroid: dict, wrap: bool=True):
-    #print('\nEntering asteroid shot checker!')
     def verify_asteroid_does_not_appear_in_wrong_timestep(a):
         for timestep, asts_list in asteroids_pending_death.items():
             if is_asteroid_in_list(asts_list, a):
-                #if current_timestep + 1 != timestep:
-                print(f"Asteroid {ast_to_string(a)} from actual ts {current_timestep} appears in list on ts {timestep} with a delta of {timestep - current_timestep}!")
+                raise Exception(f"Asteroid {ast_to_string(a)} from actual ts {current_timestep} appears in list on ts {timestep} with a delta of {timestep - current_timestep}!")
                 return False
         return True
 
@@ -1627,13 +1633,10 @@ class Simulation():
                     # There is no collision since the asteroid is born after our predicted collision time, and an unborn asteroid can't collide with anything
                     debug_print("There is no collision since the unborn asteroid can't collide with anything")
                 else:
-                    next_imminent_asteroid_collision_time = math.inf
-                    #print('CHECKING FROM GET EXTRAP COLL TIME')
                     if not check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + additional_timesteps_to_blow_up_mines, self.game_state, asteroid):
                         # We're already shooting the asteroid. Check whether the imminent collision time is before or after the asteroid is eliminated
                         predicted_collision_ts = floor(predicted_collision_time/DELTA_TIME)
                         future_asteroid_during_imminent_collision_time = time_travel_asteroid(a, predicted_collision_ts, self.game_state, True)
-                        #print('CHECKING FROM GET EXTRAP COLL TIME INNER')
                         if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + additional_timesteps_to_blow_up_mines + predicted_collision_ts, self.game_state, future_asteroid_during_imminent_collision_time):
                             # In the future time the asteroid has already been eliminated, so there won't actually be a collision
                             debug_print("In the future time the asteroid has already been eliminated, so there won't actually be a collision")
@@ -1662,6 +1665,175 @@ class Simulation():
         return pos1[0]//max_width == pos2[0]//max_width and pos1[1]//max_height == pos2[1]//max_height
 
     def get_fitness(self):
+        # This will return a scalar number representing how good of an action/state sequence we just went through
+        # If these moves will keep us alive for a long time and shoot many asteroids along the way, then the fitness is good
+        # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
+        # The LOWER the fitness score, the BETTER!
+        move_sequence_length_s = (self.get_sequence_length() - 1)*DELTA_TIME
+        next_extrapolated_mine_collision_times = self.get_next_extrapolated_mine_collision_times_and_pos()
+        # Regardless of stationary or maneuvering, the mine safe time score is calculated the same way
+        mine_safe_time_fitness = 0
+        next_extrapolated_mine_collision_time = math.inf
+        if next_extrapolated_mine_collision_times:
+            for mine_collision_time, mine_pos in next_extrapolated_mine_collision_times:
+                next_extrapolated_mine_collision_time = min(next_extrapolated_mine_collision_time, mine_collision_time)
+                #next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
+                if ENABLE_ASSERTIONS:
+                    assert -EPS <= mine_collision_time <= 3 + EPS
+                dist_to_ground_zero = dist(self.ship_state['position'], mine_pos)
+                # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
+                # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
+                mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*10
+                mine_safe_time_fitness += 15 - 5*mine_collision_time/3 + mine_ground_zero_fudge
+        
+        # Iterate over all asteroids and get their heading angle from the ship, and see whether it's within +-30 degrees of the ship's heading
+        asteroid_aiming_cone_fitness = 0
+        ship_heading = self.ship_state['heading']
+        ship_pos = self.ship_state['position']
+        asts_within_cone = 0
+        for a in self.game_state['asteroids']:
+            theta = math.degrees(math.atan2(a['position'][1] - ship_pos[1], a['position'][0] - ship_pos[0]))
+            if abs(ship_heading - theta) <= 30 or abs(360 - abs(ship_heading - theta)) <= 30:
+                asts_within_cone += 1
+        if asts_within_cone == 0:
+            asteroid_aiming_cone_fitness = 0.8
+
+        # If mines still have yet to blow up, what we're gonna do is simulate the game until the mines blow up and we know how the mines will blast the asteroids
+        # That way, we can accurately tell what the next extrapolated asteroid collision time is
+        additional_timesteps_to_blow_up_mines = 0
+        if self.game_state['mines']:
+            self.backed_up_game_state_before_post_mutation = dict(self.game_state)
+            self.backed_up_game_state_before_post_mutation['asteroids'] = [dict(a) for a in self.game_state['asteroids']]
+            self.backed_up_game_state_before_post_mutation['mines'] = [dict(m) for m in self.game_state['mines']]
+            self.backed_up_game_state_before_post_mutation['bullets'] = [dict(b) for b in self.game_state['bullets']]
+        while self.game_state['mines']:
+            additional_timesteps_to_blow_up_mines += 1
+            self.update(0, 0, 0, None, True)
+        if additional_timesteps_to_blow_up_mines:
+            debug_print(f"In get fitness, waited an additional {additional_timesteps_to_blow_up_mines} timesteps to blow up mines!")
+        next_extrapolated_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time(additional_timesteps_to_blow_up_mines) + additional_timesteps_to_blow_up_mines*DELTA_TIME
+        safe_time_after_maneuver_s = min(next_extrapolated_asteroid_collision_time, next_extrapolated_mine_collision_time)
+        
+        states = self.get_state_sequence()
+        
+        ship_start_position = states[0]['ship_state']['position']
+        ship_end_position = states[-1]['ship_state']['position']
+
+        if len(states) >= 2:
+            displacement = dist(ship_start_position, ship_end_position)
+        else:
+            displacement = 0
+        #displacement_score = displacement/1000 # TODO: If wrapped, this score will be disporportionately big. Ideally account for that by unwrapping somehow
+        displacement_fitness = 0
+
+
+
+
+
+
+        if displacement < EPS:
+            # Stationary
+            # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
+            asteroid_safe_time_fitness = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time))
+        else:
+            # Maneuvering
+            asteroid_safe_time_fitness = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time))
+
+
+
+
+
+
+
+
+        asteroids_shot = self.asteroids_shot
+        if asteroids_shot < 0:
+            # This is to signal that we won't hit anything ever if we're staying here, so we should defer to the maneuver subcontroller to force a move
+            debug_print(f"Deferring to maneuver subcontroller! Forcing a move.")
+            asteroids_fitness = 1
+        else:
+            if asteroids_shot == 0:
+                asteroids_shot = 0.1
+            time_per_asteroids_shot = move_sequence_length_s/asteroids_shot
+            asteroids_fitness = min(1.5, time_per_asteroids_shot/3)
+
+
+
+
+
+
+
+
+
+        other_ship_proximity_fitness = 0
+        ship_proximity_max_penalty = 6
+        ship_proximity_detection_radius = 400
+        ship_prox_exponent = 3
+        for other_ship in self.other_ships:
+            other_ship_pos_x, other_ship_pos_y = other_ship['position']
+            other_ship_vel_x, other_ship_vel_y = other_ship['velocity']
+            other_ship_speed = sqrt(other_ship_vel_x*other_ship_vel_x + other_ship_vel_y*other_ship_vel_y)
+            prox_score_speed_mul = min(1, other_ship_speed/100)*0.7 + 0.3
+            self_pos_x, self_pos_y = ship_end_position#self.ship_state['position']
+            # Account for wrap. We know that the farthest two objects can be separated within the screen in the x and y axes, is by half the width, and half the height
+            abs_sep_x = abs(self_pos_x - other_ship_pos_x)
+            abs_sep_y = abs(self_pos_y - other_ship_pos_y)
+            sep_x = min(abs_sep_x, self.game_state['map_size'][0] - abs_sep_x)
+            sep_y = min(abs_sep_y, self.game_state['map_size'][1] - abs_sep_y)
+            separation_dist = sqrt(sep_x*sep_x + sep_y*sep_y)
+            if separation_dist < ship_proximity_detection_radius:
+                other_ship_proximity_fitness += prox_score_speed_mul*ship_proximity_max_penalty/(ship_proximity_detection_radius**ship_prox_exponent)*(ship_proximity_detection_radius - separation_dist)**ship_prox_exponent
+        #print(f"Prox score: {other_ship_proximity_score}")
+        sequence_length_fitness = move_sequence_length_s/10
+
+
+
+
+
+
+
+
+        if self.ship_crashed:
+            crash_fitness = 0
+        else:
+            crash_fitness = 1
+        
+
+
+
+
+
+
+        debug_print(f"Fitness: {asteroid_safe_time_fitness + mine_safe_time_fitness + asteroids_fitness + sequence_length_fitness + displacement_fitness + other_ship_proximity_fitness + crash_fitness}, Ast safe time score: {asteroid_safe_time_fitness} (safe time after maneuver is {safe_time_after_maneuver_s} s, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_fitness}, sequence length score: {sequence_length_fitness}, displacement score: {displacement_fitness}, other ship prox score: {other_ship_proximity_fitness}")
+        #self.explanation_messages.append(f"Fitness: {asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score}, Ast safe time score: {asteroid_safe_time_score} (safe time after maneuver is {safe_time_after_maneuver_s} s, mine safe time score: {mine_safe_time_score}, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_score}, sequence length score: {sequence_length_score}, displacement score: {displacement_score}, other ship prox score: {other_ship_proximity_score}")
+        debug_print(f"Fitness: {asteroid_safe_time_fitness + mine_safe_time_fitness + asteroids_fitness + sequence_length_fitness + displacement_fitness + other_ship_proximity_fitness + crash_fitness}, Ast safe time score: {asteroid_safe_time_fitness} (safe time after maneuver is {safe_time_after_maneuver_s} s, mine safe time score: {mine_safe_time_fitness}, and current sim mode is {'stationary' if displacement < EPS else 'maneuver'}), asteroids score: {asteroids_fitness}, sequence length score: {sequence_length_fitness}, displacement score: {displacement_fitness}, other ship prox score: {other_ship_proximity_fitness}, crash_score: {crash_fitness}")
+        if asteroid_safe_time_fitness < 0.1:
+            self.safety_messages.append("I'm dangerously close to being hit by asteroids. Trying my hardest to maneuver out of this situation.")
+        elif asteroid_safe_time_fitness < 0.4:
+            self.safety_messages.append("I'm close to being hit by asteroids.")
+        elif asteroid_safe_time_fitness < 0.8:
+            self.safety_messages.append("I'll eventually get hit by asteroids. Keeping my eye out for a dodge maneuver.")
+        
+        if mine_safe_time_fitness < 0.1:
+            self.safety_messages.append("I'm dangerously close to being kablooied by a mine. Trying my hardest to maneuver out of this situation.")
+        elif mine_safe_time_fitness < 0.4:
+            self.safety_messages.append("I'm close to being boomed by a mine.")
+        elif mine_safe_time_fitness < 0.9:
+            self.safety_messages.append("I'm within the radius of a mine.")
+
+        if other_ship_proximity_fitness < 0.2:
+            self.safety_messages.append("I'm dangerously close to the other ship. Get away from me!")
+        elif other_ship_proximity_fitness < 0.5:
+            self.safety_messages.append("I'm close to the other ship. Being cautious.")
+
+        # Use fuzzy "AND" by averaging the fuzzy outputs
+        overall_fitness = 1/8*sum(asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, displacement_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness)
+        if overall_fitness > 0.9:
+            self.safety_messages.append("I'm safe and chilling")
+        # The overall_fitness is the fuzzy output. There's no need to defuzzify it since we're using this as a fitness value to rank the actions and future states
+        return overall_fitness
+
+    def get_fitness_OLD(self):
         # This will return a scalar number representing how good of an action/state sequence we just went through
         # If these moves will keep us alive for a long time and shoot many asteroids along the way, then the fitness is good
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
@@ -1811,7 +1983,7 @@ class Simulation():
         overall_fitness = asteroid_safe_time_score + mine_safe_time_score + asteroids_score + sequence_length_score + displacement_score + other_ship_proximity_score + edge_proximity_score + crash_score + asteroid_aiming_cone_score
         if overall_fitness < 1:
             self.safety_messages.append("I'm safe and chilling")
-        return overall_fitness
+        return -overall_fitness
 
     def find_extreme_shooting_angle_error(self, asteroid_list, threshold, mode='largest_below'):
         # Extract the shooting_angle_error_deg values
@@ -2884,9 +3056,9 @@ class Neo(KesslerController):
         self.game_state_plotter = None
         self.actioned_timesteps = set()
         self.sims_this_planning_period = [] # The first sim in the list is stationary targetting, and the rest is maneuvers
-        self.best_fitness_this_planning_period = math.inf
+        self.best_fitness_this_planning_period = -math.inf
         self.best_fitness_this_planning_period_index = None
-        self.second_best_fitness_this_planning_period = math.inf
+        self.second_best_fitness_this_planning_period = -math.inf
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
         self.game_state_to_base_planning = None
@@ -2975,7 +3147,7 @@ class Neo(KesslerController):
             best_action_fitness = best_action_sim.get_fitness()
             debug_print(f"\nActual best action first state:", best_action_sim.get_state_sequence()[0])
             debug_print(f"\nUpdated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness: {best_action_fitness}")
-            if best_action_fitness > best_action_fitness_predicted + 0.1:
+            if best_action_fitness < best_action_fitness_predicted - 0.05:
                 debug_print(f"\n\n\n\nDANGERRRRR!!!!! Updated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness IS MUCH WORSE!!!!!!!: {best_action_fitness}")
                 if self.second_best_fitness_this_planning_period_index is not None:
                     # The best action sim's reality is worse than expected. Try our second best as a backup and hopefully this will be better, and go according to plan!
@@ -2990,7 +3162,7 @@ class Neo(KesslerController):
                     second_best_action_sim.apply_move_sequence(second_best_action_sim_predicted_move_sequence)
                     second_best_action_sim.set_fire_next_timestep_flag(second_best_predicted_sim_fire_next_timestep_flag)
                     second_best_action_fitness = second_best_action_sim.get_fitness()
-                    if second_best_action_fitness < best_action_fitness:
+                    if second_best_action_fitness > best_action_fitness:
                         debug_print(f"HOORAY, the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} is better than the best!")
                         best_action_fitness = second_best_action_fitness
                         best_action_sim = second_best_action_sim
@@ -3005,7 +3177,7 @@ class Neo(KesslerController):
             assert self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'exact'
             best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
-        if best_action_fitness >= 10:
+        if best_action_fitness <= 0.1:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
             print_explanation("RIP, I'm gonna die", self.current_timestep)
             #if self.stationary_targetting_sim_index:
@@ -3112,9 +3284,9 @@ class Neo(KesslerController):
                 self.actioned_timesteps.add(move['timestep'])
             self.enqueue_action(move['timestep'], move['thrust'], move['turn_rate'], move['fire'], move['drop_mine'])
         self.sims_this_planning_period.clear()
-        self.best_fitness_this_planning_period = math.inf
+        self.best_fitness_this_planning_period = -math.inf
         self.best_fitness_this_planning_period_index = None
-        self.second_best_fitness_this_planning_period = math.inf
+        self.second_best_fitness_this_planning_period = -math.inf
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
 
@@ -3197,7 +3369,7 @@ class Neo(KesslerController):
                     'type': 'respawn',
                     'state_type': 'exact' if base_state_is_exact else 'predicted',
                 })
-                if maneuver_fitness < self.best_fitness_this_planning_period:
+                if maneuver_fitness > self.best_fitness_this_planning_period:
                     self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
                     self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
 
@@ -3214,15 +3386,11 @@ class Neo(KesslerController):
                 stationary_targetting_sim = Simulation(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['ship_respawn_timer'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['last_timestep_fired'], self.game_state_to_base_planning['last_timestep_mined'], False, self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
                 #print('\nAST PENDING DEATH AND FORECASTED SPLITS AFTER THE SIM')
                 #print(self.asteroids_pending_death)
-                sim_complete_without_crash = stationary_targetting_sim.target_selection()
+                stationary_targetting_sim.target_selection()
                 debug_print('\nstationary targetting sim move seq')
                 debug_print(stationary_targetting_sim.get_move_sequence())
                 
                 best_stationary_targetting_fitness = stationary_targetting_sim.get_fitness()
-                if not sim_complete_without_crash:
-                    best_stationary_targetting_fitness += 10
-                    #print(f"We got hit by the ship, yikes, so the fitness for sim id {stationary_targetting_sim.get_sim_id()} is being set to {best_stationary_targetting_fitness}")
-                #print(f"Stationary targetting fitness: {best_stationary_targetting_fitness}")
 
                 self.sims_this_planning_period.append({
                     'sim': stationary_targetting_sim,
@@ -3231,7 +3399,7 @@ class Neo(KesslerController):
                     'state_type': 'exact' if base_state_is_exact else 'predicted',
                 })
                 self.stationary_targetting_sim_index = len(self.sims_this_planning_period) - 1
-                if best_stationary_targetting_fitness < self.best_fitness_this_planning_period:
+                if best_stationary_targetting_fitness > self.best_fitness_this_planning_period:
                     self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
                     self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
 
@@ -3245,17 +3413,17 @@ class Neo(KesslerController):
                 if math.isinf(self.best_fitness_this_planning_period):
                     # This is the first timestep we're planning for this period, so we don't really know how many iterations to use. Don't go all out on this first one in case it's an easy one.
                     search_iterations = 2
-                elif self.best_fitness_this_planning_period < 0.45:
+                elif self.best_fitness_this_planning_period > 0.9:
                     search_iterations = 1
-                elif self.best_fitness_this_planning_period < 0.85:
+                elif self.best_fitness_this_planning_period > 0.8:
                     search_iterations = 1
-                elif self.best_fitness_this_planning_period < 1:
+                elif self.best_fitness_this_planning_period > 0.7:
                     search_iterations = 2
-                elif self.best_fitness_this_planning_period < 2:
+                elif self.best_fitness_this_planning_period > 0.6:
                     search_iterations = 3
-                elif self.best_fitness_this_planning_period < 3:
+                elif self.best_fitness_this_planning_period > 0.5:
                     search_iterations = 4
-                elif self.best_fitness_this_planning_period < 4:
+                elif self.best_fitness_this_planning_period > 0.4:
                     search_iterations = 5
                 else:
                     search_iterations = 6
@@ -3264,17 +3432,17 @@ class Neo(KesslerController):
                     raise Exception("If there's no ships, why don't we have any sims this planning period yet? We should have done stationary first.")
                     # This is the first timestep we're planning for this period, so we don't really know how many iterations to use. Don't go all out on this first one in case it's an easy one.
                     search_iterations = 2
-                elif self.best_fitness_this_planning_period < 0.45:
+                elif self.best_fitness_this_planning_period > 0.9:
                     search_iterations = 1
-                elif self.best_fitness_this_planning_period < 0.85:
+                elif self.best_fitness_this_planning_period > 0.8:
                     search_iterations = 1
-                elif self.best_fitness_this_planning_period < 1:
+                elif self.best_fitness_this_planning_period > 0.7:
                     search_iterations = 2
-                elif self.best_fitness_this_planning_period < 2:
+                elif self.best_fitness_this_planning_period > 0.6:
                     search_iterations = 3
-                elif self.best_fitness_this_planning_period < 3:
+                elif self.best_fitness_this_planning_period > 0.5:
                     search_iterations = 4
-                elif self.best_fitness_this_planning_period < 4:
+                elif self.best_fitness_this_planning_period > 0.4:
                     search_iterations = 5
                 else:
                     search_iterations = 6
@@ -3311,8 +3479,6 @@ class Neo(KesslerController):
                 #start_time = time.time()
                 #print(f"Mines before going into the polan action sim:", self.game_state_to_base_planning['game_state']['mines'])
                 #print("Simming actual maneuver")
-                #if self.game_state_to_base_planning['timestep'] == 42:
-                #    print(f"Beginning a maneuver sim at ts 42. We're calling the function with these bullets:", self.game_state_to_base_planning['game_state']['bullets'])
                 maneuver_sim = Simulation(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['ship_respawn_timer'], self.game_state_to_base_planning['asteroids_pending_death'], self.game_state_to_base_planning['forecasted_asteroid_splits'], self.game_state_to_base_planning['last_timestep_fired'], self.game_state_to_base_planning['last_timestep_mined'], False, self.game_state_to_base_planning['fire_next_timestep_flag'], self.game_state_plotter)
                 # This if statement is a doozy. Keep in mind that we evaluate the and clauses left to right, and the moment we find one that's false, we stop.
                 # While evaluating, the simulation is advancing, and if it crashes, then it'll evaluate to false and stop the sim.
@@ -3330,7 +3496,7 @@ class Neo(KesslerController):
                     'state_type': 'exact' if base_state_is_exact else 'predicted'
                 })
                 debug_print(f"Planning random maneuver, and got fitness {maneuver_fitness}")
-                if maneuver_fitness < self.best_fitness_this_planning_period:
+                if maneuver_fitness > self.best_fitness_this_planning_period:
                     self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
                     self.second_best_fitness_this_planning_period_index = self.best_fitness_this_planning_period_index
 
@@ -3373,9 +3539,9 @@ class Neo(KesslerController):
                 #self.game_state_to_base_planning = None
                 self.sims_this_planning_period.clear()
                 self.best_fitness_this_planning_period_index = None
-                self.best_fitness_this_planning_period = math.inf
+                self.best_fitness_this_planning_period = -math.inf
                 self.second_best_fitness_this_planning_period_index = None
-                self.second_best_fitness_this_planning_period = math.inf
+                self.second_best_fitness_this_planning_period = -math.inf
                 unexpected_death = True
                 iterations_boost = True
             

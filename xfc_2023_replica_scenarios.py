@@ -14,14 +14,25 @@ ex_adv_four_corners_pt1 = Scenario(
         {'position': (pad, height - pad), 'angle': 0.0, 'speed': 0, 'size': 2},
         {'position': (width - pad, height - pad), 'angle': 0.0, 'speed': 0, 'size': 3},
     ],
-    ship_states=[{'position': (width//2, height//2), 'lives': 3, 'angle': 0, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width//2, height//2), 'lives': 3, 'angle': 0, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*7/10, height//2), 'lives': 3, 'angle': 0, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
 
-#ex_adv_four_corners_pt2 = Scenario(
-#    # This wasn't ever run in the competition stream so I have no clue what this is
-#)
+ex_adv_four_corners_pt2 = Scenario(
+    name='ex_adv_four_corners_pt2',
+    asteroid_states=[
+        {'position': (pad, pad), 'angle': 0.0, 'speed': 0, 'size': 4},
+        {'position': (width - pad, pad), 'angle': 0.0, 'speed': 0, 'size': 4},
+        {'position': (pad, height - pad), 'angle': 0.0, 'speed': 0, 'size': 4},
+        {'position': (width - pad, height - pad), 'angle': 0.0, 'speed': 0, 'size': 4},
+    ],
+    ship_states=[{'position': (width//2, height//2), 'lives': 3, 'angle': 0, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*7/10, height//2), 'lives': 3, 'angle': 0, 'team': 2, 'mines_remaining': 0}],
+    map_size=(width, height),
+    time_limit=30,
+)
 
 height_off_edge = 100
 
@@ -31,7 +42,8 @@ ex_adv_asteroids_down_up_pt1 = Scenario(
         {'position': (width*2//5, height_off_edge), 'angle': 90.0, 'speed': 100, 'size': 2},
         {'position': (width*2//5, height - height_off_edge), 'angle': -90.0, 'speed': 100, 'size': 2},
     ],
-    ship_states=[{'position': (width*2//5, height//2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width*4/10, height//2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*7/10, height//2), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
@@ -42,7 +54,8 @@ ex_adv_asteroids_down_up_pt2 = Scenario(
         {'position': (width*2//5, 0), 'angle': 90.0, 'speed': 100, 'size': 2},
         {'position': (width*2//5, height - 0), 'angle': -90.0, 'speed': 100, 'size': 2},
     ],
-    ship_states=[{'position': (width//2, height//2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width/2, height//2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*7/10, height//2), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
@@ -52,7 +65,8 @@ ex_adv_direct_facing = Scenario(
     asteroid_states=[
         {'position': (width*2//3, height*2//5), 'angle': 180.0, 'speed': 100, 'size': 2},
     ],
-    ship_states=[{'position': (width*2//10, height*2//5), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width*2//10, height*2//5), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width*7/10, height*5/100), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
@@ -63,7 +77,8 @@ ex_adv_two_asteroids_pt1 = Scenario(
         {'position': (width*17//24, height//10), 'angle': 90.0, 'speed': 100, 'size': 3},
         {'position': (width*17//24, height*9//10), 'angle': -90.0, 'speed': 100, 'size': 3},
     ],
-    ship_states=[{'position': (width//10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width/10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width/10, height*9/10), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
@@ -74,7 +89,8 @@ ex_adv_two_asteroids_pt2 = Scenario(
         {'position': (width//10, height//10), 'angle': 90.0, 'speed': 100, 'size': 3},
         {'position': (width//10, height*9//10), 'angle': -90.0, 'speed': 100, 'size': 3},
     ],
-    ship_states=[{'position': (width//10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width//10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 0},
+                 {'position': (width/10, height*9/10), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     map_size=(width, height),
     time_limit=20,
 )
@@ -92,9 +108,10 @@ init_angle = [np.rad2deg(np.arctan2(ship_position[1] - y, ship_position[0] - x))
 asteroid_states = [{"position": (x, y), "angle": angle, "speed": 0, 'size': 1} for x, y, angle in zip(ast_x, ast_y, init_angle)]
 asteroid_states.append({"position": (width*4//10, height), "angle": 270, "speed": 150, 'size': 1})
 ex_adv_ring_pt1 = Scenario(
-    name="closing_ring_scenario",
+    name="ex_adv_ring_pt1",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'angle': 180, 'lives': 3, 'team': 1, "mines_remaining": 0}],
+    ship_states=[{"position": ship_position, 'angle': 180, 'lives': 3, 'team': 1, "mines_remaining": 0},
+                 {'position': (width/10, height*9/10), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 0}],
     time_limit=20,
 )
 

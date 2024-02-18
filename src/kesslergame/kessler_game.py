@@ -157,12 +157,14 @@ class KesslerGame:
                         mines.append(new_mine)
 
             # Cull any bullets past the map edge
+            before_num_bullets = len(bullets)
             bullets = [bullet
                        for bullet
                        in bullets
                        if 0 <= bullet.position[0] <= scenario.map_size[0]
                        and 0 <= bullet.position[1] <= scenario.map_size[1]]
-
+            if len(bullets) != before_num_bullets:
+                print('BULLET LEAVING MAP')
             # Wrap ships and asteroids to other side of map
             for ship in liveships:
                 for idx, pos in enumerate(ship.position):
@@ -190,6 +192,8 @@ class KesslerGame:
             asteroid_remove_idxs = []
             for idx_bul, bullet in enumerate(bullets):
                 for idx_ast, asteroid in enumerate(asteroids):
+                    if idx_ast in asteroid_remove_idxs: # New fix that hopefully will be part of Kessler soon
+                        continue
                     # If collision occurs
                     if circle_line_collision(bullet.position, bullet.tail, asteroid.position, asteroid.radius):
                         # Increment hit values on ship that fired bullet then destruct bullet and mark for removal
@@ -256,11 +260,11 @@ class KesslerGame:
             asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
 
             # --- Check ship-ship collisions ---
-            for ship1 in liveships:
-                for ship2 in liveships:
-                    if (ship1 is not ship2) and (not ship2.is_respawning) and (not ship1.is_respawning):
-                        dist = np.sqrt(sum([(pos1 - pos2) ** 2 for pos1, pos2 in zip(ship1.position, ship2.position)]))
-                        if dist < ship1.radius + ship2.radius:
+            for i, ship1 in enumerate(liveships):
+                for ship2 in liveships[i + 1:]:
+                    if not ship2.is_respawning and not ship1.is_respawning:
+                        dist_squared = sum((pos1 - pos2) ** 2 for pos1, pos2 in zip(ship1.position, ship2.position))
+                        if dist_squared < (ship1.radius + ship2.radius) ** 2:
                             ship1.destruct(map_size=scenario.map_size)
                             ship2.destruct(map_size=scenario.map_size)
             # Cull ships that are not alive

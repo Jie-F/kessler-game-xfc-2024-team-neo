@@ -1,8 +1,9 @@
 from src.kesslergame import Scenario
 import random
 import numpy as np
+import math
 
-width, height = (1920, 1080)
+width, height = (1000, 800)
 target_priority_optimization1 = Scenario(name='Target priority optimization 1',
                             asteroid_states=[{'position': (width*5//100, height*51//100), 'speed': 200, 'angle': 180, 'size': 1},
                                              {'position': (width*5//100, height*49//100), 'speed': 100, 'angle': 0, 'size': 1}],
@@ -35,7 +36,7 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed} for x, y
 closing_ring_scenario = Scenario(
     name="closing_ring_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 0}],
+    ship_states=[{"position": ship_position, 'lives': 3, 'team': 1, "mines_remaining": 3}],
 )
 
 
@@ -67,7 +68,7 @@ asteroid_states = [{"position": (x, y), "angle": angle, "speed": speed, 'size': 
 easy_closing_ring_scenario = Scenario(
     name="easy_closing_ring_scenario",
     asteroid_states=asteroid_states,
-    ship_states=[{"position": ship_position, 'lives': 5, 'team': 1, "mines_remaining": 1}],
+    ship_states=[{"position": ship_position, 'lives': 2, 'team': 1, "mines_remaining": 2}],
 )
 
 
@@ -492,8 +493,8 @@ for angle in theta:
 moving_ring_scenario = Scenario(
     name='moving_ring_scenario',
     asteroid_states=asteroid_states,
-    ship_states=[{'position': ship_position, 'angle': 0, 'lives': 3, 'mines_remaining': 3}],
-    map_size=(1920, 1080),
+    ship_states=[{'position': ship_position, 'angle': 0, 'lives': 3, 'mines_remaining': 0}],
+    map_size=(1000, 800),
 )
 
 
@@ -549,7 +550,7 @@ shifting_square_scenario = Scenario(
     name='shifting_square_scenario',
     asteroid_states=asteroid_states,
     ship_states=[{'position': ship_position, 'angle': 0, 'lives': 5, 'mines_remaining': 3}],
-    map_size=(1920, 1080),
+    map_size=(1000, 800),
 )
 
 
@@ -708,7 +709,7 @@ def create_diagonal_asteroids(start_pos, end_pos, num_asteroids, direction, spee
     return [{'position': pos, 'angle': direction, 'speed': speed, 'size': 3} for pos in positions]
 
 # Parameters for the Intersecting Lines scenario
-width, height = 1920, 1080
+width, height = 1000, 800
 num_asteroids = 20
 speed = 200  # pixels per second
 
@@ -741,10 +742,10 @@ intersecting_lines_scenario = Scenario(
 
 # Can cause a runtime warning due to divide by 0 if you drop a mine on the first timestep and get out of the way, since the distance between the asteroid and mine is 0 when the mine is exploding
 minecrash = Scenario(name='Mine Crash',
-                            asteroid_states=[{'position': (1920//2+30*3+1, 1080//2), 'speed': 30, 'angle': 180, 'size': 4}, {'position': (1920//2+30*3+1, 1000//2), 'speed': 30, 'angle': 180, 'size': 4}],
+                            asteroid_states=[{'position': (1000//2+30*3+1, 800//2), 'speed': 30, 'angle': 180, 'size': 4}, {'position': (1000//2+30*3+1, 1000//2), 'speed': 30, 'angle': 180, 'size': 4}],
                             ship_states=[
-                                {'position': (1920//2, 1080//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
-                                #{'position': (1920*2//3, 1080//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
+                                {'position': (1000//2, 800//2), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                                #{'position': (1000*2//3, 800//2), 'angle': 90, 'lives': 10, 'team': 2, "mines_remaining": 10},
                             ],
                             map_size=(width, height),
                             time_limit=500,
@@ -764,7 +765,7 @@ minecrash = Scenario(name='Mine Crash',
 
 
 
-width, height = 1920, 1080
+width, height = 1000, 800
 center = (width // 2, height // 2)
 grid_size = 12
 distance_factor = 0.5  # This factor will determine how speed increases with distance
@@ -828,7 +829,7 @@ exploding_grid_scenario = Scenario(
 
 
 
-width, height = 1920, 1080
+width, height = 1000, 800
 center = (width // 2, height // 2)
 grid_size = 14
 time_to_form_grid = 5  # Time in seconds after which the grid is formed
@@ -885,7 +886,7 @@ grid_formation_explosion_scenario = Scenario(
 
 
 
-width, height = 1920, 1080
+width, height = 1000, 800
 center = (width // 2, height // 2)
 time_to_form_grid = 4  # Time in seconds after which the grid is formed
 
@@ -1042,4 +1043,72 @@ purgatory = Scenario(
 
 
 
+
+
+
+
+
+
+cross = Scenario(name='Cross',
+    asteroid_states=[{'position': (width/2, height/2), 'speed': 100, 'angle': np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (width/2, height/2), 'speed': 100, 'angle': -np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (width/2, height/2), 'speed': 100, 'angle': 180 - np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (width/2, height/2), 'speed': 100, 'angle': 180 + np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (0, 0), 'speed': 100, 'angle': np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (0, height), 'speed': 100, 'angle': -np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (width, 0), 'speed': 100, 'angle': 180 - np.degrees(np.arctan2(height, width)), 'size': 4},
+                     {'position': (width, height), 'speed': 100, 'angle': 180 + np.degrees(np.arctan2(height, width)), 'size': 4}],
+    ship_states=[
+        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 2},
+        {'position': (width*2//3, height//2), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 2},
+    ],
+    map_size=(width, height),
+    time_limit=np.inf,
+    ammo_limit_multiplier=0,
+    stop_if_no_ammo=False
+)
+
+
+
+
+
+
+
+fight_for_asteroid = Scenario(name='Fight For Asteroid',
+    asteroid_states=[{'position': (width/2, height/2), 'speed': 0, 'angle': np.degrees(np.arctan2(height, width)), 'size': 1}],
+    ship_states=[
+        {'position': (1, height//2), 'angle': 20, 'lives': 3, 'team': 1, "mines_remaining": 2},
+        {'position': (width - 1, height//2), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 2},
+    ],
+    map_size=(width, height),
+    time_limit=np.inf,
+    ammo_limit_multiplier=0,
+    stop_if_no_ammo=False
+)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+shot_pred_test = Scenario(name='shot_pred_test',
+    asteroid_states=[{'position': (width, height*6/7), 'speed': 1000, 'angle': 180, 'size': 2}],
+    ship_states=[
+        {'position': (width/4, 1), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 0},
+    ],
+    map_size=(width, height),
+    time_limit=np.inf,
+    ammo_limit_multiplier=0,
+    stop_if_no_ammo=False
+)
 
