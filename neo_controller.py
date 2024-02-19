@@ -1783,7 +1783,7 @@ class Simulation():
             return crash_fitness
         
         def get_sequence_length_fitness(move_sequence_length_s):
-            return max(0, 1 - move_sequence_length_s/10)
+            return sigmoid(move_sequence_length_s, -5.7, 0.8)
         
         def get_other_ship_proximity_fitness():
             other_ship_proximity_fitness = 0
