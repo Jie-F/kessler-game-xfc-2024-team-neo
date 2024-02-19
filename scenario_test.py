@@ -1,8 +1,3 @@
-# -*- coding: utf-8 -*-
-# Copyright © 2022 Thales. All Rights Reserved.
-# NOTICE: This file is subject to the license agreement defined in file 'LICENSE', which is part of
-# this source code package.
-
 import time
 import random
 from neo_controller import Neo
@@ -14,6 +9,7 @@ import sys
 from r_controller import RController
 from null_controller import NullController
 from scenarios import *
+import argparse
 #from controller_0 import ReplayController0
 #from controller_1 import ReplayController1
 
@@ -27,6 +23,13 @@ from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
 from examples.test_controller import TestController
 #from examples.graphics_both import GraphicsBoth
+
+parser = argparse.ArgumentParser(description='Run Kessler Game with optional CLI flags.')
+parser.add_argument('-invisible', action='store_true', help='Use NoGraphics for the game visualization.')
+parser.add_argument('-profile', action='store_true', help='Enable profiling of the game run.')
+parser.add_argument('-seed', type=int, help='Set the seed for random number generation.')
+
+args = parser.parse_args()
 
 global color_text
 color_text = True
@@ -84,7 +87,7 @@ width, height = (1000, 800)
 
 # Define Game Settings
 game_settings = {'perf_tracker': True,
-                 'graphics_type': GraphicsType.Tkinter,#UnrealEngine,Tkinter,NoGraphics
+                 'graphics_type': GraphicsType.NoGraphics if args.invisible else GraphicsType.Tkinter,#UnrealEngine,Tkinter,NoGraphics
                  'realtime_multiplier': 2,
                  'graphics_obj': None,
                  'frequency': 30.0,
@@ -95,7 +98,6 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 missed = False
-#for _ in range(1):
 iterations = 0
 
 xfc_2021_portfolio = [
@@ -242,14 +244,24 @@ score = None
 died = False
 #for sc in xfc2023:
 #while died or not missed:
-for i in range(1):
+#for i in range(1):
+team_1_hits = 0
+team_2_hits = 0
+team_1_deaths = 0
+team_2_deaths = 0
+team_1_wins = 0
+team_2_wins = 0
 #while True:
+for sc in xfc2023:
     iterations += 1
-    randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
+    if args.seed is not None:
+        randseed =  args.seed
+    else:
+        randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=10,
+                                    num_asteroids=20,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
@@ -265,8 +277,8 @@ for i in range(1):
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 2, 'team': 1, "mines_remaining": 0},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 2, 'team': 2, "mines_remaining": 0},
+                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 2},
+                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 2},
                                 ],
                                 map_size=(width, height),
                                 #seed=2,
@@ -279,22 +291,38 @@ for i in range(1):
         print(f"Evaluating scenario {sc.name}")
     except:
         pass
-    #cProfile.run('game.run(scenario=zigzag_motion_scenario, controllers=[Neo(), Neo()])')
+    profile = args.profile
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    controllers_used = [Neo(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [Neo(), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     try:
-        score, perf_data = game.run(scenario=sc, controllers=controllers_used)
+        if profile:
+            cProfile.run(f'game.run(scenario=sc, controllers=[Neo(), Neo()])')
+        else:
+            score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
-        score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
+        if profile:
+            cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
+        else:
+            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
     # Print out some general info about the result
     if score:
+        asts_hit = [team.asteroids_hit for team in score.teams]
         color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
         color_print(score.stop_reason, 'green')
-        color_print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]), 'green')
-        color_print('Deaths: ' + str([team.deaths for team in score.teams]), 'green')
-        if [team.deaths for team in score.teams][0] >= 1:
+        color_print('Asteroids hit: ' + str(asts_hit), 'green')
+        team_1_hits += asts_hit[0]
+        team_2_hits += asts_hit[1]
+        if asts_hit[0] > asts_hit[1]:
+            team_1_wins += 1
+        elif asts_hit[0] < asts_hit[1]:
+            team_2_wins += 1
+        team_deaths = [team.deaths for team in score.teams]
+        team_1_deaths += team_deaths[0]
+        team_2_deaths += team_deaths[1]
+        color_print('Deaths: ' + str(team_deaths), 'green')
+        if team_deaths[0] >= 1:
             died = True
         else:
             died = False
@@ -305,5 +333,8 @@ for i in range(1):
             missed = True
         else:
             missed = False
+    print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
+    print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
+    print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
 if missed:
     color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
