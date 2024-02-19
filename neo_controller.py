@@ -1707,8 +1707,8 @@ class Simulation():
         return pos1[0]//max_width == pos2[0]//max_width and pos1[1]//max_height == pos2[1]//max_height
 
     def get_fitness(self):
-        if self.ship_state['team'] == '2':
-            return sigmoid(self.get_fitness_OLD(), -0.3, 10)
+        #if self.ship_state['team'] == '2':
+        #    return sigmoid(self.get_fitness_OLD(), -0.3, 10)
         # This will return a scalar number representing how good of an action/state sequence we just went through
         # If these moves will keep us alive for a long time and shoot many asteroids along the way, then the fitness is good
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
@@ -3199,6 +3199,9 @@ class Neo(KesslerController):
             if ENABLE_ASSERTIONS:
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 assert game_state is not None
+                if not game_state['sim_frame'] == self.current_timestep:
+                    #print(self.current_timestep, game_state['sim_frame'])
+                    pass
                 assert game_state['sim_frame'] == self.current_timestep
             best_predicted_sim_fire_next_timestep_flag = best_action_sim_predicted.get_fire_next_timestep_flag()
             debug_print(f"best_predicted_sim_fire_next_timestep_flag: {best_predicted_sim_fire_next_timestep_flag}, self.game_state_to_base_planning['fire_next_timestep_flag']: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
