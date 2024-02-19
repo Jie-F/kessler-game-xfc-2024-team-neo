@@ -139,6 +139,7 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         team_2_deaths = 0
         team_1_wins = 0
         team_2_wins = 0
+        total_eval_time_s = 0
         for i in range(2):
             random.seed(i)
             for sc in training_portfolio:
@@ -146,8 +147,10 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                 print(f"Evaluating scenario {sc.name}")
                 pre = time.perf_counter()
                 score, perf_data = game.run(scenario=sc, controllers=controllers_used)
+                post = time.perf_counter()
                 asts_hit = [team.asteroids_hit for team in score.teams]
-                print('Scenario eval time: '+str(time.perf_counter()-pre))
+                total_eval_time_s += max(0, post - pre)
+                print('Scenario eval time: '+str(post - pre))
                 print(score.stop_reason)
                 print('Asteroids hit: ' + str(asts_hit))
                 team_1_hits += asts_hit[0]
@@ -159,8 +162,9 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                 team_deaths = [team.deaths for team in score.teams]
                 team_1_deaths += team_deaths[0]
                 team_2_deaths += team_deaths[1]
-                scenarios_info.append({'Name': sc.name,
+                scenarios_info.append({'scenario_name': sc.name,
                                     'randseed': i,
+                                    'eval_time': post - pre,
                                     'team_1_hits': asts_hit[0],
                                     'team_2_hits': asts_hit[1],
                                     'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
@@ -169,6 +173,7 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                                     'team_2_deaths': team_deaths[1]})
         run_info = {
             'timestamp': datetime.now().isoformat(),
+            'total_eval_time': total_eval_time_s,
             'chromosome': new_chromosome,
             'team_1_hits': team_1_hits,
             'team_2_hits': team_2_hits,

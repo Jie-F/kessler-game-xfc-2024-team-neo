@@ -261,7 +261,7 @@ for sc in xfc2023:
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
     random.seed(randseed)
     asteroids_random = generate_asteroids(
-                                    num_asteroids=20,
+                                    num_asteroids=2,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 600, 0),
@@ -306,6 +306,7 @@ for sc in xfc2023:
             cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
         else:
             score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
+    #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
         asts_hit = [team.asteroids_hit for team in score.teams]

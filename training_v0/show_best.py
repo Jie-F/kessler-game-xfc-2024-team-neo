@@ -31,7 +31,7 @@ for run in all_data:
     top_scores.append((current_score, current_chromosome))
 
 # Sort the list by score in descending order and keep only the top 3
-top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:]
+top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:5]
 
 # Print the top 3 scores and their chromosomes
 for i, (score, chromosome) in enumerate(top_scores, start=1):
