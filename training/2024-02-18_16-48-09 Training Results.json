@@ -1,0 +1,726 @@
+[
+    {
+        "timestamp": "2024-02-18T17:36:26.744021",
+        "chromosome": [
+            2.4150574206980124,
+            0.3694204528418082,
+            0.8788435116847628,
+            2.4488170359105617,
+            0.17346698106929268,
+            1.301389731634802,
+            2.41300486616076
+        ],
+        "scenarios_run": [
+            {
+                "Name": "ex_adv_four_corners_pt1",
+                "team_1_hits": 39,
+                "team_2_hits": 19,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_asteroids_down_up_pt1",
+                "team_1_hits": 3,
+                "team_2_hits": 5,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_asteroids_down_up_pt2",
+                "team_1_hits": 6,
+                "team_2_hits": 2,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_direct_facing",
+                "team_1_hits": 4,
+                "team_2_hits": 0,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_two_asteroids_pt1",
+                "team_1_hits": 18,
+                "team_2_hits": 8,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_two_asteroids_pt2",
+                "team_1_hits": 17,
+                "team_2_hits": 9,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "ex_adv_ring_pt1",
+                "team_1_hits": 18,
+                "team_2_hits": 1,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "adv_random_big_1",
+                "team_1_hits": 188,
+                "team_2_hits": 91,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "adv_random_big_3",
+                "team_1_hits": 227,
+                "team_2_hits": 119,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "adv_multi_wall_bottom_hard_1",
+                "team_1_hits": 153,
+                "team_2_hits": 47,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_wall_right_hard_1",
+                "team_1_hits": 40,
+                "team_2_hits": 20,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_ring_closing_left",
+                "team_1_hits": 436,
+                "team_2_hits": 204,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "adv_multi_ring_closing_right",
+                "team_1_hits": 396,
+                "team_2_hits": 244,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "adv_multi_two_rings_closing",
+                "team_1_hits": 1251,
+                "team_2_hits": 29,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "avg_multi_ring_closing_both2",
+                "team_1_hits": 151,
+                "team_2_hits": 41,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "adv_multi_ring_closing_both_inside",
+                "team_1_hits": 477,
+                "team_2_hits": 76,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_ring_closing_both_inside_fast",
+                "team_1_hits": 98,
+                "team_2_hits": 6,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 5",
+                "team_1_hits": 71,
+                "team_2_hits": 51,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 6",
+                "team_1_hits": 97,
+                "team_2_hits": 41,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 7",
+                "team_1_hits": 92,
+                "team_2_hits": 59,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 8",
+                "team_1_hits": 68,
+                "team_2_hits": 36,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "Random Scenario 9",
+                "team_1_hits": 102,
+                "team_2_hits": 60,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 10",
+                "team_1_hits": 104,
+                "team_2_hits": 29,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 11",
+                "team_1_hits": 136,
+                "team_2_hits": 46,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 12",
+                "team_1_hits": 85,
+                "team_2_hits": 23,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 13",
+                "team_1_hits": 133,
+                "team_2_hits": 48,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 14",
+                "team_1_hits": 115,
+                "team_2_hits": 28,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "Random Scenario 15",
+                "team_1_hits": 150,
+                "team_2_hits": 24,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 16",
+                "team_1_hits": 98,
+                "team_2_hits": 56,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 17",
+                "team_1_hits": 268,
+                "team_2_hits": 28,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 18",
+                "team_1_hits": 145,
+                "team_2_hits": 59,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 19",
+                "team_1_hits": 172,
+                "team_2_hits": 60,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 20",
+                "team_1_hits": 108,
+                "team_2_hits": 4,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 21",
+                "team_1_hits": 285,
+                "team_2_hits": 42,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 22",
+                "team_1_hits": 217,
+                "team_2_hits": 48,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 23",
+                "team_1_hits": 334,
+                "team_2_hits": 7,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 24",
+                "team_1_hits": 394,
+                "team_2_hits": 8,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 25",
+                "team_1_hits": 53,
+                "team_2_hits": 9,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            }
+        ],
+        "team_1_hits": 6749,
+        "team_2_hits": 1687,
+        "team_1_deaths": 35,
+        "team_2_deaths": 62,
+        "team_1_wins": 37,
+        "team_2_wins": 1
+    },
+    {
+        "timestamp": "2024-02-18T17:58:11.827952",
+        "chromosome": [
+            0.28397113753510717,
+            0.08896060311292153,
+            2.053862860755387,
+            2.005840805899831,
+            2.02182942540474,
+            2.1001481324334734,
+            1.4453870348585403
+        ],
+        "scenarios_run": [
+            {
+                "Name": "ex_adv_four_corners_pt1",
+                "team_1_hits": 39,
+                "team_2_hits": 19,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_asteroids_down_up_pt1",
+                "team_1_hits": 4,
+                "team_2_hits": 4,
+                "team_1_wins": 0,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_asteroids_down_up_pt2",
+                "team_1_hits": 6,
+                "team_2_hits": 2,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_direct_facing",
+                "team_1_hits": 4,
+                "team_2_hits": 0,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_two_asteroids_pt1",
+                "team_1_hits": 18,
+                "team_2_hits": 8,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "ex_adv_two_asteroids_pt2",
+                "team_1_hits": 15,
+                "team_2_hits": 11,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "ex_adv_ring_pt1",
+                "team_1_hits": 18,
+                "team_2_hits": 1,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "adv_random_big_1",
+                "team_1_hits": 185,
+                "team_2_hits": 94,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "adv_random_big_3",
+                "team_1_hits": 255,
+                "team_2_hits": 19,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_wall_bottom_hard_1",
+                "team_1_hits": 8,
+                "team_2_hits": 88,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "adv_multi_wall_right_hard_1",
+                "team_1_hits": 38,
+                "team_2_hits": 21,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_ring_closing_left",
+                "team_1_hits": 493,
+                "team_2_hits": 147,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_ring_closing_right",
+                "team_1_hits": 414,
+                "team_2_hits": 226,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "adv_multi_two_rings_closing",
+                "team_1_hits": 195,
+                "team_2_hits": 29,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "avg_multi_ring_closing_both2",
+                "team_1_hits": 135,
+                "team_2_hits": 57,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "adv_multi_ring_closing_both_inside",
+                "team_1_hits": 487,
+                "team_2_hits": 86,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "adv_multi_ring_closing_both_inside_fast",
+                "team_1_hits": 11,
+                "team_2_hits": 7,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 5",
+                "team_1_hits": 85,
+                "team_2_hits": 37,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 6",
+                "team_1_hits": 41,
+                "team_2_hits": 54,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 7",
+                "team_1_hits": 99,
+                "team_2_hits": 52,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 8",
+                "team_1_hits": 79,
+                "team_2_hits": 25,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "Random Scenario 9",
+                "team_1_hits": 113,
+                "team_2_hits": 49,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "Random Scenario 10",
+                "team_1_hits": 115,
+                "team_2_hits": 18,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 11",
+                "team_1_hits": 163,
+                "team_2_hits": 19,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 2,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 12",
+                "team_1_hits": 92,
+                "team_2_hits": 16,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 13",
+                "team_1_hits": 128,
+                "team_2_hits": 53,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 14",
+                "team_1_hits": 124,
+                "team_2_hits": 19,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 1
+            },
+            {
+                "Name": "Random Scenario 15",
+                "team_1_hits": 152,
+                "team_2_hits": 22,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 1,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 16",
+                "team_1_hits": 106,
+                "team_2_hits": 48,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 0
+            },
+            {
+                "Name": "Random Scenario 17",
+                "team_1_hits": 62,
+                "team_2_hits": 15,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 18",
+                "team_1_hits": 11,
+                "team_2_hits": 71,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 19",
+                "team_1_hits": 170,
+                "team_2_hits": 62,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 0,
+                "team_2_deaths": 2
+            },
+            {
+                "Name": "Random Scenario 20",
+                "team_1_hits": 14,
+                "team_2_hits": 16,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 21",
+                "team_1_hits": 5,
+                "team_2_hits": 47,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 22",
+                "team_1_hits": 12,
+                "team_2_hits": 39,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 23",
+                "team_1_hits": 38,
+                "team_2_hits": 7,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 24",
+                "team_1_hits": 22,
+                "team_2_hits": 4,
+                "team_1_wins": 1,
+                "team_2_wins": 0,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            },
+            {
+                "Name": "Random Scenario 25",
+                "team_1_hits": 5,
+                "team_2_hits": 15,
+                "team_1_wins": 0,
+                "team_2_wins": 1,
+                "team_1_deaths": 3,
+                "team_2_deaths": 3
+            }
+        ],
+        "team_1_hits": 3961,
+        "team_2_hits": 1507,
+        "team_1_deaths": 50,
+        "team_2_deaths": 68,
+        "team_1_wins": 30,
+        "team_2_wins": 7
+    }
+]

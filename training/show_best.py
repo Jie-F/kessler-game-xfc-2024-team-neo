@@ -21,11 +21,18 @@ def read_and_process_json_files(directory="."):
 # Call the function to start processing
 all_data = read_and_process_json_files()
 
-best_score = 0
-best_chromosome = None
-for run in all_data:
-    if run['team_1_hits'] > best_score:
-        best_score = run['team_1_hits']
-        best_chromosome = run['chromosome']
+# Initialize an empty list to keep track of top 3 scores
+top_scores = []
 
-print(f"The best score is {best_score} with chromosome {best_chromosome}")
+for run in all_data:
+    current_score = run['team_1_hits']
+    current_chromosome = run['chromosome']
+    # Append the current run's score and chromosome to the list
+    top_scores.append((current_score, current_chromosome))
+
+# Sort the list by score in descending order and keep only the top 3
+top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:5]
+
+# Print the top 3 scores and their chromosomes
+for i, (score, chromosome) in enumerate(top_scores, start=1):
+    print(f"Top {i} score is {score} with chromosome {chromosome}")
