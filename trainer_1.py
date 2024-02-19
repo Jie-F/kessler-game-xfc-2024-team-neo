@@ -5,7 +5,6 @@ from datetime import datetime
 import random
 import time
 import os
-import copy
 
 from neo_controller import Neo
 from baby_neo_controller import NeoController
@@ -21,6 +20,7 @@ from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
 GA_RESULTS_FILE = "ga_results.json"
+TRAINING_DIRECTORY = 'training_v1'
 
 def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range):
     asteroids = []
@@ -73,7 +73,7 @@ def read_and_process_json_files(directory="."):
 
 def get_top_chromosomes():
     # Call the function to start processing
-    all_data = read_and_process_json_files('training')
+    all_data = read_and_process_json_files(TRAINING_DIRECTORY)
 
     # Initialize an empty list to keep track of top 3 scores
     top_scores = []
@@ -116,7 +116,7 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         elif rand_decision < 0.7:
             print('Mutating top chromosome')
             # Take the top chromosome and apply a mutation
-            new_chromosome = normalize(mutate_chromosome(top_chromosomes[0]), 10)
+            new_chromosome = normalize(mutate_chromosome(top_chromosomes[0]), 7)
             print(f"Mutated {top_chromosomes[0]} into {new_chromosome}")
         elif rand_decision < 0.85:
             print('Crossovering chromosomes')
@@ -133,48 +133,50 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
             print(f"Took parents {parent1} and {parent2} to get {new_chromosome}")
 
         print(f"\nNew run using chromosome: {new_chromosome}")
-        random.seed(1)
         team_1_hits = 0
         team_2_hits = 0
         team_1_deaths = 0
         team_2_deaths = 0
         team_1_wins = 0
         team_2_wins = 0
-        for sc in training_portfolio:
-            controllers_used = [Neo(new_chromosome), NeoController()]
-            print(f"Evaluating scenario {sc.name}")
-            pre = time.perf_counter()
-            score, perf_data = game.run(scenario=sc, controllers=controllers_used)
-            asts_hit = [team.asteroids_hit for team in score.teams]
-            print('Scenario eval time: '+str(time.perf_counter()-pre))
-            print(score.stop_reason)
-            print('Asteroids hit: ' + str(asts_hit))
-            team_1_hits += asts_hit[0]
-            team_2_hits += asts_hit[1]
-            if asts_hit[0] > asts_hit[1]:
-                team_1_wins += 1
-            elif asts_hit[0] < asts_hit[1]:
-                team_2_wins += 1
-            team_deaths = [team.deaths for team in score.teams]
-            team_1_deaths += team_deaths[0]
-            team_2_deaths += team_deaths[1]
-            scenarios_info.append({'Name': sc.name,
-                                   'team_1_hits': asts_hit[0],
-                                   'team_2_hits': asts_hit[1],
-                                   'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
-                                   'team_2_wins': 1 if asts_hit[0] < asts_hit[1] else 0,
-                                   'team_1_deaths': team_deaths[0],
-                                   'team_2_deaths': team_deaths[1]})
+        for i in range(2):
+            random.seed(i)
+            for sc in training_portfolio:
+                controllers_used = [Neo(new_chromosome), NeoController()]
+                print(f"Evaluating scenario {sc.name}")
+                pre = time.perf_counter()
+                score, perf_data = game.run(scenario=sc, controllers=controllers_used)
+                asts_hit = [team.asteroids_hit for team in score.teams]
+                print('Scenario eval time: '+str(time.perf_counter()-pre))
+                print(score.stop_reason)
+                print('Asteroids hit: ' + str(asts_hit))
+                team_1_hits += asts_hit[0]
+                team_2_hits += asts_hit[1]
+                if asts_hit[0] > asts_hit[1]:
+                    team_1_wins += 1
+                elif asts_hit[0] < asts_hit[1]:
+                    team_2_wins += 1
+                team_deaths = [team.deaths for team in score.teams]
+                team_1_deaths += team_deaths[0]
+                team_2_deaths += team_deaths[1]
+                scenarios_info.append({'Name': sc.name,
+                                    'randseed': i,
+                                    'team_1_hits': asts_hit[0],
+                                    'team_2_hits': asts_hit[1],
+                                    'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
+                                    'team_2_wins': 1 if asts_hit[0] < asts_hit[1] else 0,
+                                    'team_1_deaths': team_deaths[0],
+                                    'team_2_deaths': team_deaths[1]})
         run_info = {
             'timestamp': datetime.now().isoformat(),
             'chromosome': new_chromosome,
-            'scenarios_run': scenarios_info,
             'team_1_hits': team_1_hits,
             'team_2_hits': team_2_hits,
             'team_1_deaths': team_1_deaths,
             'team_2_deaths': team_2_deaths,
             'team_1_wins': team_1_wins,
             'team_2_wins': team_2_wins,
+            'scenarios_run': scenarios_info,
         }
         results.append(run_info)
         # Save incrementally
@@ -187,7 +189,7 @@ def normalize(numbers, target_sum):
     sum_numbers = sum(numbers)
     return [number / sum_numbers * target_sum for number in numbers]
 
-def generate_random_chromosome(chromosome_length=7, target_sum=10):
+def generate_random_chromosome(chromosome_length=7, target_sum=7):
     random.seed()
     random_numbers = generate_random_numbers(chromosome_length)
     normalized_chromosome = normalize(random_numbers, target_sum)
@@ -221,7 +223,9 @@ xfc2023 = [
     ex_adv_two_asteroids_pt2,
     ex_adv_ring_pt1,
     adv_random_big_1,
+    adv_random_big_2,
     adv_random_big_3,
+    adv_random_big_4,
     adv_multi_wall_bottom_hard_1,
     adv_multi_wall_right_hard_1,
     adv_multi_ring_closing_left,
@@ -234,11 +238,10 @@ xfc2023 = [
 
 training_portfolio = xfc2023
 
-random.seed(1)
-
 width, height = (1000, 800)
 
-for num_ast in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]:
+for ind, num_ast in enumerate([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]):
+    random.seed(ind)
     rand_scenario = Scenario(name=f'Random Scenario {num_ast}',
                                 asteroid_states=generate_asteroids(
                                         num_asteroids=num_ast,
@@ -258,4 +261,4 @@ for num_ast in [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 2
                                 stop_if_no_ammo=False)
     training_portfolio.append(rand_scenario)
 
-run_training(training_portfolio, f"training\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training Results.json")
+run_training(training_portfolio, f"{TRAINING_DIRECTORY}\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training 1 Results.json")

@@ -1756,7 +1756,7 @@ class Simulation():
                     # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
                     # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
                     mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*10
-                    mine_safe_time_score += 15 - 5*mine_collision_time/3 + mine_ground_zero_fudge
+                    mine_safe_time_score += 15 - 5*mine_collision_time/3 + max(0, mine_ground_zero_fudge)
             mine_safe_time_fitness = sigmoid(mine_safe_time_score, -0.2, 15)
             return mine_safe_time_fitness, next_extrapolated_mine_collision_time
 
@@ -1771,6 +1771,14 @@ class Simulation():
                     asts_within_cone += 1
             if asts_within_cone == 0:
                 asteroid_aiming_cone_score = 0
+            elif asts_within_cone == 1:
+                asteroid_aiming_cone_score = 0.8
+            elif asts_within_cone == 2:
+                asteroid_aiming_cone_score = 0.85
+            elif asts_within_cone == 3:
+                asteroid_aiming_cone_score = 0.90
+            elif asts_within_cone == 4:
+                asteroid_aiming_cone_score = 0.95
             else:
                 asteroid_aiming_cone_score = 1
             return asteroid_aiming_cone_score
