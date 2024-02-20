@@ -196,6 +196,7 @@ alternate_scenarios = [
 
 xfc2023 = [
     ex_adv_four_corners_pt1,
+    ex_adv_four_corners_pt2,
     ex_adv_asteroids_down_up_pt1,
     ex_adv_asteroids_down_up_pt2,
     ex_adv_direct_facing,
@@ -203,15 +204,17 @@ xfc2023 = [
     ex_adv_two_asteroids_pt2,
     ex_adv_ring_pt1,
     adv_random_big_1,
+    adv_random_big_2,
     adv_random_big_3,
+    adv_random_big_4,
     adv_multi_wall_bottom_hard_1,
     adv_multi_wall_right_hard_1,
-    adv_multi_ring_closing_left,
-    adv_multi_ring_closing_right,
-    adv_multi_two_rings_closing,
-    avg_multi_ring_closing_both2,
-    adv_multi_ring_closing_both_inside,
-    adv_multi_ring_closing_both_inside_fast
+    #adv_multi_ring_closing_left,
+    #adv_multi_ring_closing_right,
+    #adv_multi_two_rings_closing,
+    #avg_multi_ring_closing_both2,
+    #adv_multi_ring_closing_both_inside,
+    #adv_multi_ring_closing_both_inside_fast
 ]
 
 custom = [
@@ -252,14 +255,18 @@ team_2_deaths = 0
 team_1_wins = 0
 team_2_wins = 0
 #while True:
-for sc in xfc2023:
+random.seed(1)
+#for sc in xfc2023:
+for _ in range(1):
     iterations += 1
     if args.seed is not None:
         randseed =  args.seed
     else:
+        pass
         randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
-    random.seed(randseed)
+    #random.seed(randseed)
+    
     asteroids_random = generate_asteroids(
                                     num_asteroids=2,
                                     position_range_x=(0, width),
@@ -285,7 +292,7 @@ for sc in xfc2023:
                                 time_limit=600,
                                 ammo_limit_multiplier=random.choice([0]),
                                 stop_if_no_ammo=False)
-
+    
     pre = time.perf_counter()
     try:
         print(f"Evaluating scenario {sc.name}")
@@ -295,17 +302,25 @@ for sc in xfc2023:
     # my_test_scenario
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    controllers_used = [Neo(), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #state = 
+    controllers_used = [Neo([3,7,1,1,1,10,1]), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    #controllers_used = [NeoController(), NeoController()]
+    #random.setstate(state)
+    #print(f"RNG State: {random.getstate()}")
+    #score, perf_data = game.run(scenario=ex_adv_four_corners_pt1, controllers=controllers_used)
+    #score, perf_data = game.run(scenario=ex_adv_four_corners_pt2, controllers=controllers_used)
+    random.seed(1)
     try:
         if profile:
             cProfile.run(f'game.run(scenario=sc, controllers=[Neo(), Neo()])')
         else:
+            #print(random.getstate())
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
         if profile:
-            cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
+            cProfile.run(f'game.run(scenario=ex_adv_four_corners_pt2, controllers=[Neo(), Neo()])')
         else:
-            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
+            score, perf_data = game.run(scenario=adv_random_big_2, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:

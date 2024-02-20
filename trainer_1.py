@@ -116,13 +116,14 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         elif rand_decision < 0.7:
             print('Mutating top chromosome')
             # Take the top chromosome and apply a mutation
-            new_chromosome = normalize(mutate_chromosome(top_chromosomes[0]), 7)
+            new_chromosome = mutate_chromosome(top_chromosomes[0], 0.2, 0.5)
             print(f"Mutated {top_chromosomes[0]} into {new_chromosome}")
         elif rand_decision < 0.85:
             print('Crossovering chromosomes')
             # Take some top chromosomes and crossover them
             child_1, child_2 = crossover_chromosomes(top_chromosomes[0], top_chromosomes[1])
             new_chromosome = random.choice([child_1, child_2])
+            new_chromosome = mutate_chromosome(new_chromosome)
             print(f"Took parents {top_chromosomes[0]} and {top_chromosomes[1]} to get {new_chromosome}")
         else:
             print('Crossovering rand chromosomes')
@@ -130,8 +131,9 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
             parent1, parent2 = random.sample(top_chromosomes, 2)
             child_1, child_2 = crossover_chromosomes(parent1, parent2)
             new_chromosome = random.choice([child_1, child_2])
+            new_chromosome = mutate_chromosome(new_chromosome)
             print(f"Took parents {parent1} and {parent2} to get {new_chromosome}")
-
+        new_chromosome = normalize(new_chromosome, 7)
         print(f"\nNew run using chromosome: {new_chromosome}")
         team_1_hits = 0
         team_2_hits = 0
@@ -141,10 +143,11 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         team_2_wins = 0
         total_eval_time_s = 0
         for i in range(2):
-            random.seed(i)
             for sc in training_portfolio:
+                random.seed(i)
                 controllers_used = [Neo(new_chromosome), NeoController()]
-                print(f"Evaluating scenario {sc.name}")
+                print(f"\nEvaluating scenario {sc.name} with rng seed {i}")
+                #print(f"RNG State: {random.getstate()}")
                 pre = time.perf_counter()
                 score, perf_data = game.run(scenario=sc, controllers=controllers_used)
                 post = time.perf_counter()
@@ -208,9 +211,12 @@ def mutate_chromosome(chromosome, mutation_rate=0.2, mutation_strength=0.3):
             if random.random() < mutation_rate:  # Apply mutation with a certain probability
                 # Add a random offset within the range [-mutation_strength, mutation_strength]
                 offset = random.uniform(-mutation_strength, mutation_strength)
-                chromosome[i] += offset
-                chromosome[i] = max(chromosome[i], 0)
-                mutation_occurred = True
+                original_gene = chromosome[i]
+                chromosome[i] = max(chromosome[i] + offset, 0)
+                if original_gene != chromosome[i]:
+                    mutation_occurred = True
+                else:
+                    mutation_occurred = False
     return chromosome
 
 def crossover_chromosomes(parent1, parent2):

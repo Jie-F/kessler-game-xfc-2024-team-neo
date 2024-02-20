@@ -117,7 +117,9 @@ class KesslerGame:
                 t_start = time.perf_counter()
 
             # Loop through each controller/ship combo and apply their actions
+            #print('\nshowing ship stuff')
             for idx, ship in enumerate(ships):
+                #print(controllers[idx].ship_id, ship.id)
                 if ship.alive:
                     # Reset controls on ship to defaults
                     ship.thrust = 0
