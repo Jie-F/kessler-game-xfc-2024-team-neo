@@ -124,7 +124,6 @@ random_search_iterations = 0
 random_search_total_fitness = 0
 
 total_sim_timesteps = 0
-cheap_preview_time = 0
 
 @lru_cache()
 def set_up_mine_fis():
@@ -821,7 +820,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
 
     def rotate_heading(heading_difference_deg):
         nonlocal move_sequence
-        if abs(heading_difference_deg)*10 < GRAIN:
+        if abs(heading_difference_deg) < GRAIN:
             move_sequence.append({'thrust': 0, 'turn_rate': 0, 'fire': False})
         still_need_to_turn = heading_difference_deg
         while abs(still_need_to_turn) > SHIP_MAX_TURN_RATE*DELTA_TIME:
@@ -879,7 +878,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
     rotate_heading(ship_heading_angle)
     accelerate(ship_cruise_speed, ship_accel_turn_rate)
     cruise(ship_cruise_timesteps, ship_cruise_turn_rate)
-    accelerate(0, 0)
+    accelerate(0, 0) # TODO: If we remove this, we get some interesting results and emergent behavior. Neo would spazz around the map, going from one maneuver directly into another. I might even be able to tweak it to work. Maybe in the stationary targeting, apply a thrust to slow down the ship, so the targeting works a bit better. That could fix the issue, and it might be worth exploring if I have time! But for now, let’s just eat the slight time loss and regain the control of node based movement without drifting around like driftwood.
     return move_sequence
 
 def analyze_gamestate_for_heuristic_maneuver(game_state, ship_state):
@@ -2194,7 +2193,7 @@ class Simulation():
         if fitness_function_weights is not None:
             fitness_weights = fitness_function_weights
         else:
-            fitness_weights = [7, 10, 1, 1, 7, 9, 1]
+            fitness_weights = [7, 10, 1, 1, 8, 9, 1]
         #print(fitness_weights)
         overall_fitness = weighted_average(fitnesses, fitness_weights)
         if overall_fitness > 0.9:
@@ -2476,7 +2475,6 @@ class Simulation():
                 else:
                     self.explanation_messages.append("Asteroids no longer exist. We're all done!")
                     self.explanation_messages.append(f"In this scenario, I have simulated {total_sim_timesteps*DELTA_TIME/60:0.0f} minutes of gameplay!")
-                    print(cheap_preview_time)
                     turn_direction = 0
                     idle_thrust = 0
                 # We still simulate one iteration of this, because if we had a pending shot from before, this will do the shot!
@@ -2898,6 +2896,7 @@ class Simulation():
                     # We're able to decide whether we want to fire any convenient shots we can get
                     timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
                     fire_this_timestep = False
+                    # TODO: If we're decelerating, maybe we can use this time to turn toward a target we want to shoot, and save a few frames! Super microoptimization strats.
                     if timesteps_until_can_fire == 0 and not self.halt_shooting: #self.future_timesteps >= self.timesteps_to_not_check_collision_for:
                         for asteroid in self.game_state['asteroids']:
                             if fire_this_timestep:
@@ -3715,7 +3714,7 @@ class Neo(KesslerController):
                     ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/DELTA_TIME))
 
                 # First do a dummy simulation just to go through the motion, so we have the list of moves
-                start_time = time.perf_counter()
+                #start_time = time.perf_counter()
                 #print("Simming maneuver preview")
                 #dummy_game_state = {'asteroids': [], 'mines': [], 'ships': [], 'bullets': [], 'map_size': self.game_state_to_base_planning['game_state']['map_size'], 'sim_frame': 0}
                 #maneuver_preview = Simulation(dummy_game_state, self.game_state_to_base_planning['ship_state'], self.game_state_to_base_planning['timestep'], self.game_state_to_base_planning['ship_respawn_timer'], {}, [], -math.inf, -math.inf, True, False)
@@ -3738,10 +3737,8 @@ class Neo(KesslerController):
                     assert orig['turn_rate'] == new['turn_rate']
                     assert orig['fire'] == new['fire']
                 '''
-                end_time = time.perf_counter()
+                #end_time = time.perf_counter()
                 #print(f'Cheap preview took {end_time - start_time} s. NOW DOING EXPENSIVE MANEUVER SIM')
-                global cheap_preview_time
-                cheap_preview_time += end_time - start_time
                 #start_time = time.time()
                 #print(f"Mines before going into the polan action sim:", self.game_state_to_base_planning['game_state']['mines'])
                 #print("Simming actual maneuver")
