@@ -293,7 +293,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     return bullet_t, shooting_theta, intercept_x, intercept_y
 
 
-class NeoController(KesslerController):
+class BabyNeoController(KesslerController):
     def __init__(self):
         self.init_done = False
 
