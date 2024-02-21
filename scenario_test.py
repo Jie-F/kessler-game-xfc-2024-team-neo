@@ -1,8 +1,8 @@
 import time
 import random
-from neo_controller import Neo
+from neo_controller import NeoController
 from smith_controller import Smith
-from baby_neo_controller import NeoController
+from baby_neo_controller import BabyNeoController
 import numpy as np
 import cProfile
 import sys
@@ -303,7 +303,7 @@ for _ in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
-    controllers_used = [Neo(), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
