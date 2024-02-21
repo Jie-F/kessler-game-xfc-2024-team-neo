@@ -37,8 +37,8 @@ from typing import Any, Optional, Callable
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import skfuzzy as fuzz
-from skfuzzy import control as ctrl
+#import skfuzzy as fuzz
+#from skfuzzy import control as ctrl
 
 from src.kesslergame import KesslerController
 
@@ -129,235 +129,6 @@ random_search_iterations = 0
 random_search_total_fitness = 0
 
 total_sim_timesteps = 0
-
-@lru_cache()
-def set_up_mine_fis():
-    # set up mine FIS
-    mines_left = ctrl.Antecedent(np.arange(0, 4, 1), 'mines_left')
-    lives_left = ctrl.Antecedent(np.arange(1, 4, 1), 'lives_left')
-    asteroids_hit = ctrl.Antecedent(np.arange(0, 51, 1), 'asteroids_hit')
-    drop_mine = ctrl.Consequent(np.arange(0, 11, 1), 'drop_mine')
-
-    # Defining the membership functions
-    mines_left['few'] = fuzz.trimf(mines_left.universe, [1, 1, 2])
-    mines_left['many'] = fuzz.trimf(mines_left.universe, [1.5, 3, 3])
-    lives_left['few'] = fuzz.trimf(lives_left.universe, [1, 1, 2])
-    lives_left['many'] = fuzz.trimf(lives_left.universe, [1.5, 3, 3])
-    asteroids_hit['few'] = fuzz.trimf(asteroids_hit.universe, [0, 0, ASTEROIDS_HIT_OKAY_CENTER])
-    asteroids_hit['okay'] = fuzz.trimf(asteroids_hit.universe, [0, ASTEROIDS_HIT_OKAY_CENTER, ASTEROIDS_HIT_VERY_GOOD])
-    asteroids_hit['many'] = fuzz.trimf(asteroids_hit.universe, [ASTEROIDS_HIT_OKAY_CENTER, ASTEROIDS_HIT_VERY_GOOD, ASTEROIDS_HIT_VERY_GOOD])
-
-    drop_mine['no'] = fuzz.trimf(drop_mine.universe, [0, 0, 5])
-    drop_mine['yes'] = fuzz.trimf(drop_mine.universe, [5, 10, 10])
-
-    rules = [
-        ctrl.Rule(mines_left['few'] & lives_left['few'] & asteroids_hit['few'], drop_mine['no']),
-        ctrl.Rule(mines_left['few'] & lives_left['few'] & asteroids_hit['okay'], drop_mine['no']),
-        ctrl.Rule(mines_left['few'] & lives_left['few'] & asteroids_hit['many'], drop_mine['yes']),
-        ctrl.Rule(mines_left['few'] & lives_left['many'] & asteroids_hit['few'], drop_mine['no']),
-        ctrl.Rule(mines_left['few'] & lives_left['many'] & asteroids_hit['okay'], drop_mine['yes']),
-        ctrl.Rule(mines_left['few'] & lives_left['many'] & asteroids_hit['many'], drop_mine['yes']),
-        ctrl.Rule(mines_left['many'] & lives_left['few'] & asteroids_hit['few'], drop_mine['no']),
-        ctrl.Rule(mines_left['many'] & lives_left['few'] & asteroids_hit['okay'], drop_mine['no']),
-        ctrl.Rule(mines_left['many'] & lives_left['few'] & asteroids_hit['many'], drop_mine['yes']),
-        ctrl.Rule(mines_left['many'] & lives_left['many'] & asteroids_hit['few'], drop_mine['yes']),
-        ctrl.Rule(mines_left['many'] & lives_left['many'] & asteroids_hit['okay'], drop_mine['yes']),
-        ctrl.Rule(mines_left['many'] & lives_left['many'] & asteroids_hit['many'], drop_mine['yes']),
-    ]
-
-    mine_dropping_control = ctrl.ControlSystem(rules)
-    mine_dropping_fis = ctrl.ControlSystemSimulation(mine_dropping_control)
-    return mine_dropping_fis
-
-@lru_cache()
-def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int):
-    debug_print("Mine fis inputs", num_mines_left, num_lives_left, num_asteroids_hit)
-    if num_mines_left == 0 or num_asteroids_hit < 8:
-        return False
-    num_mines_left = min(num_mines_left, 3)
-    num_lives_left = min(num_lives_left, 3)
-    num_asteroids_hit = min(num_asteroids_hit, ASTEROIDS_HIT_VERY_GOOD)
-    debug_print(f"Mine fis: Mines left: {num_mines_left}, lives left: {num_lives_left}, asteroids hit: {num_asteroids_hit}")
-    mine_dropping_fis = set_up_mine_fis()
-    mine_dropping_fis.input['mines_left'] = num_mines_left
-    mine_dropping_fis.input['lives_left'] = num_lives_left
-    mine_dropping_fis.input['asteroids_hit'] = num_asteroids_hit
-    # Compute the output
-    mine_dropping_fis.compute()
-    drop_decision = mine_dropping_fis.output['drop_mine']
-    # Interpreting the output
-    should_drop_mine = drop_decision > 5  # True for drop, False for don't drop
-    return should_drop_mine
-
-@lru_cache()
-def setup_heuristic_maneuver_fis():
-    K = 0.8/DELTA_TIME
-    # Antecedents (Inputs)
-    imminent_asteroid_speed = ctrl.Antecedent(np.arange(0, 301, 1), 'imminent_asteroid_speed')
-    imminent_asteroid_relative_heading = ctrl.Antecedent(np.arange(0, 361, 1), 'imminent_asteroid_relative_heading')
-    largest_gap_relative_heading = ctrl.Antecedent(np.arange(0, 361, 1), 'largest_gap_relative_heading')
-    nearby_asteroid_average_speed = ctrl.Antecedent(np.arange(0, 301, 1), 'nearby_asteroid_average_speed')
-    nearby_asteroid_count = ctrl.Antecedent(np.arange(0, 16, 1), 'nearby_asteroid_count')
-
-    # Consequents (Outputs)
-    ship_accel_turn_rate = ctrl.Consequent(np.arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_accel_turn_rate')
-    ship_cruise_speed = ctrl.Consequent(np.arange(-SHIP_MAX_SPEED, SHIP_MAX_SPEED + 1, 1), 'ship_cruise_speed')
-    ship_cruise_turn_rate = ctrl.Consequent(np.arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_cruise_turn_rate')
-    ship_cruise_timesteps = ctrl.Consequent(np.arange(0, K + 1, 1), 'ship_cruise_timesteps')
-    ship_thrust_direction = ctrl.Consequent(np.arange(-1, 2, 1), 'ship_thrust_direction')
-
-
-    # Membership Functions for Antecedents
-    imminent_asteroid_speed.automf(names=['slow', 'medium', 'fast'])
-    #imminent_asteroid_relative_heading.automf(names=['F', 'FL', 'L', 'BL', 'B', 'BR', 'R', 'FR'])
-    #largest_gap_relative_heading.automf(names=['F', 'FL', 'L', 'BL', 'B', 'BR', 'R', 'FR'])
-    nearby_asteroid_average_speed.automf(names=['slow', 'medium', 'fast'])
-    nearby_asteroid_count.automf(names=['few', 'medium', 'many'])
-
-    # Define manual membership functions with 90 degrees width, dominant in 45 degrees
-    # Forward (F) - Bimodal covering 0 to 45 and 315 to 360
-    imminent_asteroid_relative_heading['F'] = np.fmax(
-        fuzz.trimf(imminent_asteroid_relative_heading.universe, [0, 0, 45]),  # Extends to 0 to 45
-        fuzz.trimf(imminent_asteroid_relative_heading.universe, [315, 360, 360])  # Wraps from 315 to 360
-    )
-
-    # Forward Left (FL)
-    imminent_asteroid_relative_heading['FL'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [0, 45, 90])
-
-    # Left (L)
-    imminent_asteroid_relative_heading['L'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [45, 90, 135])
-
-    # Back Left (BL)
-    imminent_asteroid_relative_heading['BL'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [90, 135, 180])
-
-    # Back (B)
-    imminent_asteroid_relative_heading['B'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [135, 180, 225])
-
-    # Back Right (BR)
-    imminent_asteroid_relative_heading['BR'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [180, 225, 270])
-
-    # Right (R)
-    imminent_asteroid_relative_heading['R'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [225, 270, 315])
-
-    # Forward Right (FR)
-    imminent_asteroid_relative_heading['FR'] = fuzz.trimf(imminent_asteroid_relative_heading.universe, [270, 315, 360])
-
-
-    # Define manual membership functions with 90 degrees width, dominant in 45 degrees
-    # Forward (F) - Bimodal covering 0 to 45 and 315 to 360
-    largest_gap_relative_heading['F'] = np.fmax(
-        fuzz.trimf(largest_gap_relative_heading.universe, [0, 0, 45]),  # Extends to 0 to 45
-        fuzz.trimf(largest_gap_relative_heading.universe, [315, 360, 360])  # Wraps from 315 to 360
-    )
-
-    # Forward Left (FL)
-    largest_gap_relative_heading['FL'] = fuzz.trimf(largest_gap_relative_heading.universe, [0, 45, 90])
-
-    # Left (L)
-    largest_gap_relative_heading['L'] = fuzz.trimf(largest_gap_relative_heading.universe, [45, 90, 135])
-
-    # Back Left (BL)
-    largest_gap_relative_heading['BL'] = fuzz.trimf(largest_gap_relative_heading.universe, [90, 135, 180])
-
-    # Back (B)
-    largest_gap_relative_heading['B'] = fuzz.trimf(largest_gap_relative_heading.universe, [135, 180, 225])
-
-    # Back Right (BR)
-    largest_gap_relative_heading['BR'] = fuzz.trimf(largest_gap_relative_heading.universe, [180, 225, 270])
-
-    # Right (R)
-    largest_gap_relative_heading['R'] = fuzz.trimf(largest_gap_relative_heading.universe, [225, 270, 315])
-
-    # Forward Right (FR)
-    largest_gap_relative_heading['FR'] = fuzz.trimf(largest_gap_relative_heading.universe, [270, 315, 360])
-    #largest_gap_relative_heading['F'].view()
-
-    # Membership Functions for Consequents
-
-    # Acceleration Turn Rate
-    ship_accel_turn_rate['R'] = fuzz.trimf(ship_accel_turn_rate.universe, [-SHIP_MAX_TURN_RATE, -SHIP_MAX_TURN_RATE/2, 0])
-    ship_accel_turn_rate['M'] = fuzz.trimf(ship_accel_turn_rate.universe, [-SHIP_MAX_TURN_RATE/4, 0, SHIP_MAX_TURN_RATE/4])
-    ship_accel_turn_rate['L'] = fuzz.trimf(ship_accel_turn_rate.universe, [0, SHIP_MAX_TURN_RATE/2, SHIP_MAX_TURN_RATE])
-    #ship_accel_turn_rate.view()
-    # Cruise Speed
-    ship_cruise_speed['slow'] = fuzz.trimf(ship_cruise_speed.universe, [0, 0, SHIP_MAX_SPEED/2])
-    ship_cruise_speed['medium'] = fuzz.trimf(ship_cruise_speed.universe, [0, SHIP_MAX_SPEED/2, SHIP_MAX_SPEED])
-    ship_cruise_speed['fast'] = fuzz.trimf(ship_cruise_speed.universe, [SHIP_MAX_SPEED/2, SHIP_MAX_SPEED, SHIP_MAX_SPEED])
-    #ship_cruise_speed.view()
-    # Cruise Turn Rate
-    ship_cruise_turn_rate['R'] = fuzz.trimf(ship_cruise_turn_rate.universe, [-SHIP_MAX_TURN_RATE, -SHIP_MAX_TURN_RATE/2, 0])
-    ship_cruise_turn_rate['M'] = fuzz.trimf(ship_cruise_turn_rate.universe, [-SHIP_MAX_TURN_RATE/4, 0, SHIP_MAX_TURN_RATE/4])
-    ship_cruise_turn_rate['L'] = fuzz.trimf(ship_cruise_turn_rate.universe, [0, SHIP_MAX_TURN_RATE/2, SHIP_MAX_TURN_RATE])
-    #ship_cruise_turn_rate.view()
-    # Cruise Time Steps
-    ship_cruise_timesteps['short'] = fuzz.trimf(ship_cruise_timesteps.universe, [0, K/4, K/2])
-    ship_cruise_timesteps['medium'] = fuzz.trimf(ship_cruise_timesteps.universe, [K/4, K/2, 3*K/4])
-    ship_cruise_timesteps['long'] = fuzz.trimf(ship_cruise_timesteps.universe, [K/2, 3*K/4, K])
-    #ship_cruise_timesteps.view()
-
-    ship_thrust_direction['F'] = fuzz.trimf(ship_thrust_direction.universe, [0, 1, 1])
-    ship_thrust_direction['B'] = fuzz.trimf(ship_thrust_direction.universe, [-1, -1, 0])
-
-    rules = [
-        # The faster the imminent asteroid approaches, the quicker we want to get out of there
-        ctrl.Rule(imminent_asteroid_speed['slow'], ship_cruise_speed['slow']),
-        ctrl.Rule(imminent_asteroid_speed['medium'], ship_cruise_speed['medium']),
-        ctrl.Rule(imminent_asteroid_speed['fast'], ship_cruise_speed['fast']),
-        # Adjust ship speed depending on the surrounding asteroids' speeds
-        ctrl.Rule(nearby_asteroid_average_speed['slow'], ship_cruise_speed['slow']),
-        ctrl.Rule(nearby_asteroid_average_speed['medium'], ship_cruise_speed['medium']),
-        ctrl.Rule(nearby_asteroid_average_speed['fast'], ship_cruise_speed['fast']),
-        # Cruise length should depend on asteroid density a bit, since a lower density means we should be able to travel farther without hitting anything
-        ctrl.Rule(nearby_asteroid_count['few'], (ship_cruise_timesteps['long'], ship_cruise_speed['fast'])),
-        ctrl.Rule(nearby_asteroid_count['medium'], (ship_cruise_timesteps['medium'], ship_cruise_speed['medium'])),
-        ctrl.Rule(nearby_asteroid_count['many'], (ship_cruise_timesteps['short'], ship_cruise_speed['slow'])),
-        # Whichever direction the imminent asteroid is from us, we want to avoid running directly at that asteroid
-        ctrl.Rule(imminent_asteroid_relative_heading['F'], (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['B'], (ship_thrust_direction['F'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['L'], (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])), #, ~(ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['R'], (ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])), #& ~(ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['FL'], (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])), #& ~(ship_thrust_direction['F'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['L'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['FR'], (ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])), #& ~(ship_thrust_direction['F'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['BL'], (ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])), #& ~(ship_thrust_direction['B'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(imminent_asteroid_relative_heading['BR'], (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])), #& ~(ship_thrust_direction['B'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['L'])),
-        # Whereever the largest gap to escape is, we want to go there
-        ctrl.Rule(largest_gap_relative_heading['F'], (ship_thrust_direction['F'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['M'])),
-        ctrl.Rule(largest_gap_relative_heading['B'], (ship_thrust_direction['B'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['M'])),
-        ctrl.Rule(largest_gap_relative_heading['L'], (ship_thrust_direction['F'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])),# | (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(largest_gap_relative_heading['R'], (ship_thrust_direction['F'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['R'])),# | (ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['L'])),
-        ctrl.Rule(largest_gap_relative_heading['FL'], (ship_thrust_direction['F'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['M'])),# | (ship_thrust_direction['F'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['L'])),
-        ctrl.Rule(largest_gap_relative_heading['FR'], (ship_thrust_direction['F'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['M'])),# | (ship_thrust_direction['F'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(largest_gap_relative_heading['BL'], (ship_thrust_direction['B'], ship_accel_turn_rate['R'], ship_cruise_turn_rate['M'])),# | (ship_thrust_direction['B'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['R'])),
-        ctrl.Rule(largest_gap_relative_heading['BR'], (ship_thrust_direction['B'], ship_accel_turn_rate['L'], ship_cruise_turn_rate['M'])),# | (ship_thrust_direction['B'], ship_accel_turn_rate['M'], ship_cruise_turn_rate['L'])),
-    ]
-
-    # Create the control system
-    maneuver_control_system = ctrl.ControlSystem(rules)
-    maneuver_fis = ctrl.ControlSystemSimulation(maneuver_control_system)
-    return maneuver_fis
-
-def maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count):
-    maneuver_fis = setup_heuristic_maneuver_fis()
-    #random_imminent_asteroid_speed = random.uniform(0, 300)
-    #random_imminent_asteroid_relative_heading = random.uniform(0, 360)
-    #random_largest_gap_relative_heading = random.uniform(0, 360)
-    #random_nearby_asteroid_average_speed = random.uniform(0, 300)
-    #random_nearby_asteroid_count = random.randint(0, 15)
-    #print(f"imminent_asteroid_speed: {imminent_asteroid_speed}, imminent_asteroid_relative_heading: {imminent_asteroid_relative_heading}, largest_gap_relative_heading: {largest_gap_relative_heading}, nearby_asteroid_average_speed: {nearby_asteroid_average_speed}, nearby_asteroid_count: {nearby_asteroid_count}")
-    maneuver_fis.input['imminent_asteroid_speed'] = imminent_asteroid_speed
-    maneuver_fis.input['imminent_asteroid_relative_heading'] = imminent_asteroid_relative_heading
-    maneuver_fis.input['largest_gap_relative_heading'] = largest_gap_relative_heading
-    maneuver_fis.input['nearby_asteroid_average_speed'] = nearby_asteroid_average_speed
-    maneuver_fis.input['nearby_asteroid_count'] = nearby_asteroid_count
-    maneuver_fis.compute()
-
-    acceleration_turn_rate = maneuver_fis.output['ship_accel_turn_rate']
-    cruise_speed = maneuver_fis.output['ship_cruise_speed']
-    cruise_turn_rate = maneuver_fis.output['ship_cruise_turn_rate']
-    cruise_timesteps = maneuver_fis.output['ship_cruise_timesteps']
-    thrust_direction = maneuver_fis.output['ship_thrust_direction']
-    debug_print(f"FIS Acceleration Turn Rate: {acceleration_turn_rate}, Cruise Speed: {cruise_speed}, Cruise Turn Rate: {cruise_turn_rate}, Cruise Timesteps: {cruise_timesteps}, Thrust Direction: {thrust_direction}")
-    return acceleration_turn_rate, cruise_speed, cruise_turn_rate, cruise_timesteps, thrust_direction
 
 def sigmoid(x, k: float=1.0, x0: float=0.0):
     """
@@ -1846,11 +1617,17 @@ def check_mine_opportunity(ship_state, game_state):
             # We want to conserve mines more if we only have mines left and not bullets, and laying multiple mines at once is risky because the first one may blow asteroids away from the second, so the second one would be a waste
             return False
     #debug_print(f"Mine count inside: {mine_ast_count} compared to average density amount inside: {average_asteroids_inside_blast_radius}")
-    try:
-        return mine_fis(ship_state['mines_remaining'], ship_state['lives_remaining'], mine_ast_count)
-    except Exception as e:
-        print(f"EXCEPTION RAISED IN MINE FIS: {e}")
-        return False
+    #try:
+    #    return mine_fis(ship_state['mines_remaining'], ship_state['lives_remaining'], mine_ast_count)
+    #except Exception as e:
+    #    print(f"EXCEPTION RAISED IN MINE FIS: {e}")
+    #    return False
+    #if (len(game_state['asteroids']) > 40 and mine_ast_count > 1.5*average_asteroids_inside_blast_radius or mine_ast_count > 20 or mine_ast_count > 2*average_asteroids_inside_blast_radius) and len(game_state['mines']) == 0:
+    #    return True
+    #else:
+    #    return False
+    return False
+
 
 class Simulation():
     # Simulates kessler_game.py and ship.py and other game mechanics
@@ -3728,12 +3505,13 @@ class NeoController(KesslerController):
                 heuristic_maneuver = True
             else:
                 heuristic_maneuver = False
-
+            heuristic_maneuver = False
             for _ in range(search_iterations):
+                '''
                 if heuristic_maneuver:
                     random_ship_heading_angle = 0
                     imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
-                    ship_accel_turn_rate, ship_cruise_speed, ship_cruise_turn_rate, ship_cruise_timesteps, thrust_direction = maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count)
+                    ship_accel_turn_rate, ship_cruise_speed, ship_cruise_turn_rate, ship_cruise_timesteps, thrust_direction
                     #print(ship_accel_turn_rate, ship_cruise_speed, ship_cruise_turn_rate, ship_cruise_timesteps, thrust_direction)
                     ship_cruise_timesteps = round(ship_cruise_timesteps)
                     if thrust_direction < -GRAIN:
@@ -3741,6 +3519,7 @@ class NeoController(KesslerController):
                     elif thrust_direction < GRAIN:
                         # The FIS couldn't decide which way to thrust, so we'll just skip the heuristic maneuver altogether
                         heuristic_maneuver = False
+                '''
                 if not heuristic_maneuver:
                     random_ship_heading_angle = random.uniform(-30.0, 30.0)
                     ship_accel_turn_rate = random.triangular(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE, 0)
