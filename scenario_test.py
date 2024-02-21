@@ -255,23 +255,23 @@ team_2_deaths = 0
 team_1_wins = 0
 team_2_wins = 0
 #while True:
-random.seed(1)
+#random.seed(1)
 #for sc in xfc2023:
 for _ in range(1):
     iterations += 1
     if args.seed is not None:
-        randseed =  args.seed
+        randseed = args.seed
     else:
         pass
         randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
     color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
-    #random.seed(randseed)
-    
+    random.seed(randseed)
+
     asteroids_random = generate_asteroids(
-                                    num_asteroids=2,
+                                    num_asteroids=25,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
-                                    speed_range=(-300, 600, 0),
+                                    speed_range=(-300, 300, 0),
                                     angle_range=(-1, 361),
                                     size_range=(1, 4)
                                 )*random.choice([1])
@@ -303,13 +303,12 @@ for _ in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
-    controllers_used = [Neo([3,7,1,1,1,10,1]), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [Neo(), NeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
     #score, perf_data = game.run(scenario=ex_adv_four_corners_pt1, controllers=controllers_used)
     #score, perf_data = game.run(scenario=ex_adv_four_corners_pt2, controllers=controllers_used)
-    random.seed(1)
     try:
         if profile:
             cProfile.run(f'game.run(scenario=sc, controllers=[Neo(), Neo()])')
@@ -318,9 +317,9 @@ for _ in range(1):
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
         if profile:
-            cProfile.run(f'game.run(scenario=ex_adv_four_corners_pt2, controllers=[Neo(), Neo()])')
+            cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
         else:
-            score, perf_data = game.run(scenario=adv_random_big_2, controllers=controllers_used)
+            score, perf_data = game.run(scenario=adv_random_big_1, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
