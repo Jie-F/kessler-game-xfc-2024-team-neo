@@ -898,7 +898,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
 def analyze_gamestate_for_heuristic_maneuver(game_state, ship_state):
     # This is a helper function to analyze and prepare the gamestate, to give the maneuver FIS useful information, to heuristically command a maneuver to try out
     def calculate_angular_width(radius, distance):
-        return 2*atan2(radius, distance)
+        return asin(radius/distance)
 
     def find_largest_gap(asteroids, ship_position):
         if not asteroids:
@@ -1237,7 +1237,7 @@ def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x:
         if asteroid_r < asteroid_dist:
             shot_heading_tolerance_rad = asin((asteroid_r - ASTEROID_AIM_BUFFER_PIXELS)/asteroid_dist)
         else:
-            shot_heading_tolerance_rad = pi/2
+            shot_heading_tolerance_rad = pi/4
         solutions.append((feasible, angle_difference_rad(theta, theta_0), shot_heading_tolerance_rad, t, intercept_x, intercept_y, asteroid_dist))
 
     return solutions
