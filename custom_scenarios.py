@@ -1112,3 +1112,83 @@ shot_pred_test = Scenario(name='shot_pred_test',
     stop_if_no_ammo=False
 )
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+num_asteroids = 6
+side_padding = 60
+asteroid_spacing = (height - 2*side_padding)/num_asteroids  # Spacing between asteroids
+asteroid_speed = 350  # Constant speed of the asteroids
+asteroid_start_x = width*4/5  # Starting height at the top of the screen
+
+# Create asteroid states
+asteroid_states = []
+for i in range(num_asteroids):
+    y_position = side_padding + i * asteroid_spacing + asteroid_spacing/2  # Centering each asteroid
+    asteroid_states.append({
+        'position': (asteroid_start_x, y_position),
+        'angle': 180 + (30 if i%2 == 0 else -30),
+        'speed': asteroid_speed,
+        'size': 4,
+    })
+
+# Create the scenario
+shredder = Scenario(
+    name='shredder',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': (width/5, height*3/4), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 1},
+                 {'position': (width/5, height/4), 'angle': 90, 'lives': 3, 'team': 2, 'mines_remaining': 1}],
+    map_size=(width, height),
+    time_limit=45,
+)
+
+
+
+
+
+
+
+
+num_asteroids = 12
+asteroid_y_spacing = height/num_asteroids  # Spacing between asteroids
+asteroid_x_spacing = width/num_asteroids
+asteroid_speed_x = (height+width)*200/height  # Constant speed of the asteroids
+asteroid_speed_y = (height+width)*200/width
+asteroid_start_x = width*4/5  # Starting height at the top of the screen
+
+# Create asteroid states
+asteroid_states = []
+for i in range(num_asteroids):
+    y_position = i * asteroid_y_spacing + asteroid_y_spacing/2  # Centering each asteroid
+    x_position = i * asteroid_x_spacing + asteroid_x_spacing/2
+    asteroid_states.append({
+        'position': (x_position, y_position),
+        'angle': 0 if i%2 == 0 else 270,
+        'speed': asteroid_speed_x if i%2 == 0 else asteroid_speed_y,
+        'size': 3,
+    })
+
+# Create the scenario
+diagonal_shredder = Scenario(
+    name='diagonal_shredder',
+    asteroid_states=asteroid_states,
+    ship_states=[{'position': (width/5, height*3/4), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 1},
+                 {'position': (width/5, height/4), 'angle': 90, 'lives': 3, 'team': 2, 'mines_remaining': 1}],
+    map_size=(width, height),
+    time_limit=45,
+)
