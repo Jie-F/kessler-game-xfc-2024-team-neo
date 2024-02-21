@@ -74,6 +74,7 @@ UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON = 8
 UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON = 3 # 1 second to turn, 2 seconds for bullet travel time
 ASTEROID_SIZE_SHOT_PRIORITY = (math.nan, 1, 2, 3, 4) # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights = None
+MINE_DROP_COOLDOWN_FUDGE_TS = 10 # We can drop a mine every 31 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
 
 # Initialization
 # Global variable to store messages and their last printed timestep
@@ -356,7 +357,7 @@ def maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_h
 
 def sigmoid(x, k=1, x0=0):
     """
-    Compute the sigmoid function with scaling and shift.
+    Compute the logistic sigmoid function with scaling and shift.
 
     Parameters:
     - x: The input value or array of values.
@@ -364,9 +365,22 @@ def sigmoid(x, k=1, x0=0):
     - x0: The shift factor. Positive values shift the curve to the right, negative to the left.
 
     Returns:
-    - The sigmoid function value(s) for the given input.
+    - The logistic sigmoid function value(s) for the given input.
     """
     return 1 / (1 + math.exp(-k * (x - x0)))
+
+def linear(x, point1, point2):
+    """
+    Interpolate a linear function between two points. If the input is outside the range, then the output is clamped to the nearest extreme output.
+    """
+    x1, y1 = point1
+    x2, y2 = point2
+    if x <= x1:
+        return y1
+    elif x >= x2:
+        return y2
+    else:
+        return y1 + (x - x1)*(y2 - y1)/(x2 - x1)
 
 def weighted_average(numbers: list, weights: list=None) -> float:
     """
@@ -2011,8 +2025,6 @@ class Simulation():
         return pos1[0]//max_width == pos2[0]//max_width and pos1[1]//max_height == pos2[1]//max_height
 
     def get_fitness(self):
-        #if self.ship_state['team'] == '2':
-        #    return sigmoid(self.get_fitness_OLD(), -0.3, 10)
         # This will return a scalar number representing how good of an action/state sequence we just went through
         # If these moves will keep us alive for a long time and shoot many asteroids along the way, then the fitness is good
         # If these moves result in us getting into a dangerous spot, or if we don't shoot many asteroids at all, then the fitness will be bad
@@ -2098,15 +2110,17 @@ class Simulation():
             return sigmoid(move_sequence_length_s, -5.7, 0.8)
         
         def get_other_ship_proximity_fitness():
-            other_ship_proximity_fitness = 0
-            ship_proximity_max_penalty = 10
-            ship_proximity_detection_radius = 400
-            ship_prox_exponent = 3
+            # Penalize being too close to the other ship. If the other ship is moving, penalize that as well by effectively treating the distance as closer to the other ship
+            # There is no maximum detection distance.
+            # On a 1000x800 board, the max distance between two ships is 640.3 pixels
             for other_ship in self.other_ships:
                 other_ship_pos_x, other_ship_pos_y = other_ship['position']
                 other_ship_vel_x, other_ship_vel_y = other_ship['velocity']
                 other_ship_speed = sqrt(other_ship_vel_x*other_ship_vel_x + other_ship_vel_y*other_ship_vel_y)
-                prox_score_speed_mul = min(1, other_ship_speed/100)*0.7 + 0.3
+                #prox_score_speed_mul = min(1, other_ship_speed/100)*0.7 + 0.3
+                # This multiplier effectively decreases the distance between the ships, at least when the fitness function considers it
+                # If the other ship is stationary, then the multiplier is 1. But if the other ship is moving quickly, I treat the distance between us to be smaller than it actually is, down to 30% the actual distance
+                other_ship_speed_dist_mul = linear(other_ship_speed, (0, 1), (SHIP_MAX_SPEED, 0.3))
                 self_pos_x, self_pos_y = ship_end_position#self.ship_state['position']
                 # Account for wrap. We know that the farthest two objects can be separated within the screen in the x and y axes, is by half the width, and half the height
                 abs_sep_x = abs(self_pos_x - other_ship_pos_x)
@@ -2114,9 +2128,10 @@ class Simulation():
                 sep_x = min(abs_sep_x, self.game_state['map_size'][0] - abs_sep_x)
                 sep_y = min(abs_sep_y, self.game_state['map_size'][1] - abs_sep_y)
                 separation_dist = sqrt(sep_x*sep_x + sep_y*sep_y)
-                if separation_dist < ship_proximity_detection_radius:
-                    other_ship_proximity_fitness += prox_score_speed_mul*ship_proximity_max_penalty/(ship_proximity_detection_radius**ship_prox_exponent)*(ship_proximity_detection_radius - separation_dist)**ship_prox_exponent
-            return sigmoid(other_ship_proximity_fitness, -0.6, 5)
+                #other_ship_proximity_fitness += prox_score_speed_mul*ship_proximity_max_penalty/(ship_proximity_detection_radius**ship_prox_exponent)*(ship_proximity_detection_radius - separation_dist)**ship_prox_exponent
+                return sigmoid(separation_dist*other_ship_speed_dist_mul, 0.016, 203)
+            else:
+                return 1
 
         move_sequence_length_s = (self.get_sequence_length() - 1)*DELTA_TIME
         next_extrapolated_mine_collision_times = self.get_next_extrapolated_mine_collision_times_and_pos()
@@ -2193,7 +2208,7 @@ class Simulation():
         if fitness_function_weights is not None:
             fitness_weights = fitness_function_weights
         else:
-            fitness_weights = [7, 10, 1, 1, 8, 9, 1]
+            fitness_weights = [6, 10, 1, 1, 6, 8, 1]
         #print(fitness_weights)
         overall_fitness = weighted_average(fitnesses, fitness_weights)
         if overall_fitness > 0.9:
@@ -3012,7 +3027,8 @@ class Simulation():
 
             # Only drop mines at the beginning of the sim
             # We can drop a mine once every 31 frames
-            if self.future_timesteps == 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 32 and not self.halt_shooting:
+            
+            if self.future_timesteps == 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 32 - MINE_DROP_COOLDOWN_FUDGE_TS and not self.halt_shooting:
                 drop_mine_this_timestep = check_mine_opportunity(self.ship_state, self.game_state) # Read only access of the ship and game states
             else:
                 drop_mine_this_timestep = False
@@ -3711,6 +3727,7 @@ class Neo(KesslerController):
                     #random_ship_cruise_speed = random.uniform(-ship_max_speed, ship_max_speed)
                     ship_cruise_speed = random.triangular(0, SHIP_MAX_SPEED, SHIP_MAX_SPEED)*random.choice([-1, 1])
                     ship_cruise_turn_rate = random.triangular(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE, 0)
+                    # TODO: For denser asteroid fields, decrease the max cruise seconds to encourage shorter maneuvers!
                     ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/DELTA_TIME))
 
                 # First do a dummy simulation just to go through the motion, so we have the list of moves

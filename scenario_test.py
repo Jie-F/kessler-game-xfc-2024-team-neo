@@ -319,7 +319,7 @@ for _ in range(1):
         if profile:
             cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
         else:
-            score, perf_data = game.run(scenario=adv_random_big_1, controllers=controllers_used)
+            score, perf_data = game.run(scenario=adv_multi_ring_closing_left, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
