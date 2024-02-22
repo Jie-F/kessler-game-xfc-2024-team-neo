@@ -131,7 +131,7 @@ random_search_total_fitness = 0
 total_sim_timesteps = 0
 
 @lru_cache()
-def set_up_mine_fis():
+def set_up_mine_fis() -> ctrl.ControlSystemSimulation:
     # set up mine FIS
     mines_left = ctrl.Antecedent(np.arange(0, 4, 1), 'mines_left')
     lives_left = ctrl.Antecedent(np.arange(1, 4, 1), 'lives_left')
@@ -170,7 +170,7 @@ def set_up_mine_fis():
     return mine_dropping_fis
 
 @lru_cache()
-def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int):
+def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int) -> bool:
     debug_print("Mine fis inputs", num_mines_left, num_lives_left, num_asteroids_hit)
     if num_mines_left == 0 or num_asteroids_hit < 8:
         return False
@@ -186,11 +186,11 @@ def mine_fis(num_mines_left: int, num_lives_left: int, num_asteroids_hit: int):
     mine_dropping_fis.compute()
     drop_decision = mine_dropping_fis.output['drop_mine']
     # Interpreting the output
-    should_drop_mine = drop_decision > 5  # True for drop, False for don't drop
+    should_drop_mine: bool = drop_decision > 5  # True for drop, False for don't drop
     return should_drop_mine
 
 @lru_cache()
-def setup_heuristic_maneuver_fis():
+def setup_heuristic_maneuver_fis() -> ctrl.ControlSystemSimulation:
     K = 0.8/DELTA_TIME
     # Antecedents (Inputs)
     imminent_asteroid_speed = ctrl.Antecedent(np.arange(0, 301, 1), 'imminent_asteroid_speed')
@@ -336,7 +336,7 @@ def setup_heuristic_maneuver_fis():
     maneuver_fis = ctrl.ControlSystemSimulation(maneuver_control_system)
     return maneuver_fis
 
-def maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count):
+def maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count) -> tuple:
     maneuver_fis = setup_heuristic_maneuver_fis()
     #random_imminent_asteroid_speed = random.uniform(0, 300)
     #random_imminent_asteroid_relative_heading = random.uniform(0, 360)
@@ -359,7 +359,7 @@ def maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_h
     debug_print(f"FIS Acceleration Turn Rate: {acceleration_turn_rate}, Cruise Speed: {cruise_speed}, Cruise Turn Rate: {cruise_turn_rate}, Cruise Timesteps: {cruise_timesteps}, Thrust Direction: {thrust_direction}")
     return acceleration_turn_rate, cruise_speed, cruise_turn_rate, cruise_timesteps, thrust_direction
 
-def sigmoid(x, k: float=1.0, x0: float=0.0):
+def sigmoid(x: float, k: float = 1.0, x0: float = 0.0) -> float:
     """
     Compute the logistic sigmoid function with scaling and shift.
 
@@ -373,7 +373,7 @@ def sigmoid(x, k: float=1.0, x0: float=0.0):
     """
     return 1 / (1 + math.exp(-k * (x - x0)))
 
-def linear(x, point1, point2):
+def linear(x: float, point1: tuple[float, float], point2: tuple[float, float]) -> float:
     """
     Interpolate a linear function between two points. If the input is outside the range, then the output is clamped to the nearest extreme output.
     """
@@ -386,7 +386,7 @@ def linear(x, point1, point2):
     else:
         return y1 + (x - x1)*(y2 - y1)/(x2 - x1)
 
-def weighted_average(numbers: list, weights: list[float] | None=None) -> float:
+def weighted_average(numbers: list[float], weights: Optional[list[float]] = None) -> float:
     """
     Calculate the weighted average of a list of numbers.
     If no weights are provided, the regular average is calculated.
@@ -414,7 +414,7 @@ def weighted_average(numbers: list, weights: list[float] | None=None) -> float:
         return sum(numbers)/len(numbers) if numbers else 0
 
 
-def compare_asteroids(ast_a, ast_b):
+def compare_asteroids(ast_a: dict, ast_b: dict) -> bool:
     for i in range(2):
         if ast_a['position'][i] != ast_b['position'][i]:
             return False
@@ -430,7 +430,7 @@ def compare_asteroids(ast_a, ast_b):
         return False
     return True
 
-def compare_bullets(bul_a, bul_b):
+def compare_bullets(bul_a: dict, bul_b: dict) -> bool:
     for i in range(2):
         if bul_a['position'][i] != bul_b['position'][i]:
             return False
@@ -442,7 +442,7 @@ def compare_bullets(bul_a, bul_b):
         return False
     return True
 
-def compare_mines(mine_a, mine_b):
+def compare_mines(mine_a: dict, mine_b: dict) -> bool:
     for i in range(2):
         if not mine_a['position'][i] == mine_b['position'][i]:
             return False
@@ -454,7 +454,7 @@ def compare_mines(mine_a, mine_b):
         return False
     return True
 
-def compare_gamestates(gamestate_a, gamestate_b):
+def compare_gamestates(gamestate_a: dict, gamestate_b: dict) -> bool:
     # The game state consists of asteroids, ships, bullets, mines
     asteroids_a = gamestate_a['asteroids']
     asteroids_b = gamestate_b['asteroids']
@@ -488,7 +488,7 @@ def compare_gamestates(gamestate_a, gamestate_b):
     # No need to compare trivial stuff like timesteps that are in the game state
     return True
 
-def compare_shipstates(ship_a, ship_b):
+def compare_shipstates(ship_a: dict, ship_b: dict) -> bool:
     # Compare booleans and integers
     if ship_a['is_respawning'] != ship_b['is_respawning']:
         return False
@@ -557,7 +557,7 @@ def compare_shipstates(ship_a, ship_b):
             return False
     return True
 
-def wrap_position(position: tuple, bounds: tuple):
+def wrap_position(position: tuple[float, float], bounds: tuple[float, float]) -> tuple[float, float]:
     x, y = position
     x_bound, y_bound = bounds
 
@@ -573,17 +573,17 @@ def wrap_position(position: tuple, bounds: tuple):
 
     return x, y
 
-def preprocess_bullets(bullets):
+def preprocess_bullets(bullets: list[dict]) -> list[dict]:
     for b in bullets:
         bullet_tail_delta = (-BULLET_LENGTH*cos(radians(b['heading'])), -BULLET_LENGTH*sin(radians(b['heading'])))
         b['tail_delta'] = bullet_tail_delta
     return bullets
 
-def preprocess_bullets_in_gamestate(game_state: dict):
+def preprocess_bullets_in_gamestate(game_state: dict) -> dict:
     game_state['bullets'] = preprocess_bullets(game_state['bullets'])
     return game_state
 
-def print_explanation(message: str, current_timestep: int, time_threshold: float=EXPLANATION_MESSAGE_SILENCE_INTERVAL_S/DELTA_TIME):
+def print_explanation(message: str, current_timestep: int, time_threshold: float = EXPLANATION_MESSAGE_SILENCE_INTERVAL_S/DELTA_TIME) -> None:
     if not PRINT_EXPLANATIONS:
         return
     global explanation_messages_with_timestamps
@@ -594,11 +594,11 @@ def print_explanation(message: str, current_timestep: int, time_threshold: float
         print(message)
         explanation_messages_with_timestamps[message] = current_timestep
 
-def debug_print(*messages):
+def debug_print(*messages) -> None:
     if DEBUG_MODE:
         print(*messages)
 
-def inspect_scenario(game_state, ship_state):
+def inspect_scenario(game_state: dict, ship_state: dict) -> None:
     asteroids = game_state['asteroids']
     width = game_state['map_size'][0]
     height = game_state['map_size'][1]
@@ -643,25 +643,25 @@ def inspect_scenario(game_state, ship_state):
     #avg_speed = average_speed()
     #print(f"Average asteroid density: {average_density}, average vel: {average_vel}, average speed: {avg_speed}")
 
-def asteroid_counter(asteroids: Optional[list] = None):
+def asteroid_counter(asteroids: Optional[list] = None) -> tuple[int, int]:
     if asteroids is None:
         return 0
     current_count = len(asteroids)
-    total_count = 0
+    total_count: int = 0
     for a in asteroids:
         total_count += ASTEROID_COUNT_LOOKUP[a['size']]
     return total_count, current_count
 
 
 class GameStatePlotter:
-    def __init__(self, game_state):
+    def __init__(self, game_state) -> None:
         self.fig, self.ax = plt.subplots()
         self.ax.set_xlim([0, game_state['map_size'][0]])
         self.ax.set_ylim([0, game_state['map_size'][1]])
         self.ax.set_aspect('equal', adjustable='box')
         self.game_state = game_state
 
-    def fuse_time_to_color(self, remaining_time):
+    def fuse_time_to_color(self, remaining_time) -> str:
         if remaining_time >= 3.0:
             return "#00FF00"  # Green
         elif remaining_time <= 0.0:
@@ -684,7 +684,7 @@ class GameStatePlotter:
             # Convert to hex
             return f"#{red:02x}{green:02x}00"
 
-    def update_plot(self, asteroids: Optional[list] = None, ship_state: Optional[dict] = None, bullets: Optional[list] = None, special_bullets: Optional[list] = None, circled_asteroids: Optional[list] = None, ghost_asteroids: Optional[list] = None, forecasted_asteroids: Optional[list] = None, mines: Optional[list] = None, clear_plot: bool = True, pause_time: float = EPS, plot_title: str = ""):
+    def update_plot(self, asteroids: Optional[list] = None, ship_state: Optional[dict] = None, bullets: Optional[list] = None, special_bullets: Optional[list] = None, circled_asteroids: Optional[list] = None, ghost_asteroids: Optional[list] = None, forecasted_asteroids: Optional[list] = None, mines: Optional[list] = None, clear_plot: bool = True, pause_time: float = EPS, plot_title: str = "") -> None:
         if asteroids is None:
             asteroids = []
         if bullets is None:
@@ -772,7 +772,7 @@ class GameStatePlotter:
         plt.draw()
         plt.pause(pause_time)
 
-def append_dict_to_file(dict_data: dict, file_path: str):
+def append_dict_to_file(dict_data: dict, file_path: str) -> None:
     """
     This function takes a dictionary and appends it as a string in a JSON-like format to a text file.
 
@@ -788,7 +788,7 @@ def append_dict_to_file(dict_data: dict, file_path: str):
     with open(file_path, 'a') as file:
         file.write(dict_string + "\n")
 
-def log_tuple_to_file(tuple_of_numbers: tuple, file_path: str):
+def log_tuple_to_file(tuple_of_numbers: tuple, file_path: str) -> None:
     """
     Logs a tuple of numbers to a text file, appending to the file.
     Each tuple is logged on a new line, with its elements separated by commas.
@@ -800,13 +800,13 @@ def log_tuple_to_file(tuple_of_numbers: tuple, file_path: str):
         # Joining the tuple elements with commas and appending a newline
         file.write(','.join(map(str, tuple_of_numbers)) + '\n')
 
-def ast_to_string(a: dict):
+def ast_to_string(a: dict) -> str:
     if 'timesteps_until_appearance' in a:
         return f"Pos: ({a['position'][0]}, {a['position'][1]}), Vel: ({a['velocity'][0]}, {a['velocity'][1]}), Size: {a['size']}, Appears in {a['timesteps_until_appearance']*DELTA_TIME} s"
     else:
         return f"Pos: ({a['position'][0]}, {a['position'][1]}), Vel: ({a['velocity'][0]}, {a['velocity'][1]}), Size: {a['size']}"
 
-def angle_difference_rad(angle1: float, angle2: float):
+def angle_difference_rad(angle1: float, angle2: float) -> float:
     # Calculate the raw difference
     raw_diff = angle1 - angle2
 
@@ -819,7 +819,7 @@ def angle_difference_rad(angle1: float, angle2: float):
 
     return adjusted_diff
 
-def angle_difference_deg(angle1: float, angle2: float):
+def angle_difference_deg(angle1: float, angle2: float) -> float:
     # Calculate the raw difference
     raw_diff = angle1 - angle2
 
@@ -832,12 +832,12 @@ def angle_difference_deg(angle1: float, angle2: float):
 
     return adjusted_diff
 
-def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_accel_turn_rate, ship_cruise_timesteps, ship_cruise_turn_rate):
+def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed: float, ship_accel_turn_rate: float, ship_cruise_timesteps: int, ship_cruise_turn_rate: float) -> list:
     # This is a silly code duplication to get a super optimized class for getting the ship's move sequence. Using the entire Simulation class is overkill and too much.
     move_sequence = []
     ship_speed = 0.0
 
-    def rotate_heading(heading_difference_deg):
+    def rotate_heading(heading_difference_deg: float) -> None:
         nonlocal move_sequence
         if abs(heading_difference_deg) < GRAIN:
             move_sequence.append({'thrust': 0, 'turn_rate': 0, 'fire': False})
@@ -850,7 +850,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
             assert -SHIP_MAX_TURN_RATE <= still_need_to_turn/DELTA_TIME <= SHIP_MAX_TURN_RATE
             move_sequence.append({'thrust': 0, 'turn_rate': still_need_to_turn/DELTA_TIME, 'fire': False})
 
-    def accelerate(target_speed, turn_rate):
+    def accelerate(target_speed: float, turn_rate: float) -> None:
         nonlocal move_sequence
         nonlocal ship_speed
         # Keep in mind speed can be negative
@@ -867,14 +867,14 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
             thrust_amount = min(max(-SHIP_MAX_THRUST, thrust_amount), SHIP_MAX_THRUST)
             update(thrust_amount, turn_rate)
 
-    def cruise(cruise_timesteps, cruise_turn_rate):
+    def cruise(cruise_timesteps: int, cruise_turn_rate: float) -> None:
         nonlocal move_sequence
         nonlocal ship_speed
         # Maintain current speed
         for _ in range(cruise_timesteps):
             update(np.sign(ship_speed)*SHIP_DRAG, cruise_turn_rate)
 
-    def update(thrust, turn_rate):
+    def update(thrust: float, turn_rate: float) -> None:
         nonlocal move_sequence
         nonlocal ship_speed
         # Apply drag. Fully stop the ship if it would cross zero speed in this time (prevents oscillation)
@@ -902,10 +902,10 @@ def get_ship_maneuver_move_sequence(ship_heading_angle, ship_cruise_speed, ship_
 
 def analyze_gamestate_for_heuristic_maneuver(game_state: dict, ship_state: dict[str, Any]) -> tuple[float, float, float, float, int]:
     # This is a helper function to analyze and prepare the gamestate, to give the maneuver FIS useful information, to heuristically command a maneuver to try out
-    def calculate_angular_width(radius, distance) -> float:
+    def calculate_angular_width(radius: float, distance: float) -> float:
         return asin(radius/distance)
 
-    def find_largest_gap(asteroids, ship_position) -> tuple[float, float]:
+    def find_largest_gap(asteroids: list[dict], ship_position: tuple[float, float]) -> tuple[float, float]:
         if not asteroids:
             # No asteroids mean the entire space is a gap.
             return 0.0, 2.0 * pi
@@ -1013,7 +1013,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: dict, ship_state: dict[
         nearby_asteroid_average_speed = nearby_asteroid_total_speed/nearby_asteroid_count
     return most_imminent_asteroid_speed, imminent_asteroid_relative_heading_deg, largest_gap_relative_heading_deg, nearby_asteroid_average_speed, nearby_asteroid_count
 
-def check_collision(a_x: float, a_y: float, a_r: float, b_x: float, b_y: float, b_r: float, pixel_padding: float=0):
+def check_collision(a_x: float, a_y: float, a_r: float, b_x: float, b_y: float, b_r: float, pixel_padding: float = 0) -> bool:
     delta_x = a_x - b_x
     delta_y = a_y - b_y
     separation = a_r + b_r + pixel_padding
@@ -1138,7 +1138,7 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
             universes.append((current_universe_x, current_universe_y))
     return universes
 
-def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: float=10) -> list:
+def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: float = 10.0) -> list:
     if abs(asteroid['velocity'][0]) < EPS and abs(asteroid['velocity'][1]) < EPS:
         return [asteroid]
 
@@ -1156,7 +1156,7 @@ def unwrap_asteroid(asteroid: dict, max_x: float, max_y: float, time_horizon_s: 
     #print(f"Returning unwrapped asteroids: {unwrapped_asteroids}")
     return unwrapped_asteroids
 
-def check_coordinate_bounds(game_state: dict, x: float, y: float):
+def check_coordinate_bounds(game_state: dict, x: float, y: float) -> bool:
     if 0 <= x <= game_state['map_size'][0] and 0 <= y <= game_state['map_size'][1]:
         return True
     else:
@@ -3552,7 +3552,7 @@ class NeoController(KesslerController):
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
 
-    def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool=False, plan_stationary: bool=False):
+    def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool = False, plan_stationary: bool = False) -> None:
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
         # We simulate both options, and take the one with the higher fitness score
