@@ -46,10 +46,14 @@ class Smith(KesslerController):
         fire = False
         drop_mine = False
 
-        if self.current_timestep == 1:
-            thrust, turn_rate, fire, drop_mine = 0, 0, 0, True
-        elif 10 < self.current_timestep < 30:
-            thrust, turn_rate, fire, drop_mine = 280, 0, 0, False
+        drop_mine_at = 72
+
+        if self.current_timestep < drop_mine_at:
+            thrust, turn_rate, fire, drop_mine = 470.0, 0, 0, False
+        elif self.current_timestep == drop_mine_at:
+            thrust, turn_rate, fire, drop_mine = 480.0, 0, 0, True
+        else:
+            thrust, turn_rate, fire, drop_mine = 480.0, 0, 0, False
 
         return thrust, turn_rate, fire, drop_mine
 

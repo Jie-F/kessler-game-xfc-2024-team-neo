@@ -1192,3 +1192,23 @@ diagonal_shredder = Scenario(
     map_size=(width, height),
     time_limit=45,
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+out_of_bound_mine = Scenario(
+    name='out_of_bound_mine',
+    asteroid_states=[{'position': (width/100, height*42/100), 'speed': 0, 'angle': 0, 'size': 1}],
+    ship_states=[{'position': (width/2, height/2), 'angle': 0, 'lives': 3, 'team': 1, 'mines_remaining': 2}],
+    map_size=(width, height),
+    time_limit=60,
+)

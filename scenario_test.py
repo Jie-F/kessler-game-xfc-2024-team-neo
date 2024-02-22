@@ -1,6 +1,8 @@
 import time
 import random
-from neo_controller import NeoController
+#from neo_controller import NeoController
+from src.neo_controller import NeoController
+#from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
 import numpy as np
@@ -303,7 +305,7 @@ for _ in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
-    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [NeoController(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
@@ -317,9 +319,9 @@ for _ in range(1):
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
         if profile:
-            cProfile.run(f'game.run(scenario=rand_scenario, controllers=[Neo(), Neo()])')
+            cProfile.run(f'game.run(scenario=adv_multi_ring_closing_right, controllers=controllers_used)')
         else:
-            score, perf_data = game.run(scenario=diagonal_shredder, controllers=controllers_used)
+            score, perf_data = game.run(scenario=adv_multi_ring_closing_left, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
@@ -328,14 +330,19 @@ for _ in range(1):
         color_print(score.stop_reason, 'green')
         color_print('Asteroids hit: ' + str(asts_hit), 'green')
         team_1_hits += asts_hit[0]
-        team_2_hits += asts_hit[1]
-        if asts_hit[0] > asts_hit[1]:
+        if len(asts_hit) > 1:
+            team_2_hits += asts_hit[1]
+        if len(asts_hit) > 1:
+            if asts_hit[0] > asts_hit[1]:
+                team_1_wins += 1
+            elif asts_hit[0] < asts_hit[1]:
+                team_2_wins += 1
+        else:
             team_1_wins += 1
-        elif asts_hit[0] < asts_hit[1]:
-            team_2_wins += 1
         team_deaths = [team.deaths for team in score.teams]
         team_1_deaths += team_deaths[0]
-        team_2_deaths += team_deaths[1]
+        if len(team_deaths) > 1:
+            team_2_deaths += team_deaths[1]
         color_print('Deaths: ' + str(team_deaths), 'green')
         if team_deaths[0] >= 1:
             died = True
