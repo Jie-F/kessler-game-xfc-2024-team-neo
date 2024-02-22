@@ -484,7 +484,7 @@ def weighted_average(numbers: list[float], weights: Optional[list[float]] = None
         return sum(numbers)/len(numbers) if numbers else 0
 
 
-def compare_asteroids(ast_a: dict, ast_b: dict) -> bool:
+def compare_asteroids(ast_a: Asteroid, ast_b: Asteroid) -> bool:
     for i in range(2):
         if ast_a['position'][i] != ast_b['position'][i]:
             return False
@@ -500,7 +500,7 @@ def compare_asteroids(ast_a: dict, ast_b: dict) -> bool:
         return False
     return True
 
-def compare_bullets(bul_a: dict, bul_b: dict) -> bool:
+def compare_bullets(bul_a: Bullet, bul_b: Bullet) -> bool:
     for i in range(2):
         if bul_a['position'][i] != bul_b['position'][i]:
             return False
@@ -512,7 +512,7 @@ def compare_bullets(bul_a: dict, bul_b: dict) -> bool:
         return False
     return True
 
-def compare_mines(mine_a: dict, mine_b: dict) -> bool:
+def compare_mines(mine_a: Mine, mine_b: Mine) -> bool:
     for i in range(2):
         if not mine_a['position'][i] == mine_b['position'][i]:
             return False
@@ -524,7 +524,7 @@ def compare_mines(mine_a: dict, mine_b: dict) -> bool:
         return False
     return True
 
-def compare_gamestates(gamestate_a: dict, gamestate_b: dict) -> bool:
+def compare_gamestates(gamestate_a: GameState, gamestate_b: GameState) -> bool:
     # The game state consists of asteroids, ships, bullets, mines
     asteroids_a = gamestate_a['asteroids']
     asteroids_b = gamestate_b['asteroids']
@@ -558,7 +558,7 @@ def compare_gamestates(gamestate_a: dict, gamestate_b: dict) -> bool:
     # No need to compare trivial stuff like timesteps that are in the game state
     return True
 
-def compare_shipstates(ship_a: dict, ship_b: dict) -> bool:
+def compare_shipstates(ship_a: Ship, ship_b: Ship) -> bool:
     # Compare booleans and integers
     if ship_a['is_respawning'] != ship_b['is_respawning']:
         return False
@@ -643,13 +643,13 @@ def wrap_position(position: tuple[float, float], bounds: tuple[float, float]) ->
 
     return x, y
 
-def preprocess_bullets(bullets: list[dict]) -> list[dict]:
+def preprocess_bullets(bullets: list[Bullet]) -> list[Bullet]:
     for b in bullets:
         bullet_tail_delta = (-BULLET_LENGTH*cos(radians(b['heading'])), -BULLET_LENGTH*sin(radians(b['heading'])))
         b['tail_delta'] = bullet_tail_delta
     return bullets
 
-def preprocess_bullets_in_gamestate(game_state: GameState) -> dict:
+def preprocess_bullets_in_gamestate(game_state: GameState) -> GameState:
     game_state['bullets'] = preprocess_bullets(game_state['bullets'])
     return game_state
 
@@ -1039,7 +1039,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
             other_ships.append(ship)
     for ship in other_ships:
         # Fake ships as asteroids
-        asteroids.append({'position': ship['position'], 'velocity': (0, 0), 'radius': ship['radius']})
+        asteroids.append({'position': ship['position'], 'velocity': (0, 0), 'radius': ship['radius'], 'size': -1, 'mass': -1.0})
     ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y = ship_state['position'][0], ship_state['position'][1], ship_state['velocity'][0], ship_state['velocity'][1]
     most_imminent_collision_time_s = math.inf
     most_imminent_asteroid = None
@@ -1963,8 +1963,8 @@ class Simulation():
         self.ship_move_sequence: list[dict] = []
         self.state_sequence: list[dict] = []
         self.asteroids_shot: int = 0
-        self.asteroids_pending_death: dict[int, list[dict]] = {timestep: list(l) for timestep, l in asteroids_pending_death.items()}
-        self.forecasted_asteroid_splits: list[dict] = [dict(a) for a in forecasted_asteroid_splits]
+        self.asteroids_pending_death: dict[int, list[Asteroid]] = {timestep: list(l) for timestep, l in asteroids_pending_death.items()}
+        self.forecasted_asteroid_splits: list[Asteroid] = [dict(a) for a in forecasted_asteroid_splits]
         self.halt_shooting: bool = halt_shooting
         self.fire_next_timestep_flag: bool = False
         self.fire_first_timestep: bool = fire_first_timestep
@@ -3471,7 +3471,7 @@ class NeoController(KesslerController):
         #aggression = ctrl.Consequent(np.arange(0, 1, 1), 'asteroid_growth_factor')
 
 
-    def get_other_ships(self, game_state: GameState) -> list[dict]:
+    def get_other_ships(self, game_state: GameState) -> list[Ship]:
         other_ships = []
         for ship in game_state['ships']:
             if ship['id'] != self.ship_id:
