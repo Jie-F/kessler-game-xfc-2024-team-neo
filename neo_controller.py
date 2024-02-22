@@ -23,6 +23,7 @@ import bisect
 from functools import lru_cache
 import copy
 from typing import Any, Optional, Callable, TypedDict, cast
+import gc
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -488,8 +489,41 @@ def weighted_average(numbers: list[float], weights: Optional[list[float]] = None
         return total_weighted/total_weight
     else:
         # Calculate regular average if no weights are provided
-        return sum(numbers)/len(numbers) if numbers else 0
+        return sum(numbers)/len(numbers) if numbers else 0.0
 
+def weighted_harmonic_mean(numbers: list[float], weights: Optional[list[float]] = None, offset: float = 0.0) -> float:
+    """
+    Calculate the weighted harmonic mean of a list of numbers.
+    If no weights are provided, the regular harmonic mean is calculated.
+    Raises ValueError if weights are provided but do not match the length of numbers.
+    
+    Parameters:
+    - numbers: list of numbers.
+    - weights: Corresponding weights for each number.
+    
+    Returns:
+    - The weighted (or regular) harmonic mean of the numbers.
+    
+    Raises:
+    - ValueError: If weights are provided but their length doesn't match the numbers list.
+    """
+    if numbers:
+        if weights is not None:
+            if len(weights) != len(numbers):
+                raise ValueError("Length of weights must match length of numbers.")
+            # Calculate weighted harmonic mean
+            weight_sum = sum(weights)
+            weighted_reciprocals_sum = sum(w/(x + offset) for w, x in zip(weights, numbers))
+            weighted_harmonic_mean = weight_sum/weighted_reciprocals_sum - offset
+            return weighted_harmonic_mean # Apparently without this redundant assignment of this variable, I get a compiler error in mypyc and it says I have an error on line -1 LOLL
+        else:
+            # Calculate regular harmonic mean if no weights are provided
+            weight_sum = len(numbers)
+            weighted_reciprocals_sum = sum(1.0/(x + offset) for x in numbers)
+            weighted_harmonic_mean = weight_sum/weighted_reciprocals_sum - offset
+            return weighted_harmonic_mean
+    else:
+        return 0.0
 
 def compare_asteroids(ast_a: Asteroid, ast_b: Asteroid) -> bool:
     for i in range(2):
@@ -988,12 +1022,18 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
 def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: Ship) -> tuple[float, float, float, float, int]:
     # This is a helper function to analyze and prepare the gamestate, to give the maneuver FIS useful information, to heuristically command a maneuver to try out
     def calculate_angular_width(radius: float, distance: float) -> float:
-        return asin(radius/distance)
+        if distance == 0.0:
+            return 2.0*pi
+        sin_theta = radius/distance
+        if -1.0 <= sin_theta <= 1.0:
+            return asin(sin_theta)
+        else:
+            return 2.0*pi
 
     def find_largest_gap(asteroids: list[Asteroid], ship_position: tuple[float, float]) -> tuple[float, float]:
         if not asteroids:
             # No asteroids mean the entire space is a gap.
-            return 0.0, 2.0 * pi
+            return 0.0, 2.0*pi
 
         angles: list[tuple[float, str]] = []
         initial_cover_count: int = 0  # Counter for asteroids covering angle 0
@@ -2156,8 +2196,14 @@ class Simulation():
             return asteroids_fitness
 
         def get_mine_safety_fitness(next_extrapolated_mine_collision_times: list[tuple[float, tuple[float, float]]]) -> tuple[float, float]:
+            # If there's no mine in my range, the fitness is perfect.
+            # For each additional mine within the range, the fitness will go down.
+            # Having two mines which are freshly placed isn't as bad as a single mine that's about to blow up.
+            # For each mine, as the time goes down, the danger should go up more than linearly
+            if not next_extrapolated_mine_collision_times:
+                return 1.0, math.inf
             # Regardless of stationary or maneuvering, the mine safe time score is calculated the same way
-            mine_safe_time_score = 0.0
+            mines_threat_level = 0.0
             next_extrapolated_mine_collision_time = math.inf
             if next_extrapolated_mine_collision_times:
                 for mine_collision_time, mine_pos in next_extrapolated_mine_collision_times:
@@ -2168,9 +2214,10 @@ class Simulation():
                     dist_to_ground_zero = dist(self.ship_state['position'], mine_pos)
                     # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
                     # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
-                    mine_ground_zero_fudge = (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS)*10.0
-                    mine_safe_time_score += 15.0 - 5*mine_collision_time/3.0 + max(0.0, mine_ground_zero_fudge)
-            mine_safe_time_fitness = sigmoid(mine_safe_time_score, -0.2, 15.0)
+                    mine_ground_zero_fudge = linear(dist_to_ground_zero, (0.0, 1.0), (MINE_BLAST_RADIUS + SHIP_RADIUS, 0.6))
+                    #mine_ground_zero_fudge = max(0.0, (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS))
+                    mines_threat_level += (3.0 - next_extrapolated_mine_collision_time)**2/9.0*mine_ground_zero_fudge
+            mine_safe_time_fitness = sigmoid(mines_threat_level, -9.2, 0.375)
             return mine_safe_time_fitness, next_extrapolated_mine_collision_time
 
         def get_asteroid_aiming_cone_fitness() -> float:
@@ -2305,11 +2352,17 @@ class Simulation():
         if fitness_function_weights is not None:
             fitness_weights = fitness_function_weights
         else:
-            fitness_weights = [6.0, 10.0, 1.0, 1.0, 6.0, 8.0, 1.0]
+            fitness_weights = [7.0, 10.0, 1.0, 0.7, 6.0, 8.0, 1.0]
         #print(fitness_weights)
-        overall_fitness = weighted_average(fitnesses, fitness_weights)
+        #overall_fitness = weighted_average(fitnesses, fitness_weights)
+        #print(fitnesses, fitness_weights)
+        overall_fitness = weighted_harmonic_mean(fitnesses, fitness_weights, 1.0)
+        assert 0.0 <= overall_fitness <= 1.0
+        self.explanation_messages.append(f"Chose the sim with fitnesses: {overall_fitness=}, {asteroid_safe_time_fitness=}, {mine_safe_time_fitness=}, {asteroids_fitness=}, {sequence_length_fitness=}, {other_ship_proximity_fitness=}, {crash_fitness=}, {asteroid_aiming_cone_fitness=}")
         if overall_fitness > 0.9:
             self.safety_messages.append("I'm safe and chilling")
+        else:
+            self.safety_messages.append(f"Stationary sim had fitnesses: {overall_fitness=}, {asteroid_safe_time_fitness=}, {mine_safe_time_fitness=}, {asteroids_fitness=}, {sequence_length_fitness=}, {other_ship_proximity_fitness=}, {crash_fitness=}, {asteroid_aiming_cone_fitness=}")
         # The overall_fitness is the fuzzy output. There's no need to defuzzify it since we're using this as a fitness value to rank the actions and future states
         return overall_fitness
 
@@ -3546,7 +3599,7 @@ class NeoController(KesslerController):
         elapsed_time_inside = current_time - self.last_entrance_time
         assert elapsed_time_inside >= 0.0
         average_outside_time = sum(self.outside_controller_time_intervals) / len(self.outside_controller_time_intervals) if len(self.outside_controller_time_intervals) > 0 else 0.0
-        remaining_time_budget = DELTA_TIME - 0.0*average_outside_time - elapsed_time_inside
+        remaining_time_budget = DELTA_TIME/2.0 - 0.0*average_outside_time - elapsed_time_inside
 
         # Check if another iteration can fit within the remaining time budget
         if remaining_time_budget >= self.average_iteration_time*PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER:
@@ -3557,7 +3610,8 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        print(f"Deciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
+        print(f"Deciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims, and their fitnesses are as follows:")
+        print([x['fitness'] for x in self.sims_this_planning_period])
         assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['ship_state']['bullets_remaining'] == 0 or self.game_state_to_base_planning['respawning']
         debug_print(f"Deciding next action! Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
         # Go through the list of planned maneuvers and pick the one with the best fitness function score
@@ -3628,9 +3682,10 @@ class NeoController(KesslerController):
             #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
             #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             #    best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
-        stationary_safety_messages = self.sims_this_planning_period[0]['sim'].get_safety_messages()
-        for message in stationary_safety_messages:
-            print_explanation(message, self.current_timestep)
+        if self.stationary_targetting_sim_index is not None:
+            stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
+            for message in stationary_safety_messages:
+                print_explanation(message, self.current_timestep)
         debug_print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness}")
         best_move_sequence = best_action_sim.get_move_sequence()
         debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
@@ -3729,12 +3784,13 @@ class NeoController(KesslerController):
             self.enqueue_action(move['timestep'], move['thrust'], move['turn_rate'], move['fire'], move['drop_mine'])
         self.sims_this_planning_period.clear()
         self.best_fitness_this_planning_period = -math.inf
-        self.best_fitness_this_planning_period_index = None
+        self.best_fitness_this_planning_period_index = None # TODO: Change this to -1 so mypyc is faster!
         self.second_best_fitness_this_planning_period = -math.inf
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
 
     def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool = False, plan_stationary: bool = False) -> None:
+        #gc.disable()
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
         # We simulate both options, and take the one with the higher fitness score
@@ -3897,7 +3953,7 @@ class NeoController(KesslerController):
                     search_iterations = 5
                 else:
                     search_iterations = 6
-            max_cruise_seconds = 0.7
+            max_cruise_seconds = 1.0
 
             if iterations_boost:
                 search_iterations = min(80, (search_iterations + 1)*10)
@@ -3978,6 +4034,8 @@ class NeoController(KesslerController):
                     self.best_fitness_this_planning_period_index = len(self.sims_this_planning_period) - 1
                 if heuristic_maneuver:
                     heuristic_maneuver = False
+        #gc.enable()
+        #gc.collect()
 
     def actions(self, ship_state_dict: dict[str, Any], game_state_dict: dict[str, Any]) -> tuple[float, float, bool, bool]:
         global GAMESTATE_PLOTTING
