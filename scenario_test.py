@@ -1,8 +1,8 @@
 import time
 import random
 #from neo_controller import NeoController
-from src.neo_controller import NeoController
-#from neo_controller import NeoController
+#from src.neo_controller import NeoController
+from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
 import numpy as np
@@ -90,7 +90,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.NoGraphics if args.invisible else GraphicsType.Tkinter,#UnrealEngine,Tkinter,NoGraphics
-                 'realtime_multiplier': 2,
+                 'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30.0,
                  'UI_settings': 'all'}
@@ -321,7 +321,7 @@ for _ in range(1):
         if profile:
             cProfile.run(f'game.run(scenario=adv_multi_ring_closing_right, controllers=controllers_used)')
         else:
-            score, perf_data = game.run(scenario=adv_multi_ring_closing_left, controllers=controllers_used)
+            score, perf_data = game.run(scenario=aspect_ratio_grid_formation_scenario, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:

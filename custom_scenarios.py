@@ -925,7 +925,7 @@ for i in range(num_asteroids_width):
         })
 
 # Ship state
-ship_state = [{'position': center, 'angle': 0, 'lives': 4, 'team': 1, 'mines_remaining': 3}]
+ship_state = [{'position': center, 'angle': 0, 'lives': 40, 'team': 1, 'mines_remaining': 3}]
 
 # Creating the Aspect Ratio Grid Formation scenario
 aspect_ratio_grid_formation_scenario = Scenario(
