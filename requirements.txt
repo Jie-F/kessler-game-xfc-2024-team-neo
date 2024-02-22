@@ -1,3 +1,6 @@
 numpy
 pillow
 inputs
+matplotlib
+skfuzzy
+scipy
