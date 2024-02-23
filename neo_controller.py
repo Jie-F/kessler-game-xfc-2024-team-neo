@@ -55,7 +55,7 @@ SLOW_DOWN_GAME_PAUSE_TIME = 2.0
 
 # These can trade off to get better performance at the expense of safety
 ENABLE_ASSERTIONS = True
-PRUNE_SIM_STATE_SEQUENCE = True
+PRUNE_SIM_STATE_SEQUENCE = False
 VALIDATE_SIMULATED_KEY_STATES = True
 VALIDATE_ALL_SIMULATED_STATES = False
 
@@ -66,7 +66,7 @@ UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON = 8.0
 UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON = 3.0 # 1 second to turn, 2 seconds for bullet travel time
 ASTEROID_SIZE_SHOT_PRIORITY = (math.nan, 1, 2, 3, 4) # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights = None
-MINE_DROP_COOLDOWN_FUDGE_TS = 10 # We can drop a mine every 31 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
+MINE_DROP_COOLDOWN_FUDGE_TS = 61 # We can drop a mine every 31 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
 
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL = 10
 # The reason we need this, is because without it, I'm checking whether I have the budget to do another iteration, but let's say I'm already taking 0 time. Kessler will pause for DELTA_TIME, taking up all the time, and I'd think I have no time to do anything!
@@ -3633,8 +3633,8 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        print(f"Deciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims, and their fitnesses are as follows:")
-        print([x['fitness'] for x in self.sims_this_planning_period])
+        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims, and their fitnesses are as follows:")
+        #print([x['fitness'] for x in self.sims_this_planning_period])
         '''
         all_ship_pos = []
         all_ship_x = []
@@ -3650,16 +3650,16 @@ class NeoController(KesslerController):
                 ship_line_y.append(ship_pos[1])
             all_ship_x.append(ship_line_x)
             all_ship_y.append(ship_line_y)
-        if len(all_ship_x) > 20:
+        if len(all_ship_x) > 130:
             for i in range(len(all_ship_x)):
-                plt.plot(all_ship_x[i], all_ship_y[i], label=f"Maneuver {i}")
+                plt.scatter(all_ship_x[i], all_ship_y[i], linewidths=1.0, label=f"Maneuver {i}")
             plt.xlim(0, 1000)
             plt.ylim(0, 800)
             plt.show()
         #time.sleep(10)
         '''
         assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['ship_state']['bullets_remaining'] == 0 or self.game_state_to_base_planning['respawning']
-        debug_print(f"Deciding next action! Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
+        #print(f"Deciding next action, Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
         # Go through the list of planned maneuvers and pick the one with the best fitness function score
         # Update the state to base planning off of, so Neo can get to work on planning the next set of moves while this current set of moves executes
         #print('Going through sorted sims list to pick the best action')
@@ -3766,9 +3766,9 @@ class NeoController(KesslerController):
         self.set_of_base_gamestate_timesteps.add(best_action_sim_last_state['timestep'])
         new_ship_state = best_action_sim.get_ship_state()
         new_fire_next_timestep_flag = best_action_sim.get_fire_next_timestep_flag()
-        debug_print(f"Firing next ts status is: {new_fire_next_timestep_flag}")
+        #print(f"Firing next ts status is: {new_fire_next_timestep_flag}")
         if new_ship_state['is_respawning'] and new_fire_next_timestep_flag and new_ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for:
-            debug_print(f"Forcing off the fire next timestep, because we just took damage")
+            #print(f"Forcing off the fire next timestep, because we just took damage")
             new_fire_next_timestep_flag = False
         if ENABLE_ASSERTIONS and new_ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for and new_ship_state['is_respawning']:
             # If our ship is hurt in our next next action and I haven't done a respawn maneuver yet (in this situation, the next next action is a respawn maneuver)
@@ -3776,8 +3776,9 @@ class NeoController(KesslerController):
             # Then I assert that our next action is not a respawning action, AND we're not firing at the start of the next next action
             if (self.game_state_to_base_planning['respawning'] or new_fire_next_timestep_flag):
                 print(f"We haven't done a respawn maneuver for having {new_ship_state['lives_remaining']} lives left")
-                print(f"self.game_state_to_base_planning['respawning']: {self.game_state_to_base_planning['respawning']}, new_fire_next_timestep_flag: {new_fire_next_timestep_flag}")
+                print(f"self.game_state_to_base_planning['respawning']: {self.game_state_to_base_planning['respawning']}, new_fire_next_timestep_flag: {new_fire_next_timestep_flag}, {best_action_sim.get_respawn_timer()=}")
             #assert not (self.game_state_to_base_planning['respawning'] or new_fire_next_timestep_flag)
+        #print(f"{new_ship_state['lives_remaining']=}, {str(self.lives_remaining_that_we_did_respawn_maneuver_for)=}, {new_ship_state['is_respawning']=}")
         self.game_state_to_base_planning = {
             'timestep': best_action_sim_last_state['timestep'],
             'respawning': new_ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for and new_ship_state['is_respawning'],
@@ -3853,19 +3854,19 @@ class NeoController(KesslerController):
 
             # Check for danger
             #max_search_iterations = 60
-            #min_search_iterations = 6
+            min_search_iterations = 5
             #search_iterations = 50
-            max_cruise_seconds = 1 + 26*DELTA_TIME
+            max_cruise_seconds = 1.0 + 26.0*DELTA_TIME
             #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
             #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
 
-            debug_print("Look for a respawn maneuver")
+            print("Look for a respawn maneuver")
             # Run a simulation and find a course of action to put me to safety
             search_iterations_count = 0
 
             #while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
             #for _ in range(search_iterations):
-            while self.performance_controller_check_whether_i_can_do_another_iteration():
+            while search_iterations_count < min_search_iterations or self.performance_controller_check_whether_i_can_do_another_iteration():
                 search_iterations_count += 1
                 if search_iterations_count%1 == 0:
                     #print(f"Respawn search iteration {search_iterations_count}")
