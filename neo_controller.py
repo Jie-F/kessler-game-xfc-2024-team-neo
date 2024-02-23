@@ -13,6 +13,7 @@
 # TODO: Use the tolerance in the shot for the target selection so I don't just aim for the center all the time
 # TODO: Add error handling as a catch-all
 # TODO: Test successive runs of Neo to make sure it self-cleans up after itself
+# TODO: Analyze each base state, and store analysis results. Like the heuristic FIS, except use more random search. Density affects the movement speed and cruise timesteps. Tune stuff much better.
 
 import random
 import math
