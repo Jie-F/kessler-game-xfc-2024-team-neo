@@ -4056,9 +4056,12 @@ class NeoController(KesslerController):
                 heuristic_maneuver = False
 
             imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroids_count, current_asteroids_count = self.base_gamestate_analysis
-            # TODO: Replace this with a fuzzy system
-            if average_directional_speed > 49 and current_asteroids_count > 5 and total_asteroids_count > 40:
+            
+            # Let's just pretend the following is a fuzzy system lol
+            # For performance and simplicity, I'll just use a bunch of if statements
+            if average_directional_speed > 80 and current_asteroids_count > 5 and total_asteroids_count > 40:
                 # This is probably a wall scenario! We have many asteroids all travelling in basically the same direction
+                print_explanation(f"Wall scenario detected! Preferring trying longer cruise lengths")
                 ship_cruise_speed_mode = SHIP_MAX_SPEED
                 ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS
                 max_pre_maneuver_turn_timesteps = 3.0
@@ -4068,29 +4071,44 @@ class NeoController(KesslerController):
                     # Many nearby asteroids
                     if nearby_asteroid_average_speed > 100:
                         # Fast asteroids
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/6
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.167
+                    elif nearby_asteroid_average_speed > 50:
+                        # Medium asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.1
                     else:
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
-                        ship_cruise_timesteps_mode = 0.0
+                        # Slow asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.0
                 elif nearby_asteroid_count > 5:
                     # Some nearby asteroids
                     if nearby_asteroid_average_speed > 100:
                         # Fast asteroids
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.5
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.33
+                    elif nearby_asteroid_average_speed > 50:
+                        # Medium asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.5
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.28
                     else:
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/4
+                        # Slow asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.5
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.25
                 else:
                     # Few nearby asteroids
                     if nearby_asteroid_average_speed > 100:
                         # Fast asteroids
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.5
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.33
+                    elif nearby_asteroid_average_speed > 50:
+                        # Medium asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.37
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.33
                     else:
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+                        # Slow asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.33
             print(f"Nearby asteroids count is {nearby_asteroid_count}, average speed of asts is {nearby_asteroid_average_speed}, avg directional speed is {average_directional_speed}, so therefore I'm picking ship cruise timesteps mode to be {ship_cruise_timesteps_mode} and ship speed mode of {ship_cruise_speed_mode}")
             search_iterations_count = 0
             while (search_iterations_count < MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS:
