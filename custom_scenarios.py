@@ -303,7 +303,7 @@ def calculate_speed_and_angle(y_position, base_speed, speed_increment, center_y)
 screen_width, screen_height = 1000, 800
 center_y = screen_height / 2
 base_speed = 0  # Base speed for asteroids closest to the center
-speed_increment = 18  # Additional speed for each row away from the center
+speed_increment = 30  # Additional speed for each row away from the center
 vertical_spacing = 180  # Vertical spacing between rows
 horizontal_spacing = 100  # Horizontal spacing within each row
 
@@ -343,10 +343,10 @@ shearing_pattern_scenario = Scenario(
 
 
 num_asteroids = 18
-side_padding = 60
+side_padding = 0
 asteroid_spacing = (width - 2*side_padding) // num_asteroids  # Spacing between asteroids
-asteroid_speed = 90  # Constant speed of the asteroids
-asteroid_start_y = 100  # Starting height of the wall
+asteroid_speed = 160  # Constant speed of the asteroids
+asteroid_start_y = 0  # Starting height of the wall
 
 # Create asteroid states
 asteroid_states = []
@@ -356,16 +356,16 @@ for i in range(num_asteroids):
         'position': (x_position, asteroid_start_y),
         'angle': -90,  # Moving straight down
         'speed': asteroid_speed,
-        'size': 3,
+        'size': 4,
     })
 
 # Create the scenario
 super_hard_wrap = Scenario(
-    name='adv_multi_wall_bottom_hard_1',
+    name='super_hard_wrap',
     asteroid_states=asteroid_states,
-    ship_states=[{'position': (width//4, height*9//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 0}],
+    ship_states=[{'position': (width/2, height*7//10), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 3}],
     map_size=(width, height),
-    time_limit=30,
+    time_limit=240,
 )
 
 
