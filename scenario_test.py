@@ -1,8 +1,8 @@
 import time
 import random
 #from neo_controller import NeoController
-#from src.neo_controller import NeoController
-from neo_controller import NeoController
+from src.neo_controller import NeoController
+#from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
 import numpy as np
@@ -24,10 +24,10 @@ from custom_scenarios import *
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
 from examples.test_controller import TestController
-#from examples.graphics_both import GraphicsBoth
 
 parser = argparse.ArgumentParser(description='Run Kessler Game with optional CLI flags.')
 parser.add_argument('-invisible', action='store_true', help='Use NoGraphics for the game visualization.')
+parser.add_argument('-unreal', action='store_true', help='Use UnrealEngine for the game visualization.')
 parser.add_argument('-profile', action='store_true', help='Enable profiling of the game run.')
 parser.add_argument('-seed', type=int, help='Set the seed for random number generation.')
 
@@ -89,7 +89,7 @@ width, height = (1000, 800)
 
 # Define Game Settings
 game_settings = {'perf_tracker': True,
-                 'graphics_type': GraphicsType.NoGraphics if args.invisible else GraphicsType.Tkinter,#UnrealEngine,Tkinter,NoGraphics
+                 'graphics_type': GraphicsType.NoGraphics if args.invisible else (GraphicsType.UnrealEngine if args.unreal else GraphicsType.Tkinter),#UnrealEngine,Tkinter,NoGraphics
                  'realtime_multiplier': 0,
                  'graphics_obj': None,
                  'frequency': 30.0,
@@ -270,7 +270,7 @@ for _ in range(1):
     random.seed(randseed)
 
     asteroids_random = generate_asteroids(
-                                    num_asteroids=25,
+                                    num_asteroids=30,
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 300, 0),
@@ -290,7 +290,6 @@ for _ in range(1):
                                     {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 2},
                                 ],
                                 map_size=(width, height),
-                                #seed=2,
                                 time_limit=600,
                                 ammo_limit_multiplier=random.choice([0]),
                                 stop_if_no_ammo=False)
@@ -305,6 +304,7 @@ for _ in range(1):
     # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
+    #random.seed(randseed)
     controllers_used = [NeoController(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
@@ -313,15 +313,20 @@ for _ in range(1):
     #score, perf_data = game.run(scenario=ex_adv_four_corners_pt2, controllers=controllers_used)
     try:
         if profile:
+            #random.seed(randseed)
             cProfile.run(f'game.run(scenario=sc, controllers=[Neo(), Neo()])')
         else:
+            #random.seed(randseed)
             #print(random.getstate())
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
         if profile:
-            cProfile.run(f'game.run(scenario=adv_multi_ring_closing_right, controllers=controllers_used)')
+            #random.seed(randseed)
+            cProfile.run(f'game.run(scenario=rand_scenario, controllers=controllers_used)')
         else:
-            score, perf_data = game.run(scenario=aspect_ratio_grid_formation_scenario, controllers=controllers_used)
+            #random.seed(randseed)
+            #print(random.getstate())
+            score, perf_data = game.run(scenario=super_hard_wrap, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
