@@ -15,7 +15,6 @@
 # TODO: Test successive runs of Neo to make sure it self-cleans up after itself
 # TODO: Analyze each base state, and store analysis results. Like the heuristic FIS, except use more random search. Density affects the movement speed and cruise timesteps. Tune stuff much better.
 # TODO: Within targetting, maybe forecast mine splits too??
-# TODO: Make sure lru_cache works fine under mypyc and that it's not re-setting up anything or redoing computations
 
 import random
 import math
@@ -81,8 +80,18 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = False # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final = 0.5
+ENABLE_PERFORMANCE_CONTROLLER: Final = True # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
+MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 5
+MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
+MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS: Final = 150
+MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 1
+MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
+MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS: Final = 6
+
+assert MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS >= MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS
+assert MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS >= MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS
 # Initialization
 # Global variable to store messages and their last printed timestep
 explanation_messages_with_timestamps: dict[str, int] = {} # Make sure to clear this when timestep is 0 so back-to-back runs work properly!
@@ -2237,8 +2246,8 @@ class Simulation():
                     # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
                     mine_ground_zero_fudge = linear(dist_to_ground_zero, (0.0, 1.0), (MINE_BLAST_RADIUS + SHIP_RADIUS, 0.6))
                     #mine_ground_zero_fudge = max(0.0, (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS))
-                    mines_threat_level += (3.0 - next_extrapolated_mine_collision_time)**2/9.0*mine_ground_zero_fudge
-            mine_safe_time_fitness = sigmoid(mines_threat_level, -9.2, 0.375)
+                    mines_threat_level += (3.0 - next_extrapolated_mine_collision_time)**2.0/9.0*mine_ground_zero_fudge
+            mine_safe_time_fitness = sigmoid(mines_threat_level, -6.8, 0.232)
             return mine_safe_time_fitness, next_extrapolated_mine_collision_time
 
         def get_asteroid_aiming_cone_fitness() -> float:
@@ -3626,8 +3635,8 @@ class NeoController(KesslerController):
             current_time = time.perf_counter()
             elapsed_time_inside = current_time - self.last_entrance_time
             assert elapsed_time_inside >= 0.0
-            average_outside_time = sum(self.outside_controller_time_intervals) / len(self.outside_controller_time_intervals) if len(self.outside_controller_time_intervals) > 0 else 0.0
-            remaining_time_budget = max(DELTA_TIME/2.0 - elapsed_time_inside, DELTA_TIME - average_outside_time - elapsed_time_inside)
+            average_outside_time = sum(self.outside_controller_time_intervals)/len(self.outside_controller_time_intervals) if len(self.outside_controller_time_intervals) > 0 else 0.0
+            remaining_time_budget = max(DELTA_TIME*MINIMUM_DELTA_TIME_FRACTION_BUDGET - elapsed_time_inside, DELTA_TIME - average_outside_time - elapsed_time_inside)
 
             # Check if another iteration can fit within the remaining time budget
             if ENABLE_PERFORMANCE_CONTROLLER:
@@ -3865,9 +3874,6 @@ class NeoController(KesslerController):
             #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
             # Check for danger
-            #max_search_iterations = 60
-            min_search_iterations = 5
-            #search_iterations = 50
             max_cruise_seconds = 1.0 + 26.0*DELTA_TIME
             #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
             #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
@@ -3878,7 +3884,7 @@ class NeoController(KesslerController):
 
             #while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
             #for _ in range(search_iterations):
-            while search_iterations_count < min_search_iterations or self.performance_controller_check_whether_i_can_do_another_iteration():
+            while (search_iterations_count < MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS:
                 self.performance_controller_start_iteration()
                 search_iterations_count += 1
                 if search_iterations_count%1 == 0:
@@ -3977,6 +3983,7 @@ class NeoController(KesslerController):
                 debug_print(f"Planning targetting, and got fitness {best_stationary_targetting_fitness}")
 
             # Try moving! Run a simulation and find a course of action to put me to safety
+            '''
             if other_ships_exist:
                 if math.isinf(self.best_fitness_this_planning_period):
                     # This is the first timestep we're planning for this period, so we don't really know how many iterations to use. Don't go all out on this first one in case it's an easy one.
@@ -4014,8 +4021,9 @@ class NeoController(KesslerController):
                     search_iterations = 5
                 else:
                     search_iterations = 6
+            '''
             max_cruise_seconds = 1.0
-
+            '''
             if iterations_boost:
                 search_iterations = min(80, (search_iterations + 1)*10)
 
@@ -4024,14 +4032,16 @@ class NeoController(KesslerController):
                 search_iterations *= 2
             elif self.game_state_to_base_planning['ship_state']['lives_remaining'] == 2:
                 search_iterations = floor(search_iterations*1.5)
+            '''
             if len(self.sims_this_planning_period) == 0 or (len(self.sims_this_planning_period) == 1 and self.sims_this_planning_period[0]['action_type'] != 'heuristic_maneuver'):
                 heuristic_maneuver = True
             else:
                 heuristic_maneuver = False
 
-            #for _ in range(search_iterations):
-            while self.performance_controller_check_whether_i_can_do_another_iteration():
+            search_iterations_count = 0
+            while (search_iterations_count < MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS:
                 self.performance_controller_start_iteration()
+                search_iterations_count += 1
                 if heuristic_maneuver:
                     random_ship_heading_angle = 0.0
                     imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
@@ -4197,10 +4207,9 @@ class NeoController(KesslerController):
                     debug_print("\n\nWe're alone already. Injecting the following game state:")
                     debug_print(game_state)
                 self.plan_action(self.other_ships_exist, True, iterations_boost, True)
-                # TODO: I disabled this because it's incompatible with the perf monitoring! Reenable by enforcing a minimum iteration count! Don't use this!!!
-                #while len(self.sims_this_planning_period) < 6:
-                #    debug_print("Planning extra iterations!")
-                #    self.plan_action(self.other_ships_exist, True, False, False)
+                while len(self.sims_this_planning_period) < (MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS if self.game_state_to_base_planning['respawning'] else MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS):
+                    print(f"Planning extra iterations to reach minimum threshold! {len(self.sims_this_planning_period)}")
+                    self.plan_action(self.other_ships_exist, True, False, False)
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 self.decide_next_action(preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
                 if len(get_other_ships(game_state, self.ship_id)) == 0:
@@ -4236,10 +4245,9 @@ class NeoController(KesslerController):
             else:
                 self.plan_action(self.other_ships_exist, True, iterations_boost, False)
             if not self.action_queue:
-                # TODO: Disabled due to new perf monitoring!
-                #while len(self.sims_this_planning_period) < 6:
-                #    debug_print("Planning extra iterations!")
-                #    self.plan_action(self.other_ships_exist, True, False, False)
+                while len(self.sims_this_planning_period) < (MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS if self.game_state_to_base_planning['respawning'] else MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS):
+                    print("Planning extra iterations to reach minimum threshold!")
+                    self.plan_action(self.other_ships_exist, True, False, False)
                 # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 debug_print("Decide the next action.")

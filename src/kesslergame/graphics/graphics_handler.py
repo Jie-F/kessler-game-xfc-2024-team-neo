@@ -53,10 +53,7 @@ class GraphicsHandler:
         Update the graphics draw with new simulation data each simulation time-step
         """
         if self.type != GraphicsType.NoGraphics:
-            if self.type == GraphicsType.UnrealEngine:
-                self.graphics.update(score, ships, asteroids, bullets)
-            else:
-                self.graphics.update(score, ships, asteroids, bullets, mines)
+            self.graphics.update(score, ships, asteroids, bullets, mines)
 
     def close(self):
         """
