@@ -8,13 +8,13 @@
 # TODO: And do respawn maneuvers also factor in mines blowing up asteroids? I should.
 # TODO: Verify that frontrun protection's working, because it still feels like it's not totally working!
 # TODO: Maybe seek out places to go if it's a good mine opportunity? But it's risky! Only do if I have many lives left and I'm safe.
-# TODO: In crowded areas, use shorter maneuvers!
 # TODO: Make it so during a respawn maneuver, if I'm no longer gonna hit anything, I can begin to shoot!
 # TODO: Use the tolerance in the shot for the target selection so I don't just aim for the center all the time
 # TODO: Add error handling as a catch-all
 # TODO: Test successive runs of Neo to make sure it self-cleans up after itself
 # TODO: Analyze each base state, and store analysis results. Like the heuristic FIS, except use more random search. Density affects the movement speed and cruise timesteps. Tune stuff much better.
-# TODO: Within targetting, maybe forecast mine splits too??
+# TODO: Within targetting, maybe forecast mine splits too?? Nah, veto'd. This is complex and will have negligible benefit.
+# TODO: Add error checks, so that if Neo thinks its done but there's still asteroids left, it'll realize that and re-ingest the updated state and finish off its job. This should NEVER happen though, but in the 1/1000000 chance a new bug happens during the competition, this would catch it.
 
 import random
 import math
@@ -4072,14 +4072,14 @@ class NeoController(KesslerController):
                     if nearby_asteroid_average_speed > 100:
                         # Fast asteroids
                         ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
-                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.167
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.15
                     elif nearby_asteroid_average_speed > 50:
                         # Medium asteroids
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.18
                         ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.1
                     else:
                         # Slow asteroids
-                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.25
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED*0.0
                         ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.0
                 elif nearby_asteroid_count > 5:
                     # Some nearby asteroids
