@@ -15,6 +15,7 @@
 # TODO: Test successive runs of Neo to make sure it self-cleans up after itself
 # TODO: Analyze each base state, and store analysis results. Like the heuristic FIS, except use more random search. Density affects the movement speed and cruise timesteps. Tune stuff much better.
 # TODO: Within targetting, maybe forecast mine splits too??
+# TODO: Make sure lru_cache works fine under mypyc and that it's not re-setting up anything or redoing computations
 
 import random
 import math
@@ -80,7 +81,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = True # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final = False # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # Initialization
 # Global variable to store messages and their last printed timestep
@@ -228,9 +229,9 @@ def set_up_mine_fis() -> control.ControlSystemSimulation:
     drop_mine = control.Consequent(np.arange(0, 11, 1), 'drop_mine')
 
     # Defining the membership functions
-    mines_left['few'] = trimf(mines_left.universe, [1, 1, 2])
+    mines_left['few'] = trimf(mines_left.universe, [1, 1, 3])
     mines_left['many'] = trimf(mines_left.universe, [1.5, 3, 3])
-    lives_left['few'] = trimf(lives_left.universe, [1, 1, 2])
+    lives_left['few'] = trimf(lives_left.universe, [1, 1, 3])
     lives_left['many'] = trimf(lives_left.universe, [1.5, 3, 3])
     asteroids_hit['few'] = trimf(asteroids_hit.universe, [0, 0, ASTEROIDS_HIT_OKAY_CENTER])
     asteroids_hit['okay'] = trimf(asteroids_hit.universe, [0, ASTEROIDS_HIT_OKAY_CENTER, ASTEROIDS_HIT_VERY_GOOD])
