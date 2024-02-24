@@ -776,9 +776,7 @@ def inspect_scenario(game_state: GameState, ship_state: Ship) -> None:
     #avg_speed = average_speed()
     #print(f"Average asteroid density: {average_density}, average vel: {average_vel}, average speed: {avg_speed}")
 
-def asteroid_counter(asteroids: Optional[list[Asteroid]] = None) -> tuple[int, int]:
-    if asteroids is None:
-        return 0, 0
+def asteroid_counter(asteroids: list[Asteroid]) -> tuple[int, int]:
     current_count = len(asteroids)
     total_count: int = 0
     for a in asteroids:
@@ -1040,7 +1038,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     accelerate(0.0, 0.0) # TODO: If we remove this, we get some interesting results and emergent behavior. Neo would spazz around the map, going from one maneuver directly into another. I might even be able to tweak it to work. Maybe in the stationary targeting, apply a thrust to slow down the ship, so the targeting works a bit better. That could fix the issue, and it might be worth exploring if I have time! But for now, let’s just eat the slight time loss and regain the control of node based movement without drifting around like driftwood.
     return move_sequence
 
-def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: Ship) -> tuple[float, float, float, float, int]:
+def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: Ship) -> tuple[float, float, float, float, int, float, int, int]:
     # This is a helper function to analyze and prepare the gamestate, to give the maneuver FIS useful information, to heuristically command a maneuver to try out
     def calculate_angular_width(radius: float, distance: float) -> float:
         if distance == 0.0:
@@ -1050,6 +1048,16 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
             return asin(sin_theta)
         else:
             return 2.0*pi
+
+    def average_velocity(asteroids: list[Asteroid]) -> tuple[float, float]:
+        total_x_velocity = 0.0
+        total_y_velocity = 0.0
+        for a in asteroids:
+            ast_vel: tuple[float, float] = a['velocity']
+            total_x_velocity += ast_vel[0]
+            total_y_velocity += ast_vel[1]
+        num_asteroids = len(asteroids)
+        return (total_x_velocity/num_asteroids, total_y_velocity/num_asteroids)
 
     def find_largest_gap(asteroids: list[Asteroid], ship_position: tuple[float, float]) -> tuple[float, float]:
         if not asteroids:
@@ -1157,7 +1165,11 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
         nearby_asteroid_average_speed = 0.0
     else:
         nearby_asteroid_average_speed = nearby_asteroid_total_speed/nearby_asteroid_count
-    return most_imminent_asteroid_speed, imminent_asteroid_relative_heading_deg, largest_gap_relative_heading_deg, nearby_asteroid_average_speed, nearby_asteroid_count
+    
+    average_directional_velocity = average_velocity(asteroids)
+    average_directional_speed = math.sqrt(average_directional_velocity[0]*average_directional_velocity[0] + average_directional_velocity[1]*average_directional_velocity[1])
+    total_asteroid_count, current_asteroids_count = asteroid_counter(asteroids)
+    return most_imminent_asteroid_speed, imminent_asteroid_relative_heading_deg, largest_gap_relative_heading_deg, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroid_count, current_asteroids_count
 
 def check_collision(a_x: float, a_y: float, a_r: float, b_x: float, b_y: float, b_r: float, pixel_padding: float = 0) -> bool:
     delta_x = a_x - b_x
@@ -2195,13 +2207,14 @@ class Simulation():
         def get_asteroid_safe_time_fitness(next_extrapolated_asteroid_collision_time: float, displacement: float, move_sequence_length_s: float) -> float:
             if displacement < EPS:
                 # Stationary
+                # TODO: See whether there's something wrong with counting the move sequence length in this. It might be fine to count it all, or maybe use a discount factor
                 # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
                 #asteroid_safe_time_fitness = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (4, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/6, 3.0) #sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
+                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s, 2.1*4/6, 3.0) #sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
             else:
                 # Maneuvering
                 #asteroid_safe_time_fitness = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (5, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.7, 2.1*4/6, 3.0)
+                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s, 2.1*4/6, 3.0)
             return asteroid_safe_time_fitness
 
         def get_asteroid_shot_frequency_fitness(asteroids_shot: int, move_sequence_length_s: float) -> float:
@@ -3540,6 +3553,7 @@ class NeoController(KesslerController):
         self.second_best_fitness_this_planning_period_index: Optional[int] = None
         self.stationary_targetting_sim_index: Optional[int] = None
         self.game_state_to_base_planning: Optional[dict[str, Any]] = None
+        self.base_gamestate_analysis: Optional[tuple[float, float, float, float, int, float, int, int]] = None
         self.set_of_base_gamestate_timesteps: set[int] = set()
         self.base_gamestates: dict[int, Any] = {} # Key is timestep, value is the state
         self.other_ships_exist: bool = False
@@ -3856,6 +3870,7 @@ class NeoController(KesslerController):
         self.second_best_fitness_this_planning_period = -math.inf
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
+        self.base_gamestate_analysis = None
 
     def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool = False, plan_stationary: bool = False) -> None:
         #gc.disable()
@@ -3874,7 +3889,7 @@ class NeoController(KesslerController):
             #print(f"Current ship location: {ship_state['position'][0]}, {ship_state['position'][1]}, ship heading: {ship_state['heading']}")
 
             # Check for danger
-            max_cruise_seconds = 1.0 + 26.0*DELTA_TIME
+            MAX_CRUISE_SECONDS = 1.0 + 26.0*DELTA_TIME
             #ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
             #print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
 
@@ -3919,7 +3934,7 @@ class NeoController(KesslerController):
                     ship_accel_turn_rate = random.uniform(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)
                     ship_cruise_speed = SHIP_MAX_SPEED*random.choice([-1, 1])
                     ship_cruise_turn_rate = 0.0
-                    ship_cruise_timesteps = random.randint(0, round(max_cruise_seconds/DELTA_TIME))
+                    ship_cruise_timesteps = random.randint(0, round(MAX_CRUISE_SECONDS/DELTA_TIME))
                 assert self.game_state_to_base_planning is not None
                 if ENABLE_ASSERTIONS and not (bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']):
                     print(f"BAD, self.game_state_to_base_planning['ship_respawn_timer']: {self.game_state_to_base_planning['ship_respawn_timer']}, self.game_state_to_base_planning['ship_state']['is_respawning']: {self.game_state_to_base_planning['ship_state']['is_respawning']}")
@@ -3951,6 +3966,8 @@ class NeoController(KesslerController):
         else:
             # Stationary targetting simulation
             assert self.game_state_to_base_planning is not None
+            if self.base_gamestate_analysis is None:
+                self.base_gamestate_analysis = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
             if plan_stationary and self.game_state_to_base_planning['ship_state']['bullets_remaining'] != 0:
                 # No need to check whether this is allowed, because we need to do this iteration at minimum
                 self.performance_controller_start_iteration()
@@ -4022,7 +4039,7 @@ class NeoController(KesslerController):
                 else:
                     search_iterations = 6
             '''
-            max_cruise_seconds = 1.0
+            MAX_CRUISE_TIMESTEPS = 45.0
             '''
             if iterations_boost:
                 search_iterations = min(80, (search_iterations + 1)*10)
@@ -4038,13 +4055,49 @@ class NeoController(KesslerController):
             else:
                 heuristic_maneuver = False
 
+            imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroids_count, current_asteroids_count = self.base_gamestate_analysis
+            # TODO: Replace this with a fuzzy system
+            if average_directional_speed > 49 and current_asteroids_count > 5 and total_asteroids_count > 40:
+                # This is probably a wall scenario! We have many asteroids all travelling in basically the same direction
+                ship_cruise_speed_mode = SHIP_MAX_SPEED
+                ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS
+                max_pre_maneuver_turn_timesteps = 3.0
+            else:
+                max_pre_maneuver_turn_timesteps = 10.0
+                if nearby_asteroid_count > 15:
+                    # Many nearby asteroids
+                    if nearby_asteroid_average_speed > 100:
+                        # Fast asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/6
+                    else:
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
+                        ship_cruise_timesteps_mode = 0.0
+                elif nearby_asteroid_count > 5:
+                    # Some nearby asteroids
+                    if nearby_asteroid_average_speed > 100:
+                        # Fast asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+                    else:
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/4
+                else:
+                    # Few nearby asteroids
+                    if nearby_asteroid_average_speed > 100:
+                        # Fast asteroids
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/2
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+                    else:
+                        ship_cruise_speed_mode = SHIP_MAX_SPEED/4
+                        ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS/3
+            print(f"Nearby asteroids count is {nearby_asteroid_count}, average speed of asts is {nearby_asteroid_average_speed}, avg directional speed is {average_directional_speed}, so therefore I'm picking ship cruise timesteps mode to be {ship_cruise_timesteps_mode} and ship speed mode of {ship_cruise_speed_mode}")
             search_iterations_count = 0
             while (search_iterations_count < MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS:
                 self.performance_controller_start_iteration()
                 search_iterations_count += 1
                 if heuristic_maneuver:
                     random_ship_heading_angle = 0.0
-                    imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
                     ship_accel_turn_rate, ship_cruise_speed, ship_cruise_turn_rate, ship_cruise_timesteps_float, thrust_direction = maneuver_heuristic_fis(imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count)
                     #print(ship_accel_turn_rate, ship_cruise_speed, ship_cruise_turn_rate, ship_cruise_timesteps, thrust_direction)
                     ship_cruise_timesteps = round(ship_cruise_timesteps_float)
@@ -4054,6 +4107,16 @@ class NeoController(KesslerController):
                         # The FIS couldn't decide which way to thrust, so we'll just skip the heuristic maneuver altogether
                         heuristic_maneuver = False
                 if not heuristic_maneuver:
+                    random_ship_heading_angle = random.triangular(-6.0*max_pre_maneuver_turn_timesteps, 6.0*max_pre_maneuver_turn_timesteps, 0)
+                    ship_accel_turn_rate = random.triangular(0, SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)*(2.0*float(random.getrandbits(1)) - 1.0)
+                    #random_ship_cruise_speed = random.uniform(-ship_max_speed, ship_max_speed)
+                    ship_cruise_speed = random.triangular(0, SHIP_MAX_SPEED, ship_cruise_speed_mode)*(2.0*float(random.getrandbits(1)) - 1.0)#random.triangular(0, SHIP_MAX_SPEED, SHIP_MAX_SPEED)*(2.0*float(random.getrandbits(1)) - 1.0)
+                    ship_cruise_turn_rate = random.triangular(0, SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)*(2.0*float(random.getrandbits(1)) - 1.0)#random.uniform(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)
+                    # TODO: For denser asteroid fields, decrease the max cruise seconds to encourage shorter maneuvers!
+                    #ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/DELTA_TIME))
+                    ship_cruise_timesteps = floor(random.triangular(0.0, MAX_CRUISE_TIMESTEPS, ship_cruise_timesteps_mode))
+
+                    '''
                     random_ship_heading_angle = random.triangular(-6.0*10.0, 6.0*10.0, 0)
                     ship_accel_turn_rate = random.triangular(0, SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)*(2.0*float(random.getrandbits(1)) - 1.0)
                     #random_ship_cruise_speed = random.uniform(-ship_max_speed, ship_max_speed)
@@ -4062,6 +4125,7 @@ class NeoController(KesslerController):
                     # TODO: For denser asteroid fields, decrease the max cruise seconds to encourage shorter maneuvers!
                     #ship_cruise_timesteps = random.randint(1, round(max_cruise_seconds/DELTA_TIME))
                     ship_cruise_timesteps = floor(random.triangular(0.0, max_cruise_seconds/DELTA_TIME, 0.0))
+                    '''
 
                 # First do a dummy simulation just to go through the motion, so we have the list of moves
                 preview_move_sequence = get_ship_maneuver_move_sequence(random_ship_heading_angle, ship_cruise_speed, ship_accel_turn_rate, ship_cruise_timesteps, ship_cruise_turn_rate)
@@ -4151,6 +4215,7 @@ class NeoController(KesslerController):
                 self.best_fitness_this_planning_period = -math.inf
                 self.second_best_fitness_this_planning_period_index = INT_NEG_INF
                 self.second_best_fitness_this_planning_period = -math.inf
+                self.base_gamestate_analysis = None
                 unexpected_death = True
                 iterations_boost = True
 
