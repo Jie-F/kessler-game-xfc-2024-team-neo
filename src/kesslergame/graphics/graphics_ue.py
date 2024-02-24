@@ -7,6 +7,7 @@ import socket
 import numpy as np
 from typing import List
 import time
+import math
 
 from ..ship import Ship
 from ..asteroid import Asteroid
@@ -49,26 +50,26 @@ class GraphicsUE(KesslerGraphics):
         self.udp_sock.sendto(start_str.encode('utf-8'), self.udp_addr)
 
     def update(self, score: Score, ships: List[Ship], asteroids: List[Asteroid], bullets: List[Bullet], mines: List[Mine]):
-        start_time = time.perf_counter()
+        #start_time = time.perf_counter()
         update_parts = ['::frame::']
 
         for ship in ships:
             ship_part = 's({},{},{},{},{},{});'.format(
-                int(self.map_size[0] - ship.position[0]),
-                int(ship.position[1]),
-                int(180 - ship.heading),
-                int(ship.radius),
-                int(ship.alive),
+                round(self.map_size[0] - ship.position[0]),
+                round(ship.position[1]),
+                round(180 - ship.heading),
+                round(ship.radius),
+                round(ship.alive),
                 float(ship.respawn_time_left)
             )
             update_parts.append(ship_part)
 
         for ast in asteroids:
             asteroid_part = 'a({},{},{},{},{},{});'.format(
-                int(self.map_size[0] - ast.position[0]),
-                int(ast.position[1]),
-                int(180 - ast.angle),
-                int(ast.radius),
+                round(self.map_size[0] - ast.position[0]),
+                round(ast.position[1]),
+                round(180 - ast.angle),
+                round(ast.radius),
                 0,
                 0
             )
@@ -76,14 +77,32 @@ class GraphicsUE(KesslerGraphics):
 
         for bullet in bullets:
             bullet_part = 'b({},{},{},{},{},{});'.format(
-                int(self.map_size[0] - bullet.position[0]),
-                int(bullet.position[1]),
-                int(180 - bullet.heading),
-                int(bullet.length),
+                round(self.map_size[0] - bullet.position[0]),
+                round(bullet.position[1]),
+                round(180 - bullet.heading),
+                round(bullet.length),
                 0,
                 0
             )
             update_parts.append(bullet_part)
+
+        fake_bullet_length = 6
+        for mine in mines:
+            angles = np.linspace(0, 2*np.pi, num=round(2*np.pi/(2*math.atan(fake_bullet_length/2/mine.blast_radius))), endpoint=False)
+            if mine.countdown_timer < mine.detonation_time:
+                explosion_radius = mine.blast_radius * (1 - mine.countdown_timer / mine.detonation_time)**2
+            else:
+                explosion_radius = 0.0
+            for angle in angles:
+                fake_bullet_part = 'b({},{},{},{},{},{});'.format(
+                    round(self.map_size[0] - (mine.position[0] + explosion_radius*math.cos(angle))),
+                    round(mine.position[1] + explosion_radius*math.sin(angle)),
+                    round(180 - (math.degrees(angle) + 90)),
+                    round(fake_bullet_length),
+                    0,
+                    0
+                )
+                update_parts.append(fake_bullet_part)
 
         update_parts.append('::score::')
         score_part = 'time;{};'.format(round(score.sim_time, 2))
@@ -91,17 +110,17 @@ class GraphicsUE(KesslerGraphics):
 
         for team in score.teams:
             team_part = 'team;{},{},{},{},{};'.format(
-                int(team.team_id),
-                int(team.asteroids_hit),
-                int(team.lives_remaining),
-                int(team.bullets_remaining),
+                round(team.team_id),
+                round(team.asteroids_hit),
+                round(team.lives_remaining),
+                round(team.bullets_remaining),
                 round(team.accuracy * 100, 1)
             )
             update_parts.append(team_part)
 
         update_str = ''.join(update_parts)
-        end_time = time.perf_counter()
-        print(f"Time: {end_time - start_time}")
+        #end_time = time.perf_counter()
+        #print(f"Time: {end_time - start_time}")
         self.udp_sock.sendto(update_str.encode('utf-8'), self.udp_addr)
 
     def close(self):
