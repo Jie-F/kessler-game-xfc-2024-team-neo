@@ -72,7 +72,13 @@ class KesslerGame:
         sim_time = 0
         step = 0
         time_limit = scenario.time_limit if scenario.time_limit else self.time_limit
-
+        #print(f"Printing controller ship ids:")
+        #try:
+        #    for cont in controllers:
+        #        print(cont.ship_id)
+        #except:
+        #    print(f"Failed to print ship ids, probably not set yet!")
+        #print(f"Done printing controller ship ids:")
         move_record = [[] for _ in range(len(ships))]
 
         # Assign controllers to each ship
@@ -119,7 +125,7 @@ class KesslerGame:
             # Loop through each controller/ship combo and apply their actions
             #print('\nshowing ship stuff')
             for idx, ship in enumerate(ships):
-                #print(controllers[idx].ship_id, ship.id)
+                #print(f"{controllers[idx].ship_id=} {ship.id=}")
                 if ship.alive:
                     # Reset controls on ship to defaults
                     ship.thrust = 0

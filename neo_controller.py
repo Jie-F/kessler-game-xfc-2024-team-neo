@@ -2397,7 +2397,7 @@ class Simulation():
         if fitness_function_weights is not None:
             fitness_weights = fitness_function_weights
         else:
-            fitness_weights = [7.0, 15.0, 1.0, 0.7, 6.0, 8.0, 1.0]
+            fitness_weights = [7.0, 15.0, 1.0, 1.0, 6.0, 8.0, 1.0]
         #print(fitness_weights)
         #overall_fitness = weighted_average(fitnesses, fitness_weights)
         #print(fitnesses, fitness_weights)
@@ -3541,7 +3541,8 @@ class NeoController(KesslerController):
 
     def reset(self, chromosome: Optional[list[float]] = None) -> None:
         self.init_done = False
-        self.ship_id = None
+        # DO NOT OVERWRITE self.ship_id. That will cause the controller to break, since Kessler manages that itself. If we want to track our ship id, use a different variable name.
+        self.ship_id_internal: int = -1
         self.current_timestep: int = -1
         self.action_queue: list[tuple[int, float, float, bool, bool]] = []  # This will become our heap
         self.game_state_plotter: Optional[GameStatePlotter] = None
@@ -3560,8 +3561,8 @@ class NeoController(KesslerController):
         self.reality_move_sequence: list[dict[str, Any]] = []
         self.simulated_gamestate_history: dict[int, SimState] = {}
         self.lives_remaining_that_we_did_respawn_maneuver_for: set[int] = set()
-        global fitness_function_weights
         if chromosome is not None:
+            global fitness_function_weights
             fitness_function_weights = chromosome
         # For performance controller
         self.outside_controller_time_intervals: list[float] = []
@@ -3571,21 +3572,17 @@ class NeoController(KesslerController):
         self.last_iteration_start_time: float = math.nan
         self.average_iteration_time = DELTA_TIME/10
 
+        # Clear globals
         global explanation_messages_with_timestamps
-        if explanation_messages_with_timestamps:
-            debug_print('This is not a fresh import of the controller! Clearing globals...')
-            explanation_messages_with_timestamps.clear()
-            fitness_function_weights = None
-        else:
-            debug_print('Freshly running controller')
+        explanation_messages_with_timestamps.clear()
 
     def finish_init(self, game_state: GameState, ship_state: Ship) -> None:
         # If we need the game state or ship state to finish init, we can use this function to do that
-        if self.ship_id is None:
-            self.ship_id = ship_state['id']
+        if self.ship_id_internal == -1:
+            self.ship_id_internal = ship_state['id']
         if GAMESTATE_PLOTTING:
             self.game_state_plotter = GameStatePlotter(game_state)
-        if len(get_other_ships(game_state, self.ship_id)) > 0:
+        if len(get_other_ships(game_state, self.ship_id_internal)) > 0:
             self.other_ships_exist = True
             print_explanation("I've got another ship friend here with me. I'll try coexisting with them, but be careful to avoid them.", self.current_timestep)
         else:
@@ -4061,7 +4058,7 @@ class NeoController(KesslerController):
             # For performance and simplicity, I'll just use a bunch of if statements
             if average_directional_speed > 80 and current_asteroids_count > 5 and total_asteroids_count > 40:
                 # This is probably a wall scenario! We have many asteroids all travelling in basically the same direction
-                print_explanation(f"Wall scenario detected! Preferring trying longer cruise lengths")
+                print_explanation(f"Wall scenario detected! Preferring trying longer cruise lengths", self.current_timestep)
                 ship_cruise_speed_mode = SHIP_MAX_SPEED
                 ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS
                 max_pre_maneuver_turn_timesteps = 3.0
@@ -4198,7 +4195,7 @@ class NeoController(KesslerController):
         ship_state = cast(Ship, ship_state_dict)
         game_state = cast(GameState, game_state_dict)
         if not game_state['sim_frame'] == self.current_timestep:
-            print("This was not a fresh run of the controller! Please re-initialize Neo after each scenario is evaluated and avoid reusing it. I'll try cleaning up the previous run and recovering the state, but no guarantees!")
+            debug_print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
             self.reset()
             self.current_timestep += 1
         if self.current_timestep == 0:
@@ -4286,7 +4283,7 @@ class NeoController(KesslerController):
                 assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']
                 # When there's other ships, stationary targetting is the LAST thing done, just so it can be based off of the reality state
                 # The base state is exact on the final planning timestep, since the base state is the state we're on right now
-                if len(get_other_ships(game_state, self.ship_id)) == 0:
+                if len(get_other_ships(game_state, self.ship_id_internal)) == 0:
                     debug_print("\n\nWe're alone already. Injecting the following game state:")
                     debug_print(game_state)
                 self.plan_action(self.other_ships_exist, True, iterations_boost, True)
@@ -4295,7 +4292,7 @@ class NeoController(KesslerController):
                     self.plan_action(self.other_ships_exist, True, False, False)
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 self.decide_next_action(preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
-                if len(get_other_ships(game_state, self.ship_id)) == 0:
+                if len(get_other_ships(game_state, self.ship_id_internal)) == 0:
                     print_explanation("I'm alone. We can see into the future perfectly now!", self.current_timestep)
                     self.simulated_gamestate_history.clear()
                     self.set_of_base_gamestate_timesteps.clear()

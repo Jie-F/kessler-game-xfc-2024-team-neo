@@ -326,7 +326,8 @@ for _ in range(1):
         else:
             #random.seed(randseed)
             #print(random.getstate())
-            score, perf_data = game.run(scenario=super_hard_wrap, controllers=controllers_used)
+            score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
+    #score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
     if score:
