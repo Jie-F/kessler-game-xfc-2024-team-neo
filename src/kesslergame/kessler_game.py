@@ -166,6 +166,8 @@ class KesslerGame:
 
             # Cull any bullets past the map edge
             before_num_bullets = len(bullets)
+            #print()
+            #print([b.velocity for b in bullets])
             bullets = [bullet
                        for bullet
                        in bullets
@@ -173,6 +175,7 @@ class KesslerGame:
                        and 0 <= bullet.position[1] <= scenario.map_size[1]]
             if len(bullets) != before_num_bullets:
                 print('BULLET LEAVING MAP')
+                #print([b.velocity for b in bullets])
             # Wrap ships and asteroids to other side of map
             for ship in liveships:
                 for idx, pos in enumerate(ship.position):

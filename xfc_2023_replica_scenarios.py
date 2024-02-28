@@ -89,8 +89,8 @@ ex_adv_two_asteroids_pt2 = Scenario(
         {'position': (width//10, height//10), 'angle': 90.0, 'speed': 100, 'size': 3},
         {'position': (width//10, height*9//10), 'angle': -90.0, 'speed': 100, 'size': 3},
     ],
-    ship_states=[{'position': (width//10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 3},
-                 {'position': (width/10, height*9/10), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 3}],
+    ship_states=[{'position': (width/10, height//2), 'angle': 180, 'lives': 3, 'team': 1, 'mines_remaining': 3},
+                 {'position': (width*7/10, height*9/10), 'angle': 0, 'lives': 3, 'team': 2, 'mines_remaining': 3}],
     map_size=(width, height),
     time_limit=20,
 )

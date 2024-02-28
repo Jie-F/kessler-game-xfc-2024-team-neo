@@ -107,12 +107,12 @@ xfc_2021_portfolio = [
     #threat_test_2,
     #threat_test_3,
     #threat_test_4,
-    accuracy_test_1,
-    accuracy_test_2,
-    accuracy_test_3,
-    accuracy_test_4,
-    accuracy_test_5,
-    accuracy_test_6,
+    #accuracy_test_1,
+    #accuracy_test_2,
+    #accuracy_test_3,
+    #accuracy_test_4,
+    #accuracy_test_5,
+    #accuracy_test_6,
     accuracy_test_7,
     accuracy_test_8,
     accuracy_test_9,
@@ -211,12 +211,12 @@ xfc2023 = [
     adv_random_big_4,
     adv_multi_wall_bottom_hard_1,
     adv_multi_wall_right_hard_1,
-    #adv_multi_ring_closing_left,
-    #adv_multi_ring_closing_right,
-    #adv_multi_two_rings_closing,
-    #avg_multi_ring_closing_both2,
-    #adv_multi_ring_closing_both_inside,
-    #adv_multi_ring_closing_both_inside_fast
+    adv_multi_ring_closing_left,
+    adv_multi_ring_closing_right,
+    adv_multi_two_rings_closing,
+    avg_multi_ring_closing_both2,
+    adv_multi_ring_closing_both_inside,
+    adv_multi_ring_closing_both_inside_fast
 ]
 
 custom = [
@@ -256,10 +256,12 @@ team_1_deaths = 0
 team_2_deaths = 0
 team_1_wins = 0
 team_2_wins = 0
-#while True:
+while True:
 #random.seed(1)
 #for sc in xfc2023:
-for _ in range(1):
+#for _ in range(1):
+#while not missed:
+#for sc in xfc_2021_portfolio:
     iterations += 1
     if args.seed is not None:
         randseed = args.seed
@@ -305,7 +307,7 @@ for _ in range(1):
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
     #random.seed(randseed)
-    controllers_used = [NeoController(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
@@ -320,13 +322,38 @@ for _ in range(1):
             #print(random.getstate())
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
     except:
+        print(f"Running single scenario")
         if profile:
             #random.seed(randseed)
             cProfile.run(f'game.run(scenario=rand_scenario, controllers=controllers_used)')
         else:
             #random.seed(randseed)
             #print(random.getstate())
-            score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
+            '''
+                threat_test_1,
+    threat_test_2,
+    threat_test_3,
+    threat_test_4,
+    accuracy_test_1,
+    accuracy_test_2,
+    accuracy_test_3,
+    accuracy_test_4,
+    accuracy_test_5,
+    accuracy_test_6,
+    accuracy_test_7,
+    accuracy_test_8,
+    accuracy_test_9,
+    accuracy_test_10,
+    wall_left_easy,
+    wall_right_easy,
+    wall_top_easy,
+    wall_bottom_easy,
+    ring_closing,
+    ring_static_left,
+    ring_static_right,
+    ring_static_top,
+    ring_static_bottom,'''
+            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
     #score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
