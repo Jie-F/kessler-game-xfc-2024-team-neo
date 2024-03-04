@@ -275,7 +275,7 @@ def set_up_mine_fis() -> control.ControlSystemSimulation:
 def generate_mine_fis_lookup_table() -> dict[tuple[int, int, int], bool]:
     mine_dropping_fis = set_up_mine_fis()
     lookup_table = {}
-    
+
     for mines_left in range(1, 4):  # 0 to 3
         for lives_left in range(1, 4):  # 1 to 3
             for asteroids_hit in range(1, ASTEROIDS_HIT_VERY_GOOD + 1):
@@ -319,7 +319,7 @@ def mine_fis_lookup_table(num_mines_left: int, num_lives_left: int, num_asteroid
     num_mines_left = min(num_mines_left, 3)
     num_lives_left = min(num_lives_left, 3)
     num_asteroids_hit = min(num_asteroids_hit, ASTEROIDS_HIT_VERY_GOOD)
-    
+
     # Lookup decision
     return lookup_table[(num_mines_left, num_lives_left, num_asteroids_hit)]
 
@@ -1025,7 +1025,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     move_sequence: list[Action] = []
     ship_speed = ship_starting_speed
     #assert math.isclose(ship_starting_speed, 0.0, abs_tol=EPS), f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver! In which case, you can safely ignore this assertion."
-    
+
     def rotate_heading(heading_difference_deg: float) -> None:
         nonlocal move_sequence
         if abs(heading_difference_deg) < GRAIN:
@@ -1223,7 +1223,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
         nearby_asteroid_average_speed = 0.0
     else:
         nearby_asteroid_average_speed = nearby_asteroid_total_speed/nearby_asteroid_count
-    
+
     average_directional_velocity = average_velocity(asteroids)
     average_directional_speed = math.sqrt(average_directional_velocity[0]*average_directional_velocity[0] + average_directional_velocity[1]*average_directional_velocity[1])
     total_asteroid_count, current_asteroids_count = asteroid_counter(asteroids)
@@ -1733,7 +1733,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
 
     def naive_time_function_for_plotting(theta: float) -> float:
         # Just scale up the number so that it fits on the same scale and will be visible after plotting
-        return max(-200000, min(naive_time_function(theta)*100000, 200000))
+        return max(-200000.0, min(naive_time_function(theta)*100000.0, 200000.0))
 
     def root_function(theta: float) -> float:
         # Convert heading error to absolute heading
@@ -2206,7 +2206,7 @@ class Simulation():
                 #    print(f"In our special sim! State seq is: {self.state_sequence}")
                 #    print(f"Sim id {self.sim_id} Predicting ship ast collision with ship at {self.ship_state} and ast at {ast_to_string(a)}")
                 #assert math.isclose(self.ship_state['velocity'][0], 0.0, abs_tol=EPS) and math.isclose(self.ship_state['velocity'][1], 0.0, abs_tol=EPS), f"{self.ship_state['velocity']=}, {self.ship_state['speed']=}"
-                
+
                 predicted_collision_time_from_future = predict_next_imminent_collision_time_with_asteroid(self.ship_state['position'][0], self.ship_state['position'][1], 0.0*self.ship_state['velocity'][0], 0.0*self.ship_state['velocity'][1], SHIP_RADIUS, a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], -DELTA_TIME*additional_timesteps_to_blow_up_mines*0.0 if asteroid_is_born else 0.0)
                 predicted_collision_time = predicted_collision_time_from_future + (DELTA_TIME*additional_timesteps_to_blow_up_mines if asteroid_is_born else 0.0)
                 #else:
@@ -4021,7 +4021,7 @@ class NeoController(KesslerController):
             best_action_sim = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
             best_action_fitness_breakdown = best_action_sim.get_fitnesses()
-        
+
         if self.stationary_targetting_sim_index is not None:
             stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
             for message in stationary_safety_messages:
@@ -4352,7 +4352,7 @@ class NeoController(KesslerController):
                 heuristic_maneuver = False
 
             imminent_asteroid_speed, imminent_asteroid_relative_heading, largest_gap_relative_heading, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroids_count, current_asteroids_count = self.base_gamestate_analysis
-            
+
             # Let's just pretend the following is a fuzzy system lol
             # For performance and simplicity, I'll just use a bunch of if statements
             if average_directional_speed > 80 and current_asteroids_count > 5 and total_asteroids_count >= 100:
