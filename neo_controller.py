@@ -2308,7 +2308,7 @@ class Simulation():
                 # This is to signal that we won't hit anything ever if we're staying here, so we should defer to the maneuver subcontroller to force a move
                 # This is less effective with this new fitness system, but it should still work eventually.
                 debug_print(f"Deferring to maneuver subcontroller! Forcing a move.")
-                return 0.0
+                return -0.9
             else:
                 fudged_asteroids_shot: float
                 if asteroids_shot == 0:
@@ -2494,7 +2494,7 @@ class Simulation():
         # Use fuzzy "AND" by averaging the fuzzy outputs
         assert 0.0 <= asteroid_safe_time_fitness <= 1.0
         assert 0.0 <= mine_safe_time_fitness <= 1.0
-        assert 0.0 <= asteroids_fitness <= 1.0
+        assert -1.0 <= asteroids_fitness <= 1.0
         assert 0.0 <= sequence_length_fitness <= 1.0
         assert 0.0 <= other_ship_proximity_fitness <= 1.0
         assert 0.0 <= crash_fitness <= 1.0
@@ -4046,18 +4046,20 @@ class NeoController(KesslerController):
             print_explanation("Doing a respawn maneuver to get to a safe spot using my respawn invincibility", self.current_timestep)
         if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type'] in ['random_maneuver', 'heuristic_maneuver']:
             # [asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness]
-            assert self.stationary_targetting_sim_index is not None
-            stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_fitnesses()
-            debug_print('stationary fitneses', stationary_fitness_breakdown)
-            print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
-            if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
-                # No mines are threatening us whether we stay put or move
-                if best_action_fitness_breakdown[0] > stationary_fitness_breakdown[0]:
-                    print_explanation("Doing a maneuver to dodge asteroids!", self.current_timestep)
-            elif best_action_fitness_breakdown[1] > stationary_fitness_breakdown[1]:
-                print_explanation("Doing a maneuver to dodge a mine!", self.current_timestep)
-            if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
-                print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
+            if self.stationary_targetting_sim_index is None:
+                print(f"WARNING: There are no stationary targetting sims!")
+            if self.stationary_targetting_sim_index is not None:
+                stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_fitnesses()
+                debug_print('stationary fitneses', stationary_fitness_breakdown)
+                print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
+                if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
+                    # No mines are threatening us whether we stay put or move
+                    if best_action_fitness_breakdown[0] > stationary_fitness_breakdown[0]:
+                        print_explanation("Doing a maneuver to dodge asteroids!", self.current_timestep)
+                elif best_action_fitness_breakdown[1] > stationary_fitness_breakdown[1]:
+                    print_explanation("Doing a maneuver to dodge a mine!", self.current_timestep)
+                if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
+                    print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
         #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness}")
         best_move_sequence = best_action_sim.get_move_sequence()
         debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
