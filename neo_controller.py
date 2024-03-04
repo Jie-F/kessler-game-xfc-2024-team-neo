@@ -338,12 +338,7 @@ def check_mine_opportunity(ship_state: Ship, game_state: GameState, other_ships:
             # We want to conserve mines more if we only have mines left and not bullets, and laying multiple mines at once is risky because the first one may blow asteroids away from the second, so the second one would be a waste
             return False
     #debug_print(f"Mine count inside: {mine_ast_count} compared to average density amount inside: {average_asteroids_inside_blast_radius}")
-    #try:
-    # TODO: Maybe add back exception handling cuz this is sketch lmao
     return mine_fis(ship_state['mines_remaining'], ship_state['lives_remaining'], mine_ast_count)
-    #except Exception as e:
-    #    print(f"EXCEPTION RAISED IN MINE FIS: {e}")
-    #    return False
 
 @lru_cache()
 def setup_heuristic_maneuver_fis() -> control.ControlSystemSimulation:
@@ -1101,7 +1096,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
             return 2.0*pi
         sin_theta = radius/distance
         if -1.0 <= sin_theta <= 1.0:
-            return asin(sin_theta)
+            return 2.0*asin(sin_theta)
         else:
             return 2.0*pi
 
