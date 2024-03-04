@@ -522,7 +522,7 @@ def sigmoid(x: float, k: float = 1.0, x0: float = 0.0) -> float:
     Returns:
     - The logistic sigmoid function value(s) for the given input.
     """
-    return 1 / (1 + math.exp(-k * (x - x0)))
+    return 1/(1 + math.exp(-k*(x - x0)))
 
 def linear(x: float, point1: tuple[float, float], point2: tuple[float, float]) -> float:
     """
@@ -557,7 +557,7 @@ def weighted_average(numbers: list[float], weights: Optional[list[float]] = None
         if len(weights) != len(numbers):
             raise ValueError("Length of weights must match length of numbers.")
         # Calculate weighted average
-        total_weighted = sum(number * weight for number, weight in zip(numbers, weights))
+        total_weighted = sum(number*weight for number, weight in zip(numbers, weights))
         total_weight = sum(weights)
         return total_weighted/total_weight
     else:
@@ -864,15 +864,15 @@ class GameStatePlotter:
             # From green to yellow
             if remaining_time > 1.5:
                 # Interpolate between green and yellow
-                green_to_yellow_ratio = (remaining_time - 1.5) / 1.5
-                red = int(255 * (1 - green_to_yellow_ratio))
+                green_to_yellow_ratio = (remaining_time - 1.5)/1.5
+                red = int(255*(1 - green_to_yellow_ratio))
                 green = 255
             # From yellow to red
             else:
                 # Interpolate between yellow and red
-                yellow_to_red_ratio = remaining_time / 1.5
+                yellow_to_red_ratio = remaining_time/1.5
                 red = 255
-                green = int(255 * yellow_to_red_ratio)
+                green = int(255*yellow_to_red_ratio)
 
             # Convert to hex
             return f"#{red:02x}{green:02x}00"
@@ -1075,7 +1075,7 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
         # Bounds check the thrust
         thrust = min(max(-SHIP_MAX_THRUST, thrust), SHIP_MAX_THRUST)
         # Apply thrust
-        ship_speed += thrust * DELTA_TIME
+        ship_speed += thrust*DELTA_TIME
         # Bounds check the speed
         if ship_speed > SHIP_MAX_SPEED:
             ship_speed = SHIP_MAX_SPEED
@@ -1128,8 +1128,8 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
             distance = sqrt(x*x + y*y)
             angle = atan2(y, x)%(2.0*pi)
             angular_width = calculate_angular_width(asteroid['radius'], distance)
-            start_angle = (angle - angular_width / 2)%(2.0*pi)
-            end_angle = (angle + angular_width / 2)%(2.0*pi)
+            start_angle = (angle - angular_width/2.0)%(2.0*pi)
+            end_angle = (angle + angular_width/2.0)%(2.0*pi)
 
             # Check if this asteroid covers the angle 0 (or equivalently, 2π)
             if start_angle > end_angle:  # This means the asteroid wraps around angle 0
@@ -3376,7 +3376,7 @@ class Simulation():
                                             shot_heading_error_deg = math.degrees(shot_heading_error_rad)
                                             shot_heading_tolerance_deg = math.degrees(shot_heading_tolerance_rad)
                                             assert shot_heading_tolerance_deg >= 0.0
-                                            if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0: # 6 = DELTA_TIME * SHIP_MAX_TURN_RATE
+                                            if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0: # 6 = DELTA_TIME*SHIP_MAX_TURN_RATE
                                                 locked_in = True
                                                 if abs(shot_heading_error_deg) <= 6.0:
                                                     # We can turn directly to the target's center without needing the tolerance at all!
@@ -3425,7 +3425,7 @@ class Simulation():
                                             asteroid_least_shot_heading_error = shot_heading_error_deg
                                             asteroid_least_shot_heading_tolerance_deg = shot_heading_tolerance_deg
                                         assert shot_heading_tolerance_deg >= 0.0
-                                        if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0: # 6 = DELTA_TIME * SHIP_MAX_TURN_RATE
+                                        if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0: # 6 = DELTA_TIME*SHIP_MAX_TURN_RATE
                                             locked_in = True
                                             #print(f"AIMING AT THE NEW THING WE'RE DOING!!!")
                                             if abs(shot_heading_error_deg) <= 6.0:
