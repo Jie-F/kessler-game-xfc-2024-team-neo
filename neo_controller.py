@@ -3501,7 +3501,7 @@ class Simulation():
             # Only drop mines at the beginning of the sim, REMOVED: self.future_timesteps == 0 and 
             # We can drop a mine once every 31 frames
 
-            if self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 32 - MINE_DROP_COOLDOWN_FUDGE_TS and not self.halt_shooting and self.future_timesteps%1 == 0: #MINE_OPPORTUNITY_CHECK_INTERVAL_TS
+            if self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - 32 - MINE_DROP_COOLDOWN_FUDGE_TS and not self.halt_shooting and self.future_timesteps%MINE_OPPORTUNITY_CHECK_INTERVAL_TS == 0:
                 drop_mine_this_timestep = check_mine_opportunity(self.ship_state, self.game_state) # Read only access of the ship and game states
             else:
                 drop_mine_this_timestep = False
@@ -3816,6 +3816,7 @@ class NeoController(KesslerController):
         self.reality_move_sequence: list[dict[str, Any]] = []
         self.simulated_gamestate_history: dict[int, SimState] = {}
         self.lives_remaining_that_we_did_respawn_maneuver_for: set[int] = set()
+        self.last_timestep_ship_is_respawning = False
         if chromosome is not None:
             global fitness_function_weights
             fitness_function_weights = chromosome
@@ -4121,6 +4122,7 @@ class NeoController(KesslerController):
                 print(f"self.game_state_to_base_planning['ship_respawn_timer']: {self.game_state_to_base_planning['ship_respawn_timer']}, self.game_state_to_base_planning['ship_state']['is_respawning']: {self.game_state_to_base_planning['ship_state']['is_respawning']}")
             assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']
         if self.game_state_to_base_planning['respawning']:
+            #print(f"Adding to lives remaining that we did respawn for, in decide next action: {new_ship_state['lives_remaining']}")
             self.lives_remaining_that_we_did_respawn_maneuver_for.add(new_ship_state['lives_remaining'])
         debug_print(f"The next base state's respawning state is {self.game_state_to_base_planning['respawning']}")
         debug_print("The new ship state is", new_ship_state)
@@ -4529,12 +4531,14 @@ class NeoController(KesslerController):
         if self.other_ships_exist:
             # We cannot use deterministic mode to plan ahead
             # We can still try to plan ahead, but we need to compare the predicted state with the actual state
-            # Note that there is the possibility we switch from this case, to the case where other ships don't exist, if they die
+            # Note that if the other ship dies, then we will switch from this case to the case where other ships don't exist
 
-            # Since other ships exist and the game isn't deterministic, we can die at any time even during the middle of a planned maneuver where we SHOULD survive.
+            # Since other ships exist right now and the game isn't deterministic, we can die at any time even during the middle of a planned maneuver where we SHOULD survive.
+            # Or maybe we planned to die at the end of the maneuver, but we died in the middle instead. That's a sneaky case that's possible too. Handle all of these!
             # Check for that case:
             unexpected_death = False
-            if (ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and ship_state['is_respawning'] and self.current_timestep > 30*20):
+            # If we're dead/respawning but we didn't plan a respawn maneuver for it, OR if we do expect to die at the end of the maneuver, however we actually died mid-maneuver
+            if (not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for and self.current_timestep > 30*20):
                 print(f"Ouch, I died in the middle of a maneuver where I expected to survive, due to other ships being present! We have {ship_state['lives_remaining']} lives left, and here's the set of lives left we did respawn maneuvers for: {self.lives_remaining_that_we_did_respawn_maneuver_for}")
                 # Clear the move queue, since previous moves have been invalidated by us taking damage
                 self.action_queue.clear()
@@ -4550,12 +4554,15 @@ class NeoController(KesslerController):
                 unexpected_death = True
                 iterations_boost = True
                 if ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for:
+                    # We expected to die at the end of the maneuver, however we actually died mid-maneuver, so we have to revoke the respawn maneuver we had planned, and plan a new one.
+                    # Removing the life remaining number from this set will allow us to plan a new maneuver for this number of lives remaining
                     print("GOTCHA, this life remaining shouldn't be in here! Yoink!")
                     self.lives_remaining_that_we_did_respawn_maneuver_for.remove(ship_state['lives_remaining'])
             unexpected_survival = False
             # if not self.action_queue
             if self.game_state_to_base_planning is not None and not ship_state['is_respawning'] and self.game_state_to_base_planning['ship_state']['is_respawning'] and self.game_state_to_base_planning['respawning']:
                 # We thought this maneuver would end in us dying, with the next move being a respawn maneuver. However this is not the case. We're alive at the end of the maneuver! This must be because the other ship saved us by shooting an asteroid that was going to hit us, or something.
+                assert not self.last_timestep_ship_is_respawning
                 print_explanation(f"\nI thought I would die, but the other ship saved me!!!", self.current_timestep)
                 # Clear the move queue, since previous moves have been invalidated by us taking damage
                 self.action_queue.clear()
@@ -4570,6 +4577,10 @@ class NeoController(KesslerController):
                 self.base_gamestate_analysis = None
                 iterations_boost = True
                 unexpected_survival = True
+                # Yoink this life remaining from the respawn maneuvers, since we no longer are doing one
+                assert ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for
+                # We need to subtract one from the lives remaining, because when we added it, it was from a simulated ship that had one fewer life. In reality we never lost that life, so we subtract one from our actual lives.
+                self.lives_remaining_that_we_did_respawn_maneuver_for.remove(ship_state['lives_remaining'] - 1)
             # set up the actions planning
             if unexpected_death:
                 # We need to refresh the state if we died unexpectedly
@@ -4589,6 +4600,7 @@ class NeoController(KesslerController):
                 }
 
                 if self.game_state_to_base_planning['respawning']:
+                    #print(f"Adding to lives remaining that we did respawn for, in the unexpected death: {ship_state['lives_remaining']}")
                     self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state['lives_remaining'])
             elif unexpected_survival:
                 print(f"Unexpected survival, the ship state is {ship_state}")
@@ -4620,6 +4632,7 @@ class NeoController(KesslerController):
                     'fire_next_timestep_flag': False,
                 }
                 if self.game_state_to_base_planning['respawning']:
+                    #print(f"Adding to lives remaining that we did respawn for, in actions: {ship_state['lives_remaining']}")
                     self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state['lives_remaining'])
                 assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']
 
@@ -4631,21 +4644,23 @@ class NeoController(KesslerController):
                 self.game_state_to_base_planning['ship_state'] = ship_state
                 self.game_state_to_base_planning['game_state'] = preprocess_bullets_in_gamestate(game_state)
                 if not self.game_state_to_base_planning['ship_state']['is_respawning'] and bool(self.game_state_to_base_planning['ship_respawn_timer']):
-                    debug_print("We're not respawning but the ship respawn timer is non-zero, so we're gonna fix this!")
+                    # We're not respawning but the ship respawn timer is non-zero, so we're gonna fix this and make it consistent!
                     self.game_state_to_base_planning['ship_respawn_timer'] = 0.0
                 assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state']['is_respawning']
                 # When there's other ships, stationary targetting is the LAST thing done, just so it can be based off of the reality state
                 # The base state is exact on the final planning timestep, since the base state is the state we're on right now
-                if len(get_other_ships(game_state, self.ship_id_internal)) == 0:
-                    debug_print("\n\nWe're alone already. Injecting the following game state:")
-                    debug_print(game_state)
+                #if len(get_other_ships(game_state, self.ship_id_internal)) == 0:
+                #    debug_print("\n\nWe're alone already. Injecting the following game state:")
+                #    debug_print(game_state)
                 self.plan_action(self.other_ships_exist, True, iterations_boost, True)
                 while len(self.sims_this_planning_period) < (MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS if self.game_state_to_base_planning['respawning'] else MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS):
+                    # Planning extra iterations to reach minimum threshold!
                     #print(f"Planning extra iterations to reach minimum threshold! {len(self.sims_this_planning_period)}")
                     self.plan_action(self.other_ships_exist, True, False, False)
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 self.decide_next_action(preprocess_bullets_in_gamestate(game_state), ship_state) # Since other ships exist and this is non-deterministic, we constantly feed in the updated reality
                 if len(get_other_ships(game_state, self.ship_id_internal)) == 0:
+                    # The other ship just died. I'm now alone!
                     print_explanation("I'm alone. I can see into the future perfectly now!", self.current_timestep)
                     self.simulated_gamestate_history.clear()
                     self.set_of_base_gamestate_timesteps.clear()
@@ -4765,6 +4780,7 @@ class NeoController(KesslerController):
         self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})
         #print(f"TS: {self.current_timestep}, Thrust: {thrust}, Turn Rate: {turn_rate}, Fire: {fire}, Drop Mine: {drop_mine}")
         self.performance_controller_exit()
+        self.last_timestep_ship_is_respawning = ship_state['is_respawning']
         return thrust, turn_rate, fire, drop_mine
 
 if __name__ == '__main__':
