@@ -83,7 +83,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.5
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = True # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final = False # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 5
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
@@ -329,7 +329,7 @@ def check_mine_opportunity(ship_state: Ship, game_state: GameState, other_ships:
     mine_ast_count = count_asteroids_in_mine_blast_radius(game_state, ship_state['position'][0], ship_state['position'][1], round(MINE_FUSE_TIME/DELTA_TIME))
     for other_ship in other_ships:
         if check_collision(ship_state['position'][0], ship_state['position'][1], MINE_BLAST_RADIUS - MINE_OTHER_SHIP_RADIUS_FUDGE, other_ship['position'][0], other_ship['position'][1], other_ship['radius']):
-            print(f"Potentially bombing other ship. Giving reward of 10 asts!")
+            #print(f"Potentially bombing other ship. Giving reward of 10 asts!")
             mine_ast_count += MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT
     if ship_state['bullets_remaining'] == 0:
         # If ship is out of bullets, fudge the numbers to make the mine fis more likely to activate
@@ -1024,11 +1024,12 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     # This is a silly code duplication to get a super optimized class for getting the ship's move sequence. Using the entire Simulation class is overkill and too much.
     move_sequence: list[Action] = []
     ship_speed = ship_starting_speed
-    assert math.isclose(ship_starting_speed, 0.0, abs_tol=EPS), f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver! In which case, you can safely ignore this assertion."
-
+    #assert math.isclose(ship_starting_speed, 0.0, abs_tol=EPS), f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver! In which case, you can safely ignore this assertion."
+    
     def rotate_heading(heading_difference_deg: float) -> None:
         nonlocal move_sequence
         if abs(heading_difference_deg) < GRAIN:
+            # TODO: Why add this redundant action? Is this padding necessary, or can I save a frame by removing it?
             move_sequence.append({'thrust': 0.0, 'turn_rate': 0.0, 'fire': False})
         still_need_to_turn = heading_difference_deg
         while abs(still_need_to_turn) > SHIP_MAX_TURN_RATE*DELTA_TIME:
@@ -1087,6 +1088,8 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     accelerate(ship_cruise_speed, ship_accel_turn_rate)
     cruise(ship_cruise_timesteps, ship_cruise_turn_rate)
     accelerate(0.0, 0.0) # TODO: If we remove this, we get some interesting results and emergent behavior. Neo would spazz around the map, going from one maneuver directly into another. I might even be able to tweak it to work. Maybe in the stationary targeting, apply a thrust to slow down the ship, so the targeting works a bit better. That could fix the issue, and it might be worth exploring if I have time! But for now, let’s just eat the slight time loss and regain the control of node based movement without drifting around like driftwood.
+    #if not math.isclose(ship_starting_speed, 0.0, abs_tol=EPS):
+    #    print(f"Interesting move sequence! The ship didn't start stationary: {move_sequence}")
     return move_sequence
 
 def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: Ship) -> tuple[float, float, float, float, int, float, int, int]:
@@ -2065,7 +2068,9 @@ class Simulation():
         #print(f"\n\nINITIALIZING SIMULATION, fire first timestep is: {fire_first_timestep}")
         #print(f"STARTING SIMULATION ON TIMESTEP {initial_timestep}")
         #print(f"Starting sim on ts {initial_timestep} with ship state:", ship_state)
-        assert math.isclose(ship_state['speed'], 0.0, abs_tol=EPS), f"The ship speed is not zero! It's {ship_state['speed']=}, {ship_state['velocity']=}"
+        # All maneuvers start with a stationary ship
+        if not math.isclose(ship_state['speed'], 0.0, abs_tol=EPS):
+            print(f"WARNING: The ship speed when starting the sim is not zero! It's {ship_state['speed']=}, {ship_state['velocity']=}")
         if asteroids_pending_death is None:
             asteroids_pending_death = {} # Keys are timesteps, and the values are the asteroids that still have midair bullets travelling toward them, so we don't want to shoot at them again
         if forecasted_asteroid_splits is None:
@@ -3165,7 +3170,7 @@ class Simulation():
                 asteroids = [asteroid for idx, asteroid in enumerate(asteroids) if idx not in asteroid_remove_idxs]
 
     def apply_move_sequence(self, move_sequence: list[Action]) -> bool:
-        assert math.isclose(self.ship_state['speed'], 0.0, abs_tol=EPS), f"When starting in apply move sequence where the sim was safe, the ship speed is not zero! {self.ship_state['speed']=}, {self.ship_state['velocity']=}. The whole move sequence is {move_sequence}"
+        #assert math.isclose(self.ship_state['speed'], 0.0, abs_tol=EPS), f"When starting in apply move sequence where the sim was safe, the ship speed is not zero! {self.ship_state['speed']=}, {self.ship_state['velocity']=}. The whole move sequence is {move_sequence}"
         sim_was_safe = True
         for move in move_sequence:
             thrust = 0.0
@@ -3190,7 +3195,7 @@ class Simulation():
 
     def simulate_maneuver(self, move_sequence: list[Action], allow_firing: bool) -> bool:
         self.intended_move_sequence = move_sequence # Record down the intended move sequence, so if I crash and the recorded move sequence gets cut short, we still have the intended move sequence!
-        assert math.isclose(self.ship_state['speed'], 0.0, abs_tol=EPS), f"When starting in simulate maneuver where the sim was safe, the ship speed is not zero! {self.ship_state['speed']=}, {self.ship_state['velocity']=}. The whole move sequence is {move_sequence}"
+        #assert math.isclose(self.ship_state['speed'], 0.0, abs_tol=EPS), f"When starting in simulate maneuver where the sim was safe, the ship speed is not zero! {self.ship_state['speed']=}, {self.ship_state['velocity']=}. The whole move sequence is {move_sequence}"
         for move in move_sequence:
             thrust = 0.0
             turn_rate = 0.0
@@ -3283,8 +3288,9 @@ class Simulation():
                     #if len(self.other_ships) != 0:
                     if self.verify_first_shot:
                         actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence)
-                        if len(self.other_ships) == 0:
-                            assert actual_asteroid_hit is not None
+                        # I think this assertion doesn't work right after a ship dies, because their bullet can still be travelling in the air
+                        #if len(self.other_ships) == 0:
+                        #    assert actual_asteroid_hit is not None
                         if actual_asteroid_hit is None:
                             #print(f"SURPRISINGLY WE DON'T HIT ANYTHING LIKE WE THOUGHT WE WOULD!")
                             fire_this_timestep = False
@@ -3937,7 +3943,7 @@ class NeoController(KesslerController):
             plt.show()
         #time.sleep(10)
         '''
-        assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['ship_state']['bullets_remaining'] == 0 or self.game_state_to_base_planning['respawning']
+        assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['ship_state']['bullets_remaining'] == 0 or self.game_state_to_base_planning['respawning'] or not math.isclose(self.game_state_to_base_planning['ship_state']['speed'], 0.0, abs_tol=EPS)
         #print(f"Deciding next action, Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
         # Go through the list of planned maneuvers and pick the one with the best fitness function score
         # Update the state to base planning off of, so Neo can get to work on planning the next set of moves while this current set of moves executes
@@ -4251,7 +4257,8 @@ class NeoController(KesslerController):
             assert self.game_state_to_base_planning is not None
             if self.base_gamestate_analysis is None:
                 self.base_gamestate_analysis = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
-            if plan_stationary and self.game_state_to_base_planning['ship_state']['bullets_remaining'] != 0:
+            ship_is_stationary = True
+            if plan_stationary and self.game_state_to_base_planning['ship_state']['bullets_remaining'] != 0 and (ship_is_stationary := math.isclose(self.game_state_to_base_planning['ship_state']['speed'], 0.0, abs_tol=EPS)):
                 # No need to check whether this is allowed, because we need to do this iteration at minimum
                 self.performance_controller_start_iteration()
                 # The first list element is the stationary targetting
@@ -4286,7 +4293,8 @@ class NeoController(KesslerController):
                     self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
 
                 debug_print(f"Planning targetting, and got fitness {best_stationary_targetting_fitness}")
-
+            if plan_stationary and not ship_is_stationary:
+                print(f"\nWARNING: The ship wasn't stationary after the last maneuver, so we're skipping stationary targeting!")
             # Try moving! Run a simulation and find a course of action to put me to safety
             '''
             if other_ships_exist:
@@ -4507,6 +4515,9 @@ class NeoController(KesslerController):
             debug_print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
             self.reset()
             self.current_timestep += 1
+            if not game_state['sim_frame'] == self.current_timestep:
+                print(f"Setting timestep to match the passed-in game state's nonzero starting timestep of: {game_state['sim_frame']}")
+                self.current_timestep = game_state['sim_frame']
         if self.current_timestep == 0:
             # Only do these on the first timestep
             inspect_scenario(game_state, ship_state)
@@ -4553,7 +4564,8 @@ class NeoController(KesslerController):
             # If we're alive at the end of a maneuver but we're expecting to be dead at the end of the maneuver and we've planned a respawn maneuver
             if not self.action_queue and self.game_state_to_base_planning is not None and not ship_state['is_respawning'] and self.game_state_to_base_planning['ship_state']['is_respawning'] and self.game_state_to_base_planning['respawning']:
                 # We thought this maneuver would end in us dying, with the next move being a respawn maneuver. However this is not the case. We're alive at the end of the maneuver! This must be because the other ship saved us by shooting an asteroid that was going to hit us, or something.
-                assert not self.last_timestep_ship_is_respawning
+                # This assertion isn't true because we could be doing a respawn maneuver, dying, and doing another respawn maneuver!
+                #assert not self.last_timestep_ship_is_respawning
                 print_explanation(f"\nI thought I would die, but the other ship saved me!!!", self.current_timestep)
                 # Clear the move queue, since previous moves have been invalidated by us taking damage
                 self.action_queue.clear()
@@ -4569,7 +4581,6 @@ class NeoController(KesslerController):
                 iterations_boost = True
                 unexpected_survival = True
                 # Yoink this life remaining from the respawn maneuvers, since we no longer are doing one
-                assert ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for
                 if ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for:
                     # We need to subtract one from the lives remaining, because when we added it, it was from a simulated ship that had one fewer life. In reality we never lost that life, so we subtract one from our actual lives.
                     self.lives_remaining_that_we_did_respawn_maneuver_for.remove(ship_state['lives_remaining'] - 1)
