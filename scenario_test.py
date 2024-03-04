@@ -256,12 +256,13 @@ team_1_deaths = 0
 team_2_deaths = 0
 team_1_wins = 0
 team_2_wins = 0
-while True:
+#while True:
 #random.seed(1)
 #for sc in xfc2023:
 #for _ in range(1):
-#while not missed:
+#while died or not missed:
 #for sc in xfc_2021_portfolio:
+while True:
     iterations += 1
     if args.seed is not None:
         randseed = args.seed
@@ -272,7 +273,7 @@ while True:
     random.seed(randseed)
 
     asteroids_random = generate_asteroids(
-                                    num_asteroids=30,
+                                    num_asteroids=random.randint(5, 40),
                                     position_range_x=(0, width),
                                     position_range_y=(0, height),
                                     speed_range=(-300, 300, 0),
@@ -288,11 +289,11 @@ while True:
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 2},
-                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 2},
+                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
                                 ],
                                 map_size=(width, height),
-                                time_limit=600,
+                                time_limit=1200,
                                 ammo_limit_multiplier=random.choice([0]),
                                 stop_if_no_ammo=False)
     
