@@ -1237,3 +1237,16 @@ explainability_1 = Scenario(
     map_size=(width, height),
     time_limit=15,
 )
+
+
+
+
+
+
+split_forecasting = Scenario(
+    name='split_forecasting',
+    asteroid_states=[{'position': (width*0.9, height*0.7), 'speed': 300, 'angle': 180, 'size': 2}],
+    ship_states=[{'position': (width*0.5, height*0.15), 'angle': 90, 'lives': 3, 'team': 1, 'mines_remaining': 3}],
+    map_size=(width, height),
+    time_limit=15,
+)
