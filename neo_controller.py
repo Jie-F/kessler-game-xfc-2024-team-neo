@@ -4644,7 +4644,8 @@ class NeoController(KesslerController):
             # Check for that case:
             unexpected_death = False
             # If we're dead/respawning but we didn't plan a respawn maneuver for it, OR if we do expect to die at the end of the maneuver, however we actually died mid-maneuver
-            if (not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for and self.current_timestep > 30*20):
+            #print(f"{ship_state['is_respawning']=}, ts: {self.current_timestep}, Action queue length: {len(self.action_queue)}")
+            if (not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and not self.last_timestep_ship_is_respawning and ship_state['is_respawning'] and ship_state['lives_remaining'] in self.lives_remaining_that_we_did_respawn_maneuver_for):
                 print(f"Ouch, I died in the middle of a maneuver where I expected to survive, due to other ships being present! We have {ship_state['lives_remaining']} lives left, and here's the set of lives left we did respawn maneuvers for: {self.lives_remaining_that_we_did_respawn_maneuver_for}")
                 # Clear the move queue, since previous moves have been invalidated by us taking damage
                 self.action_queue.clear()
