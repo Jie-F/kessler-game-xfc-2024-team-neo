@@ -13,6 +13,8 @@
 # TODO: Add error checks, so that if Neo thinks its done but there's still asteroids left, it'll realize that and re-ingest the updated state and finish off its job. This should NEVER happen though, but in the 1/1000000 chance a new bug happens during the competition, this would catch it.
 # TODO: Tune gc to maybe speed stuff up
 # TODO: Match collision checks with Kessler, including <= vs <
+# TODO: Add iteration boosting algorithm to do more iterations in critical moments
+# TODO: If we're chilling, have mines and lives, go and do some damage!
 
 import random
 import math
@@ -58,9 +60,9 @@ SLOW_DOWN_GAME_AFTER_SECOND: Final = math.inf
 SLOW_DOWN_GAME_PAUSE_TIME: Final = 2.0
 
 # These can trade off to get better performance at the expense of safety
-ENABLE_ASSERTIONS: Final = False
+ENABLE_ASSERTIONS: Final = True
 PRUNE_SIM_STATE_SEQUENCE: Final = True
-VALIDATE_SIMULATED_KEY_STATES: Final = False
+VALIDATE_SIMULATED_KEY_STATES: Final = True
 VALIDATE_ALL_SIMULATED_STATES: Final = False
 
 # Strategic variables
@@ -1271,11 +1273,11 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
     return most_imminent_asteroid_speed, imminent_asteroid_relative_heading_deg, largest_gap_relative_heading_deg, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroid_count, current_asteroids_count
 
 
-def check_collision(a_x: float, a_y: float, a_r: float, b_x: float, b_y: float, b_r: float, pixel_padding: float = 0) -> bool:
+def check_collision(a_x: float, a_y: float, a_r: float, b_x: float, b_y: float, b_r: float, pixel_padding: float = 0.0) -> bool:
     delta_x = a_x - b_x
     delta_y = a_y - b_y
     separation = a_r + b_r + pixel_padding
-    if delta_x*delta_x + delta_y*delta_y < separation*separation:
+    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
         return True
     else:
         return False
@@ -2789,7 +2791,7 @@ class Simulation():
                 min(10, a['imminent_collision_time_s']) +
                 ASTEROID_SIZE_SHOT_PRIORITY[a['asteroid']['size']]*0.25 +
                 frontrun_score_multiplier*min(0.5, max(0, a['interception_time_s'] + a['aiming_timesteps_required']*DELTA_TIME - get_adversary_interception_time_lower_bound(a['asteroid'], self.other_ships, self.game_state))) +
-                ((5.0 if a['asteroid']['size'] == 1 else -5.0) if asteroid_will_get_hit_by_mine else 0.0)
+                ((10.0 if a['asteroid']['size'] == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
             ))
             # The frontrun time is bounded by 0 and 0.5 seconds, since anything after half a second away is basically the same and there's no point differentiating between them
             # TODO: For each asteroid, give it a couple feasible times where we wait longer and longer. This way we can choose to wait a timestep to fire again if we'll get luckier with the bullet lining up
@@ -2886,7 +2888,7 @@ class Simulation():
                     a['aiming_timesteps_required']*2 +
                     ASTEROID_SIZE_SHOT_PRIORITY[a['asteroid']['size']] +
                     frontrun_score_multiplier*min(0.5, max(0, a['interception_time_s'] + a['aiming_timesteps_required']*DELTA_TIME - get_adversary_interception_time_lower_bound(cast(Asteroid, dict(a['asteroid'])), self.other_ships, self.game_state))) +
-                    ((8.0 if a['asteroid']['size'] == 1 else -8.0) if asteroid_will_get_hit_by_mine else 0.0)
+                    ((10.0 if a['asteroid']['size'] == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
                 ))
                 # print(sorted_targets)
                 for confirmed_target in sorted_targets:
@@ -3159,8 +3161,6 @@ class Simulation():
                     'mass': BULLET_MASS,
                     'tail_delta': (-BULLET_LENGTH*cos_heading, -BULLET_LENGTH*sin_heading),
                 }
-                # if math.isclose(my_bullet['velocity'][0], -333.64933204862035):
-                #    print(f"\nSPECIAL BULLET FOUND IN SIM {self.sim_id}")
                 bullet_created = True
             if whole_move_sequence:
                 assert current_move_index is not None
@@ -3739,11 +3739,7 @@ class Simulation():
                         continue
                     if check_collision(self.ship_state['position'][0], self.ship_state['position'][1], SHIP_RADIUS, asteroid['position'][0], asteroid['position'][1], asteroid['radius']):
                         if asteroid['size'] != 1:
-                            new_stuff = forecast_asteroid_ship_splits(asteroid, 0, self.ship_state['velocity'], self.game_state, True)
-                            for n in new_stuff:
-                                if math.isclose(n['velocity'][0], -153.4230311544602, abs_tol=EPS):
-                                    print(f"{ast_to_string(n)} being added to asteroids from ship ast collision: {self.game_state['asteroids']}")
-                            self.game_state['asteroids'].extend(new_stuff)
+                            self.game_state['asteroids'].extend(forecast_asteroid_ship_splits(asteroid, 0, self.ship_state['velocity'], self.game_state, True))
                         asteroid_remove_idxs.add(a_idx)
                         # Stop checking this ship's collisions. And also return saying the ship took damage!
                         return_value = False
