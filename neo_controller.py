@@ -71,9 +71,9 @@ UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON: Final = 3.0  # 1 second to turn, 
 ASTEROID_SIZE_SHOT_PRIORITY: Final = (math.nan, 1, 2, 3, 4)  # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights = None
 MINE_DROP_COOLDOWN_FUDGE_TS: Final = 61  # We can drop a mine every 31 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
-MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final = 80
+MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final = 80.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final = 10
-MINE_OTHER_SHIP_RADIUS_FUDGE: Final = 40
+MINE_OTHER_SHIP_RADIUS_FUDGE: Final = 40.0
 MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 12.0
 
@@ -121,16 +121,16 @@ SHIP_MAX_THRUST: Final = 480.0  # px/s^2
 SHIP_DRAG: Final = 80.0  # px/s^2
 SHIP_MAX_SPEED: Final = 240.0  # px/s
 SHIP_RADIUS: Final = 20.0  # px
-SHIP_MASS: Final = 300  # kg
+SHIP_MASS: Final = 300.0  # kg
 TIMESTEPS_UNTIL_SHIP_ACHIEVES_MAX_SPEED: Final = ceil(SHIP_MAX_SPEED/(SHIP_MAX_THRUST - SHIP_DRAG)/DELTA_TIME)  # Should be 18 timesteps
 COLLISION_CHECK_PAD: Final = EPS  # px
 ASTEROID_AIM_BUFFER_PIXELS: Final = 1.0  # px
 COORDINATE_BOUND_CHECK_PADDING: Final = 1.0  # px
-MINE_BLAST_RADIUS: Final = 150  # px
-MINE_RADIUS: Final = 12  # px
-MINE_BLAST_PRESSURE: Final = 2000
-MINE_FUSE_TIME: Final = 3  # s
-MINE_MASS: Final = 25  # kg
+MINE_BLAST_RADIUS: Final = 150.0  # px
+MINE_RADIUS: Final = 12.0  # px
+MINE_BLAST_PRESSURE: Final = 2000.0
+MINE_FUSE_TIME: Final = 3.0  # s
+MINE_MASS: Final = 25.0  # kg
 ASTEROID_RADII_LOOKUP: Final = [8.0*size for size in range(5)]  # asteroid.py
 ASTEROID_AREA_LOOKUP: Final = [pi*r*r for r in ASTEROID_RADII_LOOKUP]
 ASTEROID_MASS_LOOKUP: Final = [0.25*pi*(8*size)**2 for size in range(5)]  # asteroid.py
@@ -883,7 +883,7 @@ class GameStatePlotter:
         self.game_state = game_state
 
     def fuse_time_to_color(self, remaining_time: float) -> str:
-        if remaining_time >= 3.0:
+        if remaining_time >= MINE_FUSE_TIME:
             return "#00FF00"  # Green
         elif remaining_time <= 0.0:
             return "#FF0000"  # Red
@@ -2402,13 +2402,13 @@ class Simulation():
                     next_extrapolated_mine_collision_time = min(next_extrapolated_mine_collision_time, mine_collision_time)
                     # next_extrapolated_mine_collision_time = max(0, min(3, next_extrapolated_mine_collision_time))
                     if ENABLE_ASSERTIONS:
-                        assert -EPS <= mine_collision_time <= 3.0 + EPS
+                        assert -EPS <= mine_collision_time <= MINE_FUSE_TIME + EPS
                     dist_to_ground_zero = dist(self.ship_state['position'], mine_pos)
                     # This is a linear function that is maximum when I'm right over the mine, and minimum at 0 when I'm just touching the blast radius of it
                     # This will penalize being at ground zero more than penalizing being right at the edge of the blast, where it's easier to get out
                     mine_ground_zero_fudge = linear(dist_to_ground_zero, (0.0, 1.0), (MINE_BLAST_RADIUS + SHIP_RADIUS, 0.6))
                     # mine_ground_zero_fudge = max(0.0, (MINE_BLAST_RADIUS + SHIP_RADIUS - dist_to_ground_zero)/(MINE_BLAST_RADIUS + SHIP_RADIUS))
-                    mines_threat_level += (3.0 - next_extrapolated_mine_collision_time)**2.0/9.0*mine_ground_zero_fudge
+                    mines_threat_level += (MINE_FUSE_TIME - next_extrapolated_mine_collision_time)**2.0/9.0*mine_ground_zero_fudge
             mine_safe_time_fitness = sigmoid(mines_threat_level, -6.8, 0.232)
             return mine_safe_time_fitness, next_extrapolated_mine_collision_time
 
@@ -3591,8 +3591,8 @@ class Simulation():
                 new_mine: Mine = {
                     'position': self.ship_state['position'],
                     'mass': MINE_MASS,
-                    'fuse_time': 3.0,
-                    'remaining_time': 3.0,
+                    'fuse_time': MINE_FUSE_TIME,
+                    'remaining_time': MINE_FUSE_TIME,
                 }
                 self.game_state['mines'].append(new_mine)
                 self.ship_state['mines_remaining'] -= 1
