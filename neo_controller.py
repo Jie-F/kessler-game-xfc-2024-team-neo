@@ -24,7 +24,9 @@ import copy
 from typing import Any, Optional, Callable, TypedDict, cast, Final
 import gc
 from itertools import chain
-
+#gc.set_debug(gc.DEBUG_STATS)
+gc.set_threshold(50000)
+#gc.disable()
 # import scipy
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,9 +57,9 @@ SLOW_DOWN_GAME_AFTER_SECOND: Final = math.inf
 SLOW_DOWN_GAME_PAUSE_TIME: Final = 2.0
 
 # These can trade off to get better performance at the expense of safety
-ENABLE_ASSERTIONS: Final = True
+ENABLE_ASSERTIONS: Final = False
 PRUNE_SIM_STATE_SEQUENCE: Final = True
-VALIDATE_SIMULATED_KEY_STATES: Final = True
+VALIDATE_SIMULATED_KEY_STATES: Final = False
 VALIDATE_ALL_SIMULATED_STATES: Final = False
 
 # Strategic variables
@@ -4157,6 +4159,7 @@ class NeoController(KesslerController):
         # Prune out the list of asteroids we shot at if the timestep (key) is in the past
         asteroids_pending_death = best_action_sim.get_asteroids_pending_death()
         # debug_print(f"Timesteps in asteroids pending death: {[timestep for timestep in asteroids_pending_death.keys()]}")
+        #print(f"Size of asts pending death: {sys.getsizeof()}")
         asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep >= best_action_sim_last_state['timestep']}
         forecasted_asteroid_splits = best_action_sim.get_forecasted_asteroid_splits()
         next_base_game_state = best_action_sim.get_game_state()
