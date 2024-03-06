@@ -32,8 +32,8 @@ gc.set_threshold(50000)
 #gc.disable()
 # import scipy
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
+import matplotlib.pyplot as plt  # type: ignore[import-untyped]
+import matplotlib.patches as patches  # type: ignore[import-untyped]
 from skfuzzy import control, trimf  # type: ignore[import-untyped]
 
 from src.kesslergame import KesslerController

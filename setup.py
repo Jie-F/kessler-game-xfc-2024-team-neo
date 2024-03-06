@@ -1,14 +1,6 @@
-# -*- coding: utf-8 -*-
-# Copyright © 2022 Thales. All Rights Reserved.
-# NOTICE: This file is subject to the license agreement defined in file 'LICENSE', which is part of
-# this source code package.
-
 from setuptools import setup
+from mypyc.build import mypycify
 
-with open('requirements.txt') as f:
-    requirements = f.read().splitlines()
-
-setup(
-    install_requires=requirements,
+setup(name='mypyc_output',
+      ext_modules=mypycify(['--strict', 'neo_controller.py'], opt_level="3", debug_level="1"),
 )
-
