@@ -81,6 +81,7 @@ MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 12.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness)
 DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 15.0, 1.5, 0.5, 6.0, 10.0, 0.5, 2.0)
+MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
 
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # The reason we need this, is because without it, I'm checking whether I have the budget to do another iteration, but let's say I'm already taking 0 time. Kessler will pause for DELTA_TIME, taking up all the time, and I'd think I have no time to do anything!
@@ -1274,7 +1275,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
         nearby_asteroid_average_speed = nearby_asteroid_total_speed/nearby_asteroid_count
 
     average_directional_velocity = average_velocity(asteroids)
-    average_directional_speed = math.sqrt(average_directional_velocity[0]*average_directional_velocity[0] + average_directional_velocity[1]*average_directional_velocity[1])
+    average_directional_speed = sqrt(average_directional_velocity[0]*average_directional_velocity[0] + average_directional_velocity[1]*average_directional_velocity[1])
     total_asteroid_count, current_asteroids_count = asteroid_counter(asteroids)
     return most_imminent_asteroid_speed, imminent_asteroid_relative_heading_deg, largest_gap_relative_heading_deg, nearby_asteroid_average_speed, nearby_asteroid_count, average_directional_speed, total_asteroid_count, current_asteroids_count
 
@@ -1554,7 +1555,7 @@ def forecast_asteroid_bullet_splits_from_heading(a: Asteroid, timesteps_until_ap
     bullet_vel_y = sin(radians(bullet_heading_deg))*BULLET_SPEED
     vfx = (1/(BULLET_MASS + a['mass']))*(BULLET_MASS*bullet_vel_x + a['mass']*a['velocity'][0])
     vfy = (1/(BULLET_MASS + a['mass']))*(BULLET_MASS*bullet_vel_y + a['mass']*a['velocity'][1])
-    v = math.sqrt(vfx*vfx + vfy*vfy)
+    v = sqrt(vfx*vfx + vfy*vfy)
     return forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, v, 15.0, game_state, wrap)
 
 
@@ -1564,7 +1565,7 @@ def forecast_instantaneous_asteroid_bullet_splits_from_velocity(a: Asteroid, bul
     bullet_vel_x, bullet_vel_y = bullet_velocity
     vfx = (1/(BULLET_MASS + a['mass']))*(BULLET_MASS*bullet_vel_x + a['mass']*a['velocity'][0])
     vfy = (1/(BULLET_MASS + a['mass']))*(BULLET_MASS*bullet_vel_y + a['mass']*a['velocity'][1])
-    v = math.sqrt(vfx*vfx + vfy*vfy)
+    v = sqrt(vfx*vfx + vfy*vfy)
     return forecast_asteroid_splits(a, 0, vfx, vfy, v, 15.0)
 
 
@@ -1595,7 +1596,7 @@ def forecast_asteroid_ship_splits(asteroid: Asteroid, timesteps_until_appearance
     # assert asteroid['size'] != 1 # Asteroids of size 1 don't split
     vfx = (1/(SHIP_MASS + asteroid['mass']))*(SHIP_MASS*ship_velocity[0] + asteroid['mass']*asteroid['velocity'][0])
     vfy = (1/(SHIP_MASS + asteroid['mass']))*(SHIP_MASS*ship_velocity[1] + asteroid['mass']*asteroid['velocity'][1])
-    v = math.sqrt(vfx*vfx + vfy*vfy)
+    v = sqrt(vfx*vfx + vfy*vfy)
     return forecast_asteroid_splits(asteroid, timesteps_until_appearance, vfx, vfy, v, 15.0, game_state, wrap)
 
 
@@ -2444,7 +2445,7 @@ class Simulation():
             asts_within_cone = 0
             for a in chain(self.game_state['asteroids'], self.forecasted_asteroid_splits):
                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, a):
-                    theta = math.degrees(math.atan2(a['position'][1] - ship_pos[1], a['position'][0] - ship_pos[0]))
+                    theta = degrees(atan2(a['position'][1] - ship_pos[1], a['position'][0] - ship_pos[0]))
                     if abs(ship_heading - theta) <= 30.0 or abs(360 - abs(ship_heading - theta)) <= 30.0:
                         asts_within_cone += 1
             '''
@@ -3396,32 +3397,27 @@ class Simulation():
                     timesteps_until_can_fire = max(0, 5 - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
                     fire_this_timestep = False
                     if not self.halt_shooting:
-                        # TODO: DEDUPLICATE THIS CODE
-                        if timesteps_until_can_fire == 0:  # self.future_timesteps >= self.timesteps_to_not_check_collision_for:
-                            #if self.sim_id == 23215:
-                            #    print(f"timesteps_until_can_fire == 0. Checking for feasible asteroids...")
+                        if timesteps_until_can_fire == 0:
                             max_interception_time = 0.0
                             feasible_targets_exist = False
                             min_shot_heading_error_rad = math.inf # Keep track of this so we can begin turning roughly toward our next target
+                            second_min_shot_heading_error_rad = math.inf
                             sols = 0
-                            astschecked = 0
                             for asteroid in chain(self.game_state['asteroids'], self.forecasted_asteroid_splits):
                                 # Loop through all asteroids and make sure at least one asteroid is a valid target
                                 # Get the length of time the longest asteroid would take to hit, and that'll be the upper bound of the bullet sim's timesteps
-                                
                                 # Avoid shooting asteroids that are about to get mined
-                                asteroid_will_get_hit_by_mine = False
                                 for m in self.game_state['mines']:
                                     project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
                                     asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
                                     if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
-                                        asteroid_will_get_hit_by_mine = True
-                                        break
-                                if asteroid_will_get_hit_by_mine:
-                                    continue
+                                        continue
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
-                                        astschecked += 1
+                                        # Since we need to find the minimum shot heading errors, we can't break out of this loop early. We should just go through them all.
+                                        ast_angle = atan2(a['position'][1] - self.ship_state['position'][1], a['position'][0] - self.ship_state['position'][0])
+                                        if abs(angle_difference_deg(degrees(ast_angle), self.ship_state['heading'])) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
+                                            continue
                                         sols_list = calculate_interception(self.ship_state['position'][0], self.ship_state['position'][1], a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], self.ship_state['heading'], self.game_state)
                                         for sol in sols_list:
                                             sols += 1
@@ -3431,39 +3427,27 @@ class Simulation():
                                                 if interception_time > max_interception_time:
                                                     max_interception_time = interception_time
                                                 if abs(shot_heading_error_rad) < abs(min_shot_heading_error_rad):
+                                                    second_min_shot_heading_error_rad = min_shot_heading_error_rad
                                                     min_shot_heading_error_rad = shot_heading_error_rad
-                            #print(f"Checked {astschecked} asts")
                             if feasible_targets_exist:
                                 # Use the bullet sim to confirm that this will hit something
                                 bullet_sim_timestep_limit = ceil(max_interception_time*FPS) + 1 # TODO: Might not need +1, but maybe it's safer to have it anyway at the cost of a tiny bit of performance
-                                if self.sim_id == 23215:
-                                    print(f"{sols} Feasible targets exist! Use the bullet sim to confirm that this will hit, ts limit is {bullet_sim_timestep_limit=}")
                                 actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit)
                                 if actual_asteroid_hit is not None and ship_was_safe:
                                     assert timesteps_until_bullet_hit_asteroid is not None
                                     actual_asteroid_hit_at_fire_time = time_travel_asteroid(actual_asteroid_hit, -timesteps_until_bullet_hit_asteroid, self.game_state, True)
-                                    #if self.sim_id == 85885:
-                                    #    print('CHECKING FROM UPDATE INNER LOP')
                                     if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, actual_asteroid_hit_at_fire_time):
                                         fire_this_timestep = True
-                                        #if self.sim_id == 85885:
-                                        #    print("firing this ts!")
                                         self.asteroids_shot += 1
                                         self.explanation_messages.append("During the maneuver, I conveniently shot asteroids.")
-                                        # print(f"Tracking that we shot at the asteroid {ast_to_string(asteroid)}")
                                         if actual_asteroid_hit_at_fire_time['size'] != 1:
                                             self.forecasted_asteroid_splits.extend(forecast_asteroid_bullet_splits_from_heading(actual_asteroid_hit_at_fire_time, timesteps_until_bullet_hit_asteroid, self.ship_state['heading'], self.game_state, True))
-                                            # print(f"In maneuver, Forecasted asteroid splits on ts {self.initial_timestep + self.future_timesteps + 1} is {self.forecasted_asteroid_splits}")
-                                        # actual_asteroid_hit_at_fire_time['trace'] = f"sim id {self.sim_id}, self.initial_timestep {self.initial_timestep} self.future_timesteps {self.future_timesteps}, asteroid on this initial plus future ts: {actual_asteroid_hit_at_fire_time}, ts until bull hits ast {timesteps_until_bullet_hit_asteroid}"
-                                        # if math.isclose(-153.4230311544602, actual_asteroid_hit_at_fire_time['velocity'][0]):
-                                        #    print(f"\nADDING AST WITHIN SIM UPDATE, on timestep {self.initial_timestep=} {self.future_timesteps=}, ast from next ts is {ast_to_string(actual_asteroid_hit_at_fire_time)}")
-                                        #    print(f"Tracking ast shot from {self.initial_timestep + self.future_timesteps + 1}, bullet travels for {timesteps_until_bullet_hit_asteroid}")
                                         # The reason we add one to the timestep we track on, is that once we updated the asteroids' position in the update loop, it's technically the asteroid positions in the game state of the next timestep that gets passed to the controllers!
                                         # So the asteroid positions at a certain timestep is before their positions get updated. After updating, it's the next timestep.
                                         track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
-                                        # print(f"self.asteroids_pending_death updated to {self.asteroids_pending_death[100]}")
-                            if not math.isinf(min_shot_heading_error_rad):
+                            if not math.isinf(second_min_shot_heading_error_rad):
                                 # Might as well start turning toward our next target!
+                                # The assumption is that the target that was hit wasn't the second smallest heading diff. THIS IS NOT TRUE IN GENERAL. This can be wrong! But whatever, it's not a big deal and probably not worth fixing/taking the extra compute to track this.
                                 min_shot_heading_error_deg = degrees(min_shot_heading_error_rad)
                                 if abs(min_shot_heading_error_deg) <= 6.0:
                                     altered_turn_command = min_shot_heading_error_deg*FPS
@@ -3473,21 +3457,28 @@ class Simulation():
                                 turn_rate = altered_turn_command
                                 if whole_move_sequence:
                                     whole_move_sequence[self.future_timesteps]['turn_rate'] = altered_turn_command
-                        elif timesteps_until_can_fire == 1:
-                            #if self.sim_id == 85885:
-                            #    print(f"timesteps_until_can_fire == 1")
-                            # We're able to fire on the next timestep. We can use this timestep to aim for an asteroid, and we have 6 degrees we're able to turn our ship to do that
+                        else:
+                            # if timesteps_until_can_fire == 1, then we're able to fire on the next timestep. We can use this timestep to aim for an asteroid, and we have 6 degrees we're able to turn our ship to do that
                             # On the next timestep, hopefully we'd be aimed at the asteroid and then the above if case will kick in and we will shoot it!
                             # This makes the shot efficiency during maneuvering a lot better because we're not only dodging, but we're also targetting and firing at the same time!
-                            # TODO: Make this more precise!
+                            # If there's more timesteps to turn before we can fire, then we can still begin to turn toward the closest target
                             locked_in = False
-                            for asteroid in self.game_state['asteroids']:
-                                if locked_in:
-                                    break
+                            asteroid_least_shot_heading_error = math.inf
+                            asteroid_least_shot_heading_tolerance_deg = math.nan
+                            for asteroid in chain(self.game_state['asteroids'], self.forecasted_asteroid_splits):
+                                # Avoid shooting asteroids that are about to get mined
+                                for m in self.game_state['mines']:
+                                    project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
+                                    asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
+                                    if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
+                                        continue
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
                                         if locked_in:
                                             break
+                                        ast_angle = atan2(a['position'][1] - self.ship_state['position'][1], a['position'][0] - self.ship_state['position'][0])
+                                        if abs(angle_difference_deg(degrees(ast_angle), self.ship_state['heading'])) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
+                                            continue
                                         # Roughly predict the ship's position on the next timestep using its current heading. This isn't 100% correct but whatever, it's better than nothing.
                                         ship_pred_speed = self.ship_state['speed']
                                         drag_amount = SHIP_DRAG*DELTA_TIME
@@ -3501,14 +3492,18 @@ class Simulation():
                                             ship_pred_speed = SHIP_MAX_SPEED
                                         elif ship_pred_speed < -SHIP_MAX_SPEED:
                                             ship_pred_speed = -SHIP_MAX_SPEED
-                                        sols_list = calculate_interception(self.ship_state['position'][0] + DELTA_TIME*ship_pred_speed*cos(radians(self.ship_state['heading'])), self.ship_state['position'][1] + DELTA_TIME*ship_pred_speed*sin(radians(self.ship_state['heading'])), a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], self.ship_state['heading'], self.game_state, 1)
+                                        sols_list = calculate_interception(self.ship_state['position'][0] + DELTA_TIME*timesteps_until_can_fire*ship_pred_speed*cos(radians(self.ship_state['heading'])), self.ship_state['position'][1] + DELTA_TIME*timesteps_until_can_fire*ship_pred_speed*sin(radians(self.ship_state['heading'])), a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], self.ship_state['heading'], self.game_state, timesteps_until_can_fire)
                                         for sol in sols_list:
                                             feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception = sol
-                                            shot_heading_error_deg = math.degrees(shot_heading_error_rad)
-                                            shot_heading_tolerance_deg = math.degrees(shot_heading_tolerance_rad)
+                                            shot_heading_error_deg = degrees(shot_heading_error_rad)
+                                            shot_heading_tolerance_deg = degrees(shot_heading_tolerance_rad)
+                                            if abs(shot_heading_error_deg) - shot_heading_tolerance_deg < abs(asteroid_least_shot_heading_error):
+                                                asteroid_least_shot_heading_error = shot_heading_error_deg
+                                                asteroid_least_shot_heading_tolerance_deg = shot_heading_tolerance_deg
                                             assert shot_heading_tolerance_deg >= 0.0
                                             if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0:  # 6 = DELTA_TIME*SHIP_MAX_TURN_RATE
                                                 locked_in = True
+                                                # print(f"AIMING AT THE NEW THING WE'RE DOING!!!")
                                                 if abs(shot_heading_error_deg) <= 6.0:
                                                     # We can turn directly to the target's center without needing the tolerance at all!
                                                     altered_turn_command = shot_heading_error_deg*FPS
@@ -3519,54 +3514,6 @@ class Simulation():
                                                 if whole_move_sequence:
                                                     whole_move_sequence[self.future_timesteps]['turn_rate'] = altered_turn_command
                                                 break
-                        # elif abs(self.ship_state['speed']) <= 81.0:
-                        else:
-                            #if self.sim_id == 85885:
-                            #    print(f"timesteps_until_can_fire == 2, 3, 4")
-                            # Let's just try to aim at shots even when there's 2, 3, or 4 timesteps we need to wait until we can fire. Why not?
-                            locked_in = False
-                            asteroid_least_shot_heading_error = math.inf
-                            asteroid_least_shot_heading_tolerance_deg = math.nan
-                            for a in self.game_state['asteroids']:
-                                # For performance, just use canonical asteroids and don't unwrap. Unwrapping is slow and provides minimal benefit here.
-                                if locked_in:
-                                    break
-                                if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, a):
-                                    # Roughly predict the ship's position on the next timestep using its current heading. This isn't 100% correct but whatever, it's better than nothing.
-                                    ship_pred_speed = self.ship_state['speed']
-                                    drag_amount = SHIP_DRAG*DELTA_TIME
-                                    if drag_amount > abs(ship_pred_speed):
-                                        ship_pred_speed = 0.0
-                                    else:
-                                        ship_pred_speed -= drag_amount*sign(ship_pred_speed)
-                                    # Apply thrust
-                                    ship_pred_speed += min(max(-SHIP_MAX_THRUST, thrust), SHIP_MAX_THRUST)*DELTA_TIME
-                                    if ship_pred_speed > SHIP_MAX_SPEED:
-                                        ship_pred_speed = SHIP_MAX_SPEED
-                                    elif ship_pred_speed < -SHIP_MAX_SPEED:
-                                        ship_pred_speed = -SHIP_MAX_SPEED
-                                    sols_list = calculate_interception(self.ship_state['position'][0] + DELTA_TIME*timesteps_until_can_fire*ship_pred_speed*cos(radians(self.ship_state['heading'])), self.ship_state['position'][1] + DELTA_TIME*timesteps_until_can_fire*ship_pred_speed*sin(radians(self.ship_state['heading'])), a['position'][0], a['position'][1], a['velocity'][0], a['velocity'][1], a['radius'], self.ship_state['heading'], self.game_state, timesteps_until_can_fire)
-                                    for sol in sols_list:
-                                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception = sol
-                                        shot_heading_error_deg = math.degrees(shot_heading_error_rad)
-                                        shot_heading_tolerance_deg = math.degrees(shot_heading_tolerance_rad)
-                                        if abs(shot_heading_error_deg) - shot_heading_tolerance_deg < abs(asteroid_least_shot_heading_error):
-                                            asteroid_least_shot_heading_error = shot_heading_error_deg
-                                            asteroid_least_shot_heading_tolerance_deg = shot_heading_tolerance_deg
-                                        assert shot_heading_tolerance_deg >= 0.0
-                                        if abs(shot_heading_error_deg) - shot_heading_tolerance_deg <= 6.0:  # 6 = DELTA_TIME*SHIP_MAX_TURN_RATE
-                                            locked_in = True
-                                            # print(f"AIMING AT THE NEW THING WE'RE DOING!!!")
-                                            if abs(shot_heading_error_deg) <= 6.0:
-                                                # We can turn directly to the target's center without needing the tolerance at all!
-                                                altered_turn_command = shot_heading_error_deg*FPS
-                                                assert abs(altered_turn_command) <= SHIP_MAX_TURN_RATE
-                                            else:
-                                                altered_turn_command = SHIP_MAX_TURN_RATE*sign(shot_heading_error_deg)
-                                            turn_rate = altered_turn_command
-                                            if whole_move_sequence:
-                                                whole_move_sequence[self.future_timesteps]['turn_rate'] = altered_turn_command
-                                            break
                             if not locked_in:
                                 # We can't turn all the way to something, but we can begin turning that way!
                                 if not math.isinf(asteroid_least_shot_heading_error) and not math.isnan(asteroid_least_shot_heading_tolerance_deg):
