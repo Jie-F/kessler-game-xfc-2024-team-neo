@@ -3391,12 +3391,13 @@ class Simulation():
                             for asteroid in chain(self.game_state['asteroids'], self.forecasted_asteroid_splits):
                                 # Loop through all asteroids and make sure at least one asteroid is a valid target
                                 # Get the length of time the longest asteroid would take to hit, and that'll be the upper bound of the bullet sim's timesteps
-                                # Avoid shooting asteroids that are about to get mined
-                                for m in self.game_state['mines']:
-                                    project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
-                                    asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
-                                    if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
-                                        continue
+                                # Avoid shooting size 1 asteroids that are about to get mined
+                                if asteroid['size'] == 1:
+                                    for m in self.game_state['mines']:
+                                        project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
+                                        asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
+                                        if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
+                                            continue
                                 check_next_asteroid = False
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
@@ -3456,12 +3457,13 @@ class Simulation():
                             asteroid_least_shot_heading_error = math.inf
                             asteroid_least_shot_heading_tolerance_deg = math.nan
                             for asteroid in chain(self.game_state['asteroids'], self.forecasted_asteroid_splits):
-                                # Avoid shooting asteroids that are about to get mined
-                                for m in self.game_state['mines']:
-                                    project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
-                                    asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
-                                    if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
-                                        continue
+                                # Avoid shooting size 1 asteroids that are about to get mined
+                                if asteroid['size'] == 1:
+                                    for m in self.game_state['mines']:
+                                        project_asteroid_by_timesteps_num = round(m['remaining_time']*FPS)
+                                        asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
+                                        if check_collision(asteroid_when_mine_explodes['position'][0], asteroid_when_mine_explodes['position'][1], asteroid_when_mine_explodes['radius'], m['position'][0], m['position'][1], MINE_BLAST_RADIUS):
+                                            continue
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state['map_size'][0], self.game_state['map_size'][1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
                                         if locked_in:
