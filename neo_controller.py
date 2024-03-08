@@ -61,11 +61,11 @@ SLOW_DOWN_GAME_AFTER_SECOND: Final = math.inf
 SLOW_DOWN_GAME_PAUSE_TIME: Final = 2.0
 
 # These can trade off to get better performance at the expense of safety
-ENABLE_ASSERTIONS: Final = True
+ENABLE_ASSERTIONS: Final = False
 PRUNE_SIM_STATE_SEQUENCE: Final = True
-VALIDATE_SIMULATED_KEY_STATES: Final = True
+VALIDATE_SIMULATED_KEY_STATES: Final = False
 VALIDATE_ALL_SIMULATED_STATES: Final = False
-VERIFY_AST_TRACKING: Final = True
+VERIFY_AST_TRACKING: Final = False
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -181,6 +181,15 @@ class Asteroid:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Asteroid:
+        return Asteroid(
+            position=self.position, 
+            velocity=self.velocity, 
+            size=self.size, 
+            mass=self.mass, 
+            radius=self.radius, 
+            timesteps_until_appearance=self.timesteps_until_appearance
+        )
 
 class Ship:
     __slots__ = ('is_respawning', 'position', 'velocity', 'speed', 'heading', 'mass', 'radius', 'id', 'team', 'lives_remaining', 'bullets_remaining', 'mines_remaining', 'can_fire', 'fire_rate', 'thrust_range', 'turn_rate_range', 'max_speed', 'drag')
@@ -212,6 +221,27 @@ class Ship:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Ship:
+        return Ship(
+            is_respawning=self.is_respawning,
+            position=self.position,
+            velocity=self.velocity,
+            speed=self.speed,
+            heading=self.heading,
+            mass=self.mass,
+            radius=self.radius,
+            id=self.id,
+            team=self.team,
+            lives_remaining=self.lives_remaining,
+            bullets_remaining=self.bullets_remaining,
+            mines_remaining=self.mines_remaining,
+            can_fire=self.can_fire,
+            fire_rate=self.fire_rate,
+            thrust_range=self.thrust_range,
+            turn_rate_range=self.turn_rate_range,
+            max_speed=self.max_speed,
+            drag=self.drag
+        )
 
 class Mine:
     __slots__ = ('position', 'mass', 'fuse_time', 'remaining_time')
@@ -228,6 +258,13 @@ class Mine:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Mine:
+        return Mine(
+            position=self.position,
+            mass=self.mass,
+            fuse_time=self.fuse_time,
+            remaining_time=self.remaining_time
+        )
 
 class Bullet:
     __slots__ = ('position', 'velocity', 'heading', 'mass', 'tail_delta')
@@ -245,6 +282,14 @@ class Bullet:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Bullet:
+        return Bullet(
+            position=self.position, 
+            velocity=self.velocity, 
+            heading=self.heading, 
+            mass=self.mass, 
+            tail_delta=self.tail_delta
+        )
 
 class GameState:
     __slots__ = ('asteroids', 'ships', 'bullets', 'mines', 'map_size', 'time', 'delta_time', 'sim_frame')
@@ -264,6 +309,19 @@ class GameState:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def copy(self) -> GameState:
+        return GameState(
+            asteroids=[asteroid.copy() for asteroid in self.asteroids], 
+            ships=[ship.copy() for ship in self.ships], 
+            bullets=[bullet.copy() for bullet in self.bullets], 
+            mines=[mine.copy() for mine in self.mines], 
+            map_size=self.map_size, 
+            time=self.time, 
+            delta_time=self.delta_time, 
+            sim_frame=self.sim_frame
+        )
+
 
 class Target:
     __slots__ = ('asteroid', 'feasible', 'shooting_angle_error_deg', 'aiming_timesteps_required', 'interception_time_s', 'intercept_x', 'intercept_y', 'asteroid_dist_during_interception', 'imminent_collision_time_s', 'asteroid_will_get_hit_by_mine')
@@ -286,6 +344,22 @@ class Target:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Target:
+        # Assuming asteroid.copy() is correct and asteroid is meant to be a shallow copy here.
+        # Adjust according to your needs.
+        return Target(
+            asteroid=self.asteroid.copy(), 
+            feasible=self.feasible, 
+            shooting_angle_error_deg=self.shooting_angle_error_deg, 
+            aiming_timesteps_required=self.aiming_timesteps_required, 
+            interception_time_s=self.interception_time_s, 
+            intercept_x=self.intercept_x, 
+            intercept_y=self.intercept_y, 
+            asteroid_dist_during_interception=self.asteroid_dist_during_interception, 
+            imminent_collision_time_s=self.imminent_collision_time_s, 
+            asteroid_will_get_hit_by_mine=self.asteroid_will_get_hit_by_mine
+        )
+
 
 class Action:
     __slots__ = ('thrust', 'turn_rate', 'fire', 'drop_mine', 'timestep')
@@ -303,6 +377,14 @@ class Action:
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> Action:
+        return Action(
+            thrust=self.thrust, 
+            turn_rate=self.turn_rate, 
+            fire=self.fire, 
+            drop_mine=self.drop_mine, 
+            timestep=self.timestep
+        )
 
 class SimState:
     __slots__ = ('timestep', 'ship_state', 'game_state', 'asteroids_pending_death', 'forecasted_asteroid_splits')
@@ -319,6 +401,17 @@ class SimState:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def copy(self) -> SimState:
+        # Note: Depending on how you want to handle the deep copy of game_state and other attributes, adjust accordingly.
+        return SimState(
+            timestep=self.timestep, 
+            ship_state=self.ship_state.copy(), 
+            game_state=self.game_state.copy() if self.game_state else None, 
+            asteroids_pending_death=self.asteroids_pending_death.copy() if self.asteroids_pending_death else None, 
+            forecasted_asteroid_splits=[a.copy() for a in self.forecasted_asteroid_splits] if self.forecasted_asteroid_splits else []
+        )
+
 
 
 def create_game_state_from_dict(game_state_dict: dict[str, Any]) -> GameState:
@@ -1634,7 +1727,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
         # We negate the directions because we're using the frame of reference of the ship now, not the asteroid
         dx = -universe[0]*max_x
         dy = -universe[1]*max_y
-        unwrapped_asteroid: Asteroid = copy.copy(asteroid)
+        unwrapped_asteroid: Asteroid = asteroid.copy()
         unwrapped_asteroid.position = (unwrapped_asteroid.position[0] + dx, unwrapped_asteroid.position[1] + dy)
         #unwrapped_asteroids.append(unwrapped_asteroid)
         yield unwrapped_asteroid
@@ -2354,7 +2447,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
 def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]], current_timestep: int, game_state: GameState, bullet_travel_timesteps: int, asteroid: Asteroid, wrap: bool = True) -> None:
     # This modifies asteroids_pending_death in place instead of returning it
     # Make a copy of the asteroid so we don't mess up the original object
-    asteroid = copy.copy(asteroid)
+    asteroid = asteroid.copy()
     # Project the asteroid into the future, to where it would be on the timestep of its death
 
     for future_timesteps in range(0, bullet_travel_timesteps + 1):
@@ -2363,7 +2456,7 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]]
             asteroid.position = (asteroid.position[0] % game_state.map_size[0], asteroid.position[1] % game_state.map_size[1])
         timestep = current_timestep + future_timesteps
         if timestep not in asteroids_pending_death:
-            asteroids_pending_death[timestep] = [copy.copy(asteroid)]
+            asteroids_pending_death[timestep] = [asteroid.copy()]
         else:
             if ENABLE_ASSERTIONS:
                 if is_asteroid_in_list(asteroids_pending_death[timestep], asteroid):
@@ -2371,7 +2464,7 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]]
                     print(asteroids_pending_death[timestep])
                     pass
                 assert not is_asteroid_in_list(asteroids_pending_death[timestep], asteroid), f"The asteroid {asteroid} appeared in the list of pending death when it wasn't supposed to!"
-            asteroids_pending_death[timestep].append(copy.copy(asteroid))
+            asteroids_pending_death[timestep].append(asteroid.copy())
         # Advance the asteroid to the next position
         if future_timesteps != bullet_travel_timesteps:
             # Skip this operation on the last for loop iteration
@@ -2390,7 +2483,7 @@ def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(aster
 
     # Check whether the asteroid has already been shot at, or if we can shoot at it again
     if wrap:
-        asteroid = copy.copy(asteroid)
+        asteroid = asteroid.copy()
         asteroid.position = (asteroid.position[0] % game_state.map_size[0], asteroid.position[1] % game_state.map_size[1])
     else:
         if ENABLE_ASSERTIONS:
@@ -2411,7 +2504,7 @@ def time_travel_asteroid(asteroid: Asteroid, timesteps: int, game_state: Optiona
     # This modifies the original object instead of returning a copy!
     if timesteps == 0:
         return asteroid
-    asteroid = copy.copy(asteroid)  # TODO: Unsure whether this copy is necessary
+    asteroid = asteroid.copy()  # TODO: Unsure whether this copy is necessary
     if wrap and game_state is not None:
         asteroid.position = ((asteroid.position[0] + asteroid.velocity[0]*timesteps*DELTA_TIME) % game_state.map_size[0], (asteroid.position[1] + asteroid.velocity[1]*timesteps*DELTA_TIME) % game_state.map_size[1])
     else:
@@ -2445,12 +2538,12 @@ class Simulation():
         # self.game_state.bullets = [dict(b) for b in bullets]
         if ENABLE_ASSERTIONS:
             assert (ship_state.is_respawning == bool(respawn_timer))
-        self.game_state: GameState = copy.copy(game_state)
-        self.ship_state: Ship = copy.copy(ship_state)
-        self.game_state.asteroids = [copy.copy(a) for a in game_state.asteroids]
-        self.game_state.ships = [copy.copy(s) for s in game_state.ships]
-        self.game_state.bullets = [copy.copy(b) for b in game_state.bullets]
-        self.game_state.mines = [copy.copy(m) for m in game_state.mines]
+        self.game_state: GameState = game_state.copy()
+        self.ship_state: Ship = ship_state.copy()
+        self.game_state.asteroids = [a.copy() for a in game_state.asteroids]
+        self.game_state.ships = [s.copy() for s in game_state.ships]
+        self.game_state.bullets = [b.copy() for b in game_state.bullets]
+        self.game_state.mines = [m.copy() for m in game_state.mines]
         self.other_ships = get_other_ships(self.game_state, ship_state.id)
         if ENABLE_ASSERTIONS:
             assert 0 <= len(self.other_ships) <= 1
@@ -2459,7 +2552,7 @@ class Simulation():
         self.asteroids_shot: int = 0
         # print(f"Sim starting with {asteroids_pending_death=}")
         self.asteroids_pending_death: dict[int, list[Asteroid]] = {timestep: list(l) for timestep, l in asteroids_pending_death.items()}
-        self.forecasted_asteroid_splits: list[Asteroid] = [copy.copy(a) for a in forecasted_asteroid_splits]
+        self.forecasted_asteroid_splits: list[Asteroid] = [a.copy() for a in forecasted_asteroid_splits]
         self.halt_shooting: bool = halt_shooting
         self.fire_next_timestep_flag: bool = False
         self.fire_first_timestep: bool = fire_first_timestep
@@ -2494,15 +2587,15 @@ class Simulation():
         return self.respawn_timer
 
     def get_ship_state(self) -> Ship:
-        return copy.copy(self.ship_state)
+        return self.ship_state.copy()
 
     def get_game_state(self) -> GameState:
         if self.backed_up_game_state_before_post_mutation is not None:
             #print("Getting backed up gamestate")
-            return copy.copy(self.backed_up_game_state_before_post_mutation)
+            return self.backed_up_game_state_before_post_mutation.copy()
         else:
             #print("Getting gamestate regular way")
-            return copy.copy(self.game_state)
+            return self.game_state.copy()
 
     def get_fire_next_timestep_flag(self) -> bool:
         return self.fire_next_timestep_flag
@@ -2785,10 +2878,10 @@ class Simulation():
         next_extrapolated_asteroid_collision_time = self.get_next_extrapolated_asteroid_collision_time()
         if self.game_state.mines:
             # Alternative to doing a deepcopy. Selectively copy the asteroids, mines, and bullets.
-            self.backed_up_game_state_before_post_mutation = copy.copy(self.game_state)
-            self.backed_up_game_state_before_post_mutation.asteroids = [copy.copy(a) for a in self.game_state.asteroids]
-            self.backed_up_game_state_before_post_mutation.mines = [copy.copy(m) for m in self.game_state.mines]
-            self.backed_up_game_state_before_post_mutation.bullets = [copy.copy(b) for b in self.game_state.bullets]
+            self.backed_up_game_state_before_post_mutation = self.game_state.copy()
+            self.backed_up_game_state_before_post_mutation.asteroids = [a.copy() for a in self.game_state.asteroids]
+            self.backed_up_game_state_before_post_mutation.mines = [m.copy() for m in self.game_state.mines]
+            self.backed_up_game_state_before_post_mutation.bullets = [b.copy() for b in self.game_state.bullets]
             while self.game_state.mines:
                 additional_timesteps_to_blow_up_mines += 1
                 # print(f"Calling update from get fitness to wait out mines:")
@@ -2963,7 +3056,7 @@ class Simulation():
                 # debug_print(f"asteroid_advance_timesteps {asteroid_advance_timesteps} < target_asteroid_turning_timesteps {target_asteroid_turning_timesteps}")
                 #aiming_move_sequence.extend([cast(Action, {'thrust': 0.0, 'turn_rate': 0.0, 'fire': False})]*(target_asteroid_turning_timesteps - asteroid_advance_timesteps))
                 aiming_move_sequence.extend([Action(thrust=0.0, turn_rate=0.0, fire=False) for _ in range(target_asteroid_turning_timesteps - asteroid_advance_timesteps)])
-            target_asteroid = copy.copy(target_asteroid_original)
+            target_asteroid = target_asteroid_original.copy()
             target_asteroid = time_travel_asteroid(target_asteroid, asteroid_advance_timesteps, self.game_state, True)
             # debug_print(f"We're targetting asteroid {ast_to_string(target_asteroid)}")
             # debug_print(f"Entering the bullet target sim, we're on timestep {self.initial_timestep + self.future_timesteps + len(aiming_move_sequence)}")
@@ -3059,7 +3152,7 @@ class Simulation():
                     })
                     '''
                     target_asteroids_list.append(Target(
-                        asteroid=copy.copy(asteroid),  # Record the canonical asteroid even if we're shooting at an unwrapped one
+                        asteroid=asteroid.copy(),  # Record the canonical asteroid even if we're shooting at an unwrapped one
                         feasible=feasible,  # Will be True
                         shooting_angle_error_deg=shooting_angle_error_deg,
                         aiming_timesteps_required=aiming_timesteps_required,
@@ -3095,11 +3188,11 @@ class Simulation():
             # If there's a bullet limit, penalize risky shots more
             frontrun_score_multiplier = 6.0 if self.ship_state.bullets_remaining > 0 else 3.0
             sorted_imminent_targets = target_asteroids_list
-            sorted_imminent_targets.sort(key=lambda a: (
-                min(10, a.imminent_collision_time_s) +
-                ASTEROID_SIZE_SHOT_PRIORITY[a.asteroid.size]*0.25 +
-                frontrun_score_multiplier*min(0.5, max(0, a.interception_time_s + a.aiming_timesteps_required*DELTA_TIME - get_adversary_interception_time_lower_bound(a.asteroid, self.other_ships, self.game_state))) +
-                ((10.0 if a.asteroid.size == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
+            sorted_imminent_targets.sort(key=lambda t: (
+                min(10, t.imminent_collision_time_s) +
+                ASTEROID_SIZE_SHOT_PRIORITY[t.asteroid.size]*0.25 +
+                frontrun_score_multiplier*min(0.5, max(0, t.interception_time_s + t.aiming_timesteps_required*DELTA_TIME - get_adversary_interception_time_lower_bound(t.asteroid, self.other_ships, self.game_state))) +
+                ((10.0 if t.asteroid.size == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
             ))
             # The frontrun time is bounded by 0 and 0.5 seconds, since anything after half a second away is basically the same and there's no point differentiating between them
             # TODO: For each asteroid, give it a couple feasible times where we wait longer and longer. This way we can choose to wait a timestep to fire again if we'll get luckier with the bullet lining up
@@ -3133,7 +3226,7 @@ class Simulation():
                     # Instead, find the closest asteroid along the way to shoot
                     # Sort by angular distance, with the unlikely tie broken by shot size
                     sorted_targets = target_asteroids_list
-                    sorted_targets.sort(key=lambda a: (round(a.shooting_angle_error_deg), ASTEROID_SIZE_SHOT_PRIORITY[a.asteroid.size]))
+                    sorted_targets.sort(key=lambda t: (round(t.shooting_angle_error_deg), ASTEROID_SIZE_SHOT_PRIORITY[t.asteroid.size]))
                     # debug_print(f"Turn angle deg until we can fire (max 30 degrees): {turn_angle_deg_until_can_fire}")
                     if most_imminent_asteroid_shooting_angle_error_deg > 0.0:
                         # debug_print("The imminent shot requires us to turn the ship to the left")
@@ -3181,11 +3274,11 @@ class Simulation():
                 frontrun_score_multiplier = 25.0 if self.ship_state.bullets_remaining > 0 else 15.0
                 # Sort by just convenience (and anything else I'd like)
                 sorted_targets = target_asteroids_list
-                sorted_targets.sort(key=lambda a: (
-                    a.aiming_timesteps_required*2 +
-                    ASTEROID_SIZE_SHOT_PRIORITY[a.asteroid.size] +
-                    frontrun_score_multiplier*min(0.5, max(0, a.interception_time_s + a.aiming_timesteps_required*DELTA_TIME - get_adversary_interception_time_lower_bound(copy.copy(a.asteroid), self.other_ships, self.game_state))) +
-                    ((30.0 if a.asteroid.size == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
+                sorted_targets.sort(key=lambda t: (
+                    t.aiming_timesteps_required*2 +
+                    ASTEROID_SIZE_SHOT_PRIORITY[t.asteroid.size] +
+                    frontrun_score_multiplier*min(0.5, max(0, t.interception_time_s + t.aiming_timesteps_required*DELTA_TIME - get_adversary_interception_time_lower_bound(t.asteroid.copy(), self.other_ships, self.game_state))) +
+                    ((30.0 if t.asteroid.size == 1 else -10.0) if asteroid_will_get_hit_by_mine else 0.0)
                 ))
                 for confirmed_target in sorted_targets:
                     least_shot_delay_asteroid = confirmed_target.asteroid
@@ -3346,12 +3439,12 @@ class Simulation():
         # Do the shallowest copies that we can get away with. copy.deepcopy is super slow so we avoid it
         #asteroids: list[Asteroid]
         if asteroids_to_check is not None:
-            asteroids = cast(list[Asteroid], [copy.copy(a) for a in asteroids_to_check])
+            asteroids = cast(list[Asteroid], [a.copy() for a in asteroids_to_check])
         else:
-            asteroids = cast(list[Asteroid], [copy.copy(a) for a in self.game_state.asteroids])
+            asteroids = cast(list[Asteroid], [a.copy() for a in self.game_state.asteroids])
         
-        mines: list[Mine] = cast(list[Mine], [copy.copy(m) for m in self.game_state.mines])
-        bullets: list[Bullet] = cast(list[Bullet], [copy.copy(b) for b in self.game_state.bullets])
+        mines: list[Mine] = cast(list[Mine], [m.copy() for m in self.game_state.mines])
+        bullets: list[Bullet] = cast(list[Bullet], [b.copy() for b in self.game_state.bullets])
         initial_ship_state = self.get_ship_state()
         if ship_state and ENABLE_ASSERTIONS:
             assert check_coordinate_bounds(self.game_state, ship_state.position[0], ship_state.position[1])
@@ -3636,16 +3729,16 @@ class Simulation():
             if not PRUNE_SIM_STATE_SEQUENCE or self.future_timesteps == 0:
                 self.state_sequence.append(SimState(
                     timestep=self.initial_timestep + self.future_timesteps,
-                    ship_state=copy.copy(self.ship_state),
+                    ship_state=self.ship_state.copy(),
                     game_state=self.get_game_state(),
                     asteroids_pending_death=dict(self.asteroids_pending_death),
-                    forecasted_asteroid_splits=[copy.copy(a) for a in self.forecasted_asteroid_splits]
+                    forecasted_asteroid_splits=[a.copy() for a in self.forecasted_asteroid_splits]
                 ))
             else:
                 # Create a super lightweight state that omits unnecessary stuff
                 self.state_sequence.append(SimState(
                     timestep=self.initial_timestep + self.future_timesteps,
-                    ship_state=copy.copy(self.ship_state),
+                    ship_state=self.ship_state.copy(),
                     # Assuming game_state and other attributes are optional or have default values in SimState definition
                 ))
         # The simulation starts by evaluating actions and dynamics of the current present timestep, and then steps into the future
@@ -4164,10 +4257,10 @@ class Simulation():
             #self.state_sequence.append(cast(SimState, {'timestep': self.initial_timestep + self.future_timesteps, 'ship_state': copy.copy(self.ship_state), 'game_state': self.get_game_state(), 'asteroids_pending_death': dict(self.asteroids_pending_death), 'forecasted_asteroid_splits': [copy.copy(a) for a in self.forecasted_asteroid_splits]}))
             self.state_sequence.append(SimState(
                 timestep=self.initial_timestep + self.future_timesteps,
-                ship_state=copy.copy(self.ship_state),
+                ship_state=self.ship_state.copy(),
                 game_state=self.get_game_state(),
                 asteroids_pending_death=dict(self.asteroids_pending_death),
-                forecasted_asteroid_splits=[copy.copy(a) for a in self.forecasted_asteroid_splits]
+                forecasted_asteroid_splits=[a.copy() for a in self.forecasted_asteroid_splits]
             ))
         return self.state_sequence
 
