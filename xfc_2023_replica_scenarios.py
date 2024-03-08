@@ -228,7 +228,7 @@ adv_multi_wall_bottom_hard_1 = Scenario(
 num_asteroids = 7
 side_padding = 60
 asteroid_spacing = (height - 2*side_padding)/num_asteroids  # Spacing between asteroids
-asteroid_speed = 300  # Constant speed of the asteroids
+asteroid_speed = 150  # Constant speed of the asteroids
 asteroid_start_x = width*4/5  # Starting height at the top of the screen
 
 # Create asteroid states

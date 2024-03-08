@@ -1,7 +1,5 @@
 import time
 import random
-#from src.neo_controller import NeoController
-from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
 from benchmark_controller import BenchmarkController
@@ -30,8 +28,18 @@ parser.add_argument('-invisible', action='store_true', help='Use NoGraphics for 
 parser.add_argument('-unreal', action='store_true', help='Use UnrealEngine for the game visualization.')
 parser.add_argument('-profile', action='store_true', help='Enable profiling of the game run.')
 parser.add_argument('-seed', type=int, help='Set the seed for random number generation.')
+parser.add_argument('-interp', action='store_true', help='Import the interpreted Neo Controller.')
+parser.add_argument('-scenario', type=str, help='Name of scenario to evaluate. Must be available in environment.')
+parser.add_argument('-portfolio', type=str, help='Name of portfolio to run')
+parser.add_argument('-index', type=int, help='Pick the starting index of the portfolio. Count from zero.')
 
 args = parser.parse_args()
+
+if args.interp:
+    from neo_controller import NeoController
+else:
+    from src.neo_controller import NeoController
+
 
 global color_text
 color_text = True
@@ -103,245 +111,7 @@ missed = False
 iterations = 0
 
 xfc_2021_portfolio = [
-    #threat_test_1,
-    #threat_test_2,
-    #threat_test_3,
-    #threat_test_4,
-    #accuracy_test_1,
-    #accuracy_test_2,
-    #accuracy_test_3,
-    #accuracy_test_4,
-    #accuracy_test_5,
-    #accuracy_test_6,
-    #accuracy_test_7,
-    #accuracy_test_8,
-    #accuracy_test_9,
-    #accuracy_test_10,
-    #wall_left_easy,
-    #wall_right_easy,
-    #wall_top_easy,
-    #wall_bottom_easy,
-    #ring_closing,
-    #ring_static_left,
-    #ring_static_right,
-    #ring_static_top,
-    #ring_static_bottom,
-
-    #wall_right_wrap_1,
-    #wall_right_wrap_2,
-    #wall_right_wrap_3,
-    #wall_right_wrap_4,
-    wall_left_wrap_1,
-    wall_left_wrap_2,
-    wall_left_wrap_3,
-    wall_left_wrap_4,
-    wall_top_wrap_1,
-    wall_top_wrap_2,
-    wall_top_wrap_3,
-    wall_top_wrap_4,
-    wall_bottom_wrap_1,
-    wall_bottom_wrap_2,
-    wall_bottom_wrap_3,
-    wall_bottom_wrap_4,
-]
-
-show_portfolio = [
-    #threat_test_1,
-    #threat_test_2,
-    #threat_test_3,
-    #threat_test_4,
-    #accuracy_test_5,
-    #accuracy_test_6,
-    #accuracy_test_7,
-    #accuracy_test_8,
-    #accuracy_test_9,
-    #accuracy_test_10,
-    #wall_left_easy,
-    #wall_right_easy,
-    #wall_top_easy,
-    #wall_bottom_easy,
-    #ring_closing,
-    #ring_static_left,
-    #ring_static_right,
-    #ring_static_top,
-    #ring_static_bottom,
-    #wall_right_wrap_3,
-    #wall_right_wrap_4,
-    #wall_left_wrap_3,
-    #wall_left_wrap_4,
-    #wall_top_wrap_3,
-    wall_top_wrap_4,
-    wall_bottom_wrap_3,
-    wall_bottom_wrap_4,
-]
-
-alternate_scenarios = [
-    #corridor_left,
-    #corridor_right,
-    #corridor_top,
-    #corridor_bottom,
-
-    # May have to cut these
-    #moving_corridor_1,
-    #moving_corridor_2,
-    #moving_corridor_3,
-    #moving_corridor_4,
-    #moving_corridor_angled_1,
-    #moving_corridor_angled_2,
-    #moving_corridor_curve_1,
-    #moving_corridor_curve_2,
-
-    scenario_small_box,
-    scenario_big_box,
-    scenario_2_still_corridors,
-]
-
-xfc2023 = [
-    #ex_adv_four_corners_pt1,
-    #ex_adv_four_corners_pt2,
-    #ex_adv_asteroids_down_up_pt1,
-    #ex_adv_asteroids_down_up_pt2,
-    #ex_adv_direct_facing,
-    #ex_adv_two_asteroids_pt1,
-    #ex_adv_two_asteroids_pt2,
-    #ex_adv_ring_pt1,
-    #adv_random_big_1,
-    #adv_random_big_2,
-    #adv_random_big_3,
-    #adv_random_big_4,
-    #adv_multi_wall_bottom_hard_1,
-    adv_multi_wall_right_hard_1,
-    adv_multi_ring_closing_left,
-    #adv_multi_ring_closing_right,
-    adv_multi_two_rings_closing,
-    avg_multi_ring_closing_both2,
-    adv_multi_ring_closing_both_inside,
-    adv_multi_ring_closing_both_inside_fast
-]
-
-custom = [
-    #target_priority_optimization1,
-    #closing_ring_scenario,
-    #easy_closing_ring_scenario,
-    #more_intense_closing_ring_scenario,
-    #rotating_square_scenario,
-    #rotating_square_2_overlap,
-    #falling_leaves_scenario,
-    #zigzag_motion_scenario,
-    #shearing_pattern_scenario,
-    #super_hard_wrap,
-    #wonky_ring,
-    #moving_ring_scenario,
-    #shifting_square_scenario,
-    #delayed_closing_ring_scenario,
-    #spiral_assault_scenario,
-    #dancing_ring,
-    #dancing_ring_2,
-    #intersecting_lines_scenario,
-    #exploding_grid_scenario,
-    #grid_formation_explosion_scenario,
-    #aspect_ratio_grid_formation_scenario
-]
-
-#for i in range(0, len(seeds)):
-#while True:
-score = None
-died = False
-#for sc in xfc2023:
-#while died or not missed:
-#for i in range(1):
-team_1_hits = 0
-team_2_hits = 0
-team_1_deaths = 0
-team_2_deaths = 0
-team_1_wins = 0
-team_2_wins = 0
-#while True:
-#random.seed(1)
-#for sc in xfc2023:
-for _ in range(1):
-#while died or not missed:
-#for sc in xfc_2021_portfolio:
-#while True:
-#for sc in xfc2023:
-    iterations += 1
-    if args.seed is not None:
-        randseed = args.seed
-    else:
-        pass
-        randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
-    color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
-    random.seed(randseed)
-
-    asteroids_random = generate_asteroids(
-                                    num_asteroids=random.randint(5, 40),
-                                    position_range_x=(0, width),
-                                    position_range_y=(0, height),
-                                    speed_range=(-300, 300, 0),
-                                    angle_range=(-1, 361),
-                                    size_range=(1, 4)
-                                )*random.choice([1])
-
-    # Define game scenario
-    rand_scenario = Scenario(name='Random Scenario',
-                                #num_asteroids=200,
-                                asteroid_states=asteroids_random,
-                                #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
-                                #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
-                                #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
-                                ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 10},
-                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
-                                ],
-                                map_size=(width, height),
-                                time_limit=1200.0,
-                                ammo_limit_multiplier=random.choice([0]),
-                                stop_if_no_ammo=False)
-    
-    benchmark_scenario = Scenario(name="Benchmark Scenario",
-                                    num_asteroids=100,
-                                    ship_states=[
-                                        {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
-                                    ],
-                                    map_size=(width, height),
-                                    seed=0,
-                                    time_limit=120)
-
-    pre = time.perf_counter()
-    try:
-        print(f"Evaluating scenario {sc.name}")
-    except:
-        pass
-    profile = args.profile
-    # my_test_scenario
-    # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
-    # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
-    #state = 
-    #random.seed(randseed)
-    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
-    #controllers_used = [NeoController(), NeoController()]
-    #random.setstate(state)
-    #print(f"RNG State: {random.getstate()}")
-    #score, perf_data = game.run(scenario=ex_adv_four_corners_pt1, controllers=controllers_used)
-    #score, perf_data = game.run(scenario=ex_adv_four_corners_pt2, controllers=controllers_used)
-    try:
-        if profile:
-            #random.seed(randseed)
-            cProfile.run(f'game.run(scenario=sc, controllers=[Neo(), Neo()])')
-        else:
-            #random.seed(randseed)
-            #print(random.getstate())
-            score, perf_data = game.run(scenario=sc, controllers=controllers_used)
-    except NameError:
-        print(f"Running single scenario")
-        if profile:
-            #random.seed(randseed)
-            cProfile.run(f'game.run(scenario=rand_scenario, controllers=controllers_used)')
-        else:
-            #random.seed(randseed)
-            #print(random.getstate())
-            '''
-                threat_test_1,
+    threat_test_1,
     threat_test_2,
     threat_test_3,
     threat_test_4,
@@ -363,44 +133,254 @@ for _ in range(1):
     ring_static_left,
     ring_static_right,
     ring_static_top,
-    ring_static_bottom,'''
-            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
-    #score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
-    #print(f"Perf data: {perf_data}")
-    # Print out some general info about the result
-    if score:
-        asts_hit = [team.asteroids_hit for team in score.teams]
-        color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
-        color_print(score.stop_reason, 'green')
-        color_print('Asteroids hit: ' + str(asts_hit), 'green')
-        team_1_hits += asts_hit[0]
-        if len(asts_hit) > 1:
-            team_2_hits += asts_hit[1]
-        if len(asts_hit) > 1:
-            if asts_hit[0] > asts_hit[1]:
+    ring_static_bottom,
+
+    wall_right_wrap_1,
+    wall_right_wrap_2,
+    wall_right_wrap_3,
+    wall_right_wrap_4,
+    wall_left_wrap_1,
+    wall_left_wrap_2,
+    wall_left_wrap_3,
+    wall_left_wrap_4,
+    wall_top_wrap_1,
+    wall_top_wrap_2,
+    wall_top_wrap_3,
+    wall_top_wrap_4,
+    wall_bottom_wrap_1,
+    wall_bottom_wrap_2,
+    wall_bottom_wrap_3,
+    wall_bottom_wrap_4,
+]
+
+show_portfolio = [
+    threat_test_1,
+    threat_test_2,
+    threat_test_3,
+    threat_test_4,
+    accuracy_test_5,
+    accuracy_test_6,
+    accuracy_test_7,
+    accuracy_test_8,
+    accuracy_test_9,
+    accuracy_test_10,
+    wall_left_easy,
+    wall_right_easy,
+    wall_top_easy,
+    wall_bottom_easy,
+    ring_closing,
+    ring_static_left,
+    ring_static_right,
+    ring_static_top,
+    ring_static_bottom,
+    wall_right_wrap_3,
+    wall_right_wrap_4,
+    wall_left_wrap_3,
+    wall_left_wrap_4,
+    wall_top_wrap_3,
+    wall_top_wrap_4,
+    wall_bottom_wrap_3,
+    wall_bottom_wrap_4,
+]
+
+alternate_scenarios = [
+    corridor_left,
+    corridor_right,
+    corridor_top,
+    corridor_bottom,
+
+    # May have to cut these
+    moving_corridor_1,
+    moving_corridor_2,
+    moving_corridor_3,
+    moving_corridor_4,
+    moving_corridor_angled_1,
+    moving_corridor_angled_2,
+    moving_corridor_curve_1,
+    moving_corridor_curve_2,
+
+    scenario_small_box,
+    scenario_big_box,
+    scenario_2_still_corridors,
+]
+
+xfc2023 = [
+    ex_adv_four_corners_pt1,
+    ex_adv_four_corners_pt2,
+    ex_adv_asteroids_down_up_pt1,
+    ex_adv_asteroids_down_up_pt2,
+    ex_adv_direct_facing,
+    ex_adv_two_asteroids_pt1,
+    ex_adv_two_asteroids_pt2,
+    ex_adv_ring_pt1,
+    adv_random_big_1,
+    adv_random_big_2,
+    adv_random_big_3,
+    adv_random_big_4,
+    adv_multi_wall_bottom_hard_1,
+    adv_multi_wall_right_hard_1,
+    adv_multi_ring_closing_left,
+    adv_multi_ring_closing_right,
+    adv_multi_two_rings_closing,
+    avg_multi_ring_closing_both2,
+    adv_multi_ring_closing_both_inside,
+    adv_multi_ring_closing_both_inside_fast
+]
+
+custom_scenarios = [
+    target_priority_optimization1,
+    closing_ring_scenario,
+    easy_closing_ring_scenario,
+    more_intense_closing_ring_scenario,
+    rotating_square_scenario,
+    rotating_square_2_overlap,
+    falling_leaves_scenario,
+    zigzag_motion_scenario,
+    shearing_pattern_scenario,
+    super_hard_wrap,
+    wonky_ring,
+    moving_ring_scenario,
+    shifting_square_scenario,
+    delayed_closing_ring_scenario,
+    spiral_assault_scenario,
+    dancing_ring,
+    dancing_ring_2,
+    intersecting_lines_scenario,
+    exploding_grid_scenario,
+    grid_formation_explosion_scenario,
+    aspect_ratio_grid_formation_scenario
+]
+
+
+score = None
+died = False
+team_1_hits = 0
+team_2_hits = 0
+team_1_deaths = 0
+team_2_deaths = 0
+team_1_wins = 0
+team_2_wins = 0
+
+selected_portfolio = [None]
+if args.portfolio is not None:
+    match args.portfolio:
+        case 'xfc2023':
+            selected_portfolio = xfc2023
+        case 'xfc2021':
+            selected_portfolio = xfc_2021_portfolio
+        case 'xfc2021alt':
+            selected_portfolio = alternate_scenarios
+        case 'custom':
+            selected_portfolio = custom_scenarios
+
+while True:
+    for scenario in selected_portfolio[0 if not args.index else args.index:]:
+        iterations += 1
+        if args.seed is not None:
+            randseed = args.seed
+        else:
+            pass
+            randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
+        color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
+        random.seed(randseed)
+
+        asteroids_random = generate_asteroids(
+                                        num_asteroids=random.randint(5, 40),
+                                        position_range_x=(0, width),
+                                        position_range_y=(0, height),
+                                        speed_range=(-300, 300, 0),
+                                        angle_range=(-1, 361),
+                                        size_range=(1, 4)
+                                    )*random.choice([1])
+
+        # Define game scenario
+        rand_scenario = Scenario(name='Random Scenario',
+                                    #num_asteroids=200,
+                                    asteroid_states=asteroids_random,
+                                    #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
+                                    #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+                                    #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
+                                    ship_states=[
+                                        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 10},
+                                        #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
+                                    ],
+                                    map_size=(width, height),
+                                    time_limit=1200.0,
+                                    ammo_limit_multiplier=random.choice([0]),
+                                    stop_if_no_ammo=False)
+        
+        benchmark_scenario = Scenario(name="Benchmark Scenario",
+                                        num_asteroids=100,
+                                        ship_states=[
+                                            {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
+                                        ],
+                                        map_size=(width, height),
+                                        seed=0,
+                                        time_limit=120)
+
+        pre = time.perf_counter()
+        if scenario is not None:
+            print(f"Evaluating scenario {scenario.name}")
+        else:
+            print("Evaluating random scenario")
+        profile = args.profile
+        # my_test_scenario
+        # ex_adv_four_corners_pt1 ex_adv_asteroids_down_up_pt1 ex_adv_asteroids_down_up_pt2 adv_multi_wall_bottom_hard_1 
+        # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
+        #state = 
+        #random.seed(randseed)
+        controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+        #controllers_used = [NeoController(), NeoController()]
+        #random.setstate(state)
+        #print(f"RNG State: {random.getstate()}")
+        #score, perf_data = game.run(scenario=ex_adv_four_corners_pt1, controllers=controllers_used)
+        #score, perf_data = game.run(scenario=ex_adv_four_corners_pt2, controllers=controllers_used)
+        if scenario is None:
+            scenario_to_run = rand_scenario
+        else:
+            scenario_to_run = scenario
+        if args.scenario:
+            eval(f"game.run(scenario={args.scenario}, controllers=controllers_used)")
+        else:
+            if profile:
+                cProfile.run(f'game.run(scenario=scenario_to_run, controllers=controllers_used)')
+            else:
+                score, perf_data = game.run(scenario=scenario_to_run, controllers=controllers_used)
+
+        # Print out some general info about the result
+        if score:
+            asts_hit = [team.asteroids_hit for team in score.teams]
+            color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
+            color_print(score.stop_reason, 'green')
+            color_print('Asteroids hit: ' + str(asts_hit), 'green')
+            team_1_hits += asts_hit[0]
+            if len(asts_hit) > 1:
+                team_2_hits += asts_hit[1]
+            if len(asts_hit) > 1:
+                if asts_hit[0] > asts_hit[1]:
+                    team_1_wins += 1
+                elif asts_hit[0] < asts_hit[1]:
+                    team_2_wins += 1
+            else:
                 team_1_wins += 1
-            elif asts_hit[0] < asts_hit[1]:
-                team_2_wins += 1
-        else:
-            team_1_wins += 1
-        team_deaths = [team.deaths for team in score.teams]
-        team_1_deaths += team_deaths[0]
-        if len(team_deaths) > 1:
-            team_2_deaths += team_deaths[1]
-        color_print('Deaths: ' + str(team_deaths), 'green')
-        if team_deaths[0] >= 1:
-            died = True
-        else:
-            died = False
-        color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
-        color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
-        if score.teams[0].accuracy < 1:
-            color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
-            missed = True
-        else:
-            missed = False
-    print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
-    print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
-    print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
-if missed:
-    color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
+            team_deaths = [team.deaths for team in score.teams]
+            team_1_deaths += team_deaths[0]
+            if len(team_deaths) > 1:
+                team_2_deaths += team_deaths[1]
+            color_print('Deaths: ' + str(team_deaths), 'green')
+            if team_deaths[0] >= 1:
+                died = True
+            else:
+                died = False
+            color_print('Accuracy: ' + str([team.accuracy for team in score.teams]), 'green')
+            color_print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]), 'green')
+            if score.teams[0].accuracy < 1:
+                color_print('NEO MISSED SDIOFJSDI(FJSDIOJFIOSDJFIODSJFIOJSDIOFJSDIOFJOSDIJFISJFOSDJFOJSDIOFJOSDIJFDSJFI)SDFJHSUJFIOSJFIOSJIOFJSDIOFJIOSDFOSDF\n\n', 'red')
+                missed = True
+            else:
+                missed = False
+        print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
+        print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
+        print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
+    if missed:
+        color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
