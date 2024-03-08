@@ -1250,3 +1250,57 @@ split_forecasting = Scenario(
     map_size=(width, height),
     time_limit=15,
 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Maze parameters
+maze_rows, maze_columns = 8, 12
+asteroid_size = 3
+spacing_x = width // (maze_columns + 1)
+spacing_y = height // (maze_rows + 1)
+
+# Generate maze asteroid positions
+asteroid_states = []
+for row in range(1, maze_rows + 1):
+    for col in range(1, maze_columns + 1):
+        # Skip positions to create paths
+        if (row + col) % 3 != 0:  # Simple condition to create paths, adjust as needed
+            x_position = col * spacing_x
+            y_position = row * spacing_y
+            asteroid_states.append({
+                'position': (x_position, y_position),
+                'angle': 0,
+                'speed': random.uniform(0, 40),
+                'size': asteroid_size,
+            })
+
+# Player ship state
+ship_state = [{
+    'position': (width // 2, height - 100),  # Start position near the bottom center
+    'angle': 0,
+    'lives': 3,
+    'team': 1,
+    'mines_remaining': 5,  # Limited number of mines to clear the path
+}]
+
+# Creating the Minefield Maze scenario
+minefield_maze_scenario = Scenario(
+    name='minefield_maze_scenario',
+    asteroid_states=asteroid_states,
+    ship_states=ship_state,
+    map_size=(width, height),
+    time_limit=3600,
+    ammo_limit_multiplier=0,
+    stop_if_no_ammo=False,
+)

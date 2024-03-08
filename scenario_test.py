@@ -1,6 +1,5 @@
 import time
 import random
-#from neo_controller import NeoController
 from src.neo_controller import NeoController
 #from neo_controller import NeoController
 from smith_controller import Smith
@@ -113,24 +112,24 @@ xfc_2021_portfolio = [
     #accuracy_test_4,
     #accuracy_test_5,
     #accuracy_test_6,
-    accuracy_test_7,
-    accuracy_test_8,
-    accuracy_test_9,
-    accuracy_test_10,
-    wall_left_easy,
-    wall_right_easy,
-    wall_top_easy,
-    wall_bottom_easy,
-    ring_closing,
-    ring_static_left,
-    ring_static_right,
-    ring_static_top,
-    ring_static_bottom,
+    #accuracy_test_7,
+    #accuracy_test_8,
+    #accuracy_test_9,
+    #accuracy_test_10,
+    #wall_left_easy,
+    #wall_right_easy,
+    #wall_top_easy,
+    #wall_bottom_easy,
+    #ring_closing,
+    #ring_static_left,
+    #ring_static_right,
+    #ring_static_top,
+    #ring_static_bottom,
 
-    wall_right_wrap_1,
-    wall_right_wrap_2,
-    wall_right_wrap_3,
-    wall_right_wrap_4,
+    #wall_right_wrap_1,
+    #wall_right_wrap_2,
+    #wall_right_wrap_3,
+    #wall_right_wrap_4,
     wall_left_wrap_1,
     wall_left_wrap_2,
     wall_left_wrap_3,
@@ -146,30 +145,30 @@ xfc_2021_portfolio = [
 ]
 
 show_portfolio = [
-    threat_test_1,
-    threat_test_2,
-    threat_test_3,
-    threat_test_4,
-    accuracy_test_5,
-    accuracy_test_6,
-    accuracy_test_7,
-    accuracy_test_8,
-    accuracy_test_9,
-    accuracy_test_10,
-    wall_left_easy,
-    wall_right_easy,
-    wall_top_easy,
-    wall_bottom_easy,
-    ring_closing,
-    ring_static_left,
-    ring_static_right,
-    ring_static_top,
-    ring_static_bottom,
-    wall_right_wrap_3,
-    wall_right_wrap_4,
-    wall_left_wrap_3,
-    wall_left_wrap_4,
-    wall_top_wrap_3,
+    #threat_test_1,
+    #threat_test_2,
+    #threat_test_3,
+    #threat_test_4,
+    #accuracy_test_5,
+    #accuracy_test_6,
+    #accuracy_test_7,
+    #accuracy_test_8,
+    #accuracy_test_9,
+    #accuracy_test_10,
+    #wall_left_easy,
+    #wall_right_easy,
+    #wall_top_easy,
+    #wall_bottom_easy,
+    #ring_closing,
+    #ring_static_left,
+    #ring_static_right,
+    #ring_static_top,
+    #ring_static_bottom,
+    #wall_right_wrap_3,
+    #wall_right_wrap_4,
+    #wall_left_wrap_3,
+    #wall_left_wrap_4,
+    #wall_top_wrap_3,
     wall_top_wrap_4,
     wall_bottom_wrap_3,
     wall_bottom_wrap_4,
@@ -197,22 +196,22 @@ alternate_scenarios = [
 ]
 
 xfc2023 = [
-    ex_adv_four_corners_pt1,
-    ex_adv_four_corners_pt2,
-    ex_adv_asteroids_down_up_pt1,
-    ex_adv_asteroids_down_up_pt2,
-    ex_adv_direct_facing,
-    ex_adv_two_asteroids_pt1,
-    ex_adv_two_asteroids_pt2,
-    ex_adv_ring_pt1,
-    adv_random_big_1,
-    adv_random_big_2,
-    adv_random_big_3,
-    adv_random_big_4,
-    adv_multi_wall_bottom_hard_1,
+    #ex_adv_four_corners_pt1,
+    #ex_adv_four_corners_pt2,
+    #ex_adv_asteroids_down_up_pt1,
+    #ex_adv_asteroids_down_up_pt2,
+    #ex_adv_direct_facing,
+    #ex_adv_two_asteroids_pt1,
+    #ex_adv_two_asteroids_pt2,
+    #ex_adv_ring_pt1,
+    #adv_random_big_1,
+    #adv_random_big_2,
+    #adv_random_big_3,
+    #adv_random_big_4,
+    #adv_multi_wall_bottom_hard_1,
     adv_multi_wall_right_hard_1,
     adv_multi_ring_closing_left,
-    adv_multi_ring_closing_right,
+    #adv_multi_ring_closing_right,
     adv_multi_two_rings_closing,
     avg_multi_ring_closing_both2,
     adv_multi_ring_closing_both_inside,
@@ -259,10 +258,11 @@ team_2_wins = 0
 #while True:
 #random.seed(1)
 #for sc in xfc2023:
-#for _ in range(1):
+for _ in range(1):
 #while died or not missed:
 #for sc in xfc_2021_portfolio:
-while True:
+#while True:
+#for sc in xfc2023:
     iterations += 1
     if args.seed is not None:
         randseed = args.seed
@@ -289,8 +289,8 @@ while True:
                                 #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                 #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                    {'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
+                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 10},
+                                    #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
                                 ],
                                 map_size=(width, height),
                                 time_limit=1200,
@@ -308,7 +308,7 @@ while True:
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
     #random.seed(randseed)
-    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [NeoController(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
@@ -322,7 +322,7 @@ while True:
             #random.seed(randseed)
             #print(random.getstate())
             score, perf_data = game.run(scenario=sc, controllers=controllers_used)
-    except:
+    except NameError:
         print(f"Running single scenario")
         if profile:
             #random.seed(randseed)
