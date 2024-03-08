@@ -4,6 +4,7 @@ from src.neo_controller import NeoController
 #from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
+from benchmark_controller import BenchmarkController
 import numpy as np
 import cProfile
 import sys
@@ -297,6 +298,15 @@ for _ in range(1):
                                 ammo_limit_multiplier=random.choice([0]),
                                 stop_if_no_ammo=False)
     
+    benchmark_scenario = Scenario(name="Benchmark Scenario",
+                                    num_asteroids=100,
+                                    ship_states=[
+                                        {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
+                                    ],
+                                    map_size=(width, height),
+                                    seed=0,
+                                    time_limit=120)
+
     pre = time.perf_counter()
     try:
         print(f"Evaluating scenario {sc.name}")
@@ -354,7 +364,7 @@ for _ in range(1):
     ring_static_right,
     ring_static_top,
     ring_static_bottom,'''
-            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
+            score, perf_data = game.run(scenario=benchmark_scenario, controllers=[BenchmarkController()])
     #score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
