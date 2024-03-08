@@ -1,7 +1,7 @@
 import time
 import random
-from src.neo_controller import NeoController
-#from neo_controller import NeoController
+#from src.neo_controller import NeoController
+from neo_controller import NeoController
 from smith_controller import Smith
 from baby_neo_controller import BabyNeoController
 from benchmark_controller import BenchmarkController
@@ -294,7 +294,7 @@ for _ in range(1):
                                     #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
                                 ],
                                 map_size=(width, height),
-                                time_limit=1200,
+                                time_limit=1200.0,
                                 ammo_limit_multiplier=random.choice([0]),
                                 stop_if_no_ammo=False)
     
@@ -318,7 +318,7 @@ for _ in range(1):
     # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
     #state = 
     #random.seed(randseed)
-    controllers_used = [NeoController(), NullController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+    controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
     #controllers_used = [NeoController(), NeoController()]
     #random.setstate(state)
     #print(f"RNG State: {random.getstate()}")
@@ -364,7 +364,7 @@ for _ in range(1):
     ring_static_right,
     ring_static_top,
     ring_static_bottom,'''
-            score, perf_data = game.run(scenario=benchmark_scenario, controllers=[BenchmarkController()])
+            score, perf_data = game.run(scenario=rand_scenario, controllers=controllers_used)
     #score, perf_data = game.run(scenario=wonky_ring, controllers=controllers_used)
     #print(f"Perf data: {perf_data}")
     # Print out some general info about the result
