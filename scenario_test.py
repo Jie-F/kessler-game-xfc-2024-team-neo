@@ -249,7 +249,21 @@ custom_scenarios = [
     intersecting_lines_scenario,
     exploding_grid_scenario,
     grid_formation_explosion_scenario,
-    aspect_ratio_grid_formation_scenario
+    aspect_ratio_grid_formation_scenario,
+    adv_asteroid_stealing,
+    wrapping_nightmare,
+    wrapping_nightmare_fast,
+    purgatory,
+    cross,
+    fight_for_asteroid,
+    shot_pred_test,
+    shredder,
+    diagonal_shredder,
+    out_of_bound_mine,
+    explainability_1,
+    explainability_2,
+    split_forecasting,
+    minefield_maze_scenario
 ]
 
 
@@ -308,7 +322,7 @@ while True:
                                         #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
                                     ],
                                     map_size=(width, height),
-                                    time_limit=15.0,
+                                    time_limit=240.0,
                                     ammo_limit_multiplier=random.choice([0]),
                                     stop_if_no_ammo=False)
         
@@ -392,4 +406,6 @@ while True:
     if args.once:
         break
     #break
-
+    if iterations == 0:
+        print("No scenario to run!")
+        break

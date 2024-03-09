@@ -1,9 +1,13 @@
-# Neo
+# _____   __           
+# ___  | / /__________ 
+# __   |/ /_  _ \  __ \
+# _  /|  / /  __/ /_/ /
+# /_/ |_/  \___/\____/ 
+
 # XFC 2024 Kessler controller
 # Jie Fan (jie.f@pm.me)
 # Feel free to reach out if you have questions or want to discuss anything!
 
-# TODO: ASCII art for ship
 # TODO: Show stats at the end
 # TODO: Verify that frontrun protection's working, because it still feels like it's not totally working!
 # TODO: Make it so during a respawn maneuver, if I'm no longer gonna hit anything, I can begin to shoot!
@@ -3016,7 +3020,7 @@ class Simulation():
         # overall_fitness = weighted_average(fitness_breakdown, fitness_weights)
         # print(fitness_breakdown, fitness_weights)
         overall_fitness = weighted_harmonic_mean(fitness_breakdown, fitness_weights, 1.0)
-        assert 0.0 <= overall_fitness <= 1.0
+        assert 0.0 <= overall_fitness <= 1.0 or asteroids_fitness < 0.0, f"Overall fitness of {overall_fitness} is out of range! Fitness breakdown: {fitness_breakdown}"
         # self.explanation_messages.append(f"Chose the sim with fitnesses: {overall_fitness=}, {asteroid_safe_time_fitness=}, {mine_safe_time_fitness=}, {asteroids_fitness=}, {sequence_length_fitness=}, {other_ship_proximity_fitness=}, {crash_fitness=}, {asteroid_aiming_cone_fitness=}")
         if overall_fitness > 0.9:
             self.safety_messages.append("I'm safe and chilling")
@@ -5395,7 +5399,7 @@ class NeoController(KesslerController):
                 }
                 if recovering_from_crash:
                     print(f"Recovering from crash! Setting the base gamestate. The timestep is {self.current_timestep}")
-                assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state'].is_respawning
+                assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state'].is_respawning, f"{self.game_state_to_base_planning['ship_respawn_timer']=} {self.game_state_to_base_planning['ship_state'].is_respawning=}"
             # No matter what, spend some time evaluating the best action from the next predicted state
             # When no ships are around, the stationary targetting is the first thing done
             if not self.sims_this_planning_period:

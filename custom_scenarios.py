@@ -1229,8 +1229,8 @@ explainability_1 = Scenario(
     time_limit=15,
 )
 
-explainability_1 = Scenario(
-    name='explainability_1',
+explainability_2 = Scenario(
+    name='explainability_2',
     asteroid_states=[{'position': (width/100, height*99/100), 'speed': 350, 'angle': -math.degrees(math.atan(height/width)), 'size': 1},
                      {'position': (width*5/100, height*5/100), 'speed': 0, 'angle': 0, 'size': 4}],
     ship_states=[{'position': (width/2, height/2), 'angle': 180+90+0*math.degrees(math.atan(height/width)), 'lives': 3, 'team': 1, 'mines_remaining': 3}],

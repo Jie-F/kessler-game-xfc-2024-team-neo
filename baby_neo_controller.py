@@ -259,7 +259,7 @@ def calculate_interception(ship_pos_x, ship_pos_y, asteroid_pos_x, asteroid_pos_
     # Discriminant of the quadratic formula b^2-4ac
     asteroid_dist = math.sqrt((ship_pos_x - asteroid_pos_x)**2 + (ship_pos_y - asteroid_pos_y)**2)
     targ_det = (-2 * asteroid_dist * asteroid_vel * cos_my_theta2)**2 - (4*(asteroid_vel**2 - bullet_speed**2) * asteroid_dist**2)
-    if targ_det < 0:
+    if targ_det < 0 or (2 * (asteroid_vel**2 - bullet_speed**2)) == 0.0:
         # There is no intercept. Return a fake intercept
         return 100000, 100000, -100, -100
     # Combine the Law of Cosines with the quadratic formula for solve for intercept time. Remember, there are two values produced.
