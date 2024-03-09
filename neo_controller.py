@@ -8,40 +8,39 @@
 # TODO: Verify that frontrun protection's working, because it still feels like it's not totally working!
 # TODO: Make it so during a respawn maneuver, if I'm no longer gonna hit anything, I can begin to shoot!
 # TODO: Use the tolerance in the shot for the target selection so I don't just aim for the center all the time
-# TODO: Add error handling as a catch-all
+# KINDA DONE: Add error handling as a catch-all
 # TODO: Analyze each base state, and store analysis results. Like the heuristic FIS, except use more random search. Density affects the movement speed and cruise timesteps. Tune stuff much better.
 # TODO: Add error checks, so that if Neo thinks its done but there's still asteroids left, it'll realize that and re-ingest the updated state and finish off its job. This should NEVER happen though, but in the 1/1000000 chance a new bug happens during the competition, this would catch it.
-# TODO: Tune gc to maybe speed stuff up
-# TODO: Match collision checks with Kessler, including <= vs <
+# DONE: Tune gc to maybe speed stuff up
+# DONE: Match collision checks with Kessler, including <= vs <
 # TODO: Add iteration boosting algorithm to do more iterations in critical moments
-# TODO: If we're chilling, have mines and lives, go and do some damage!
-# TODO: Optimally, the target selection will consider mines blowing up asteroids, and having forecasted asteroids there. But this is a super specific condition and it's very complex to implement correctly, so maybe let's just skip this lol. It's probably not worth spending 50 hours implementing something that will rarely come up, and there's plenty of other asteroids I can shoot, and not just ones coming off of a mine blast.
-# TODO: Remove unnecessary class attributes such as ship thrust range, asteroid mass, to speed up class creation and copying
-# TODO: Differentiate between my mine and adversary's mine, to know whether to shoot size 1's or not
+# DONE: If we're chilling, have mines and lives, go and do some damage!
+# WON'T FIX: Optimally, the target selection will consider mines blowing up asteroids, and having forecasted asteroids there. But this is a super specific condition and it's very complex to implement correctly, so maybe let's just skip this lol. It's probably not worth spending 50 hours implementing something that will rarely come up, and there's plenty of other asteroids I can shoot, and not just ones coming off of a mine blast.
+# WON'T FIX: Remove unnecessary class attributes such as ship thrust range, asteroid mass, to speed up class creation and copying
+# DONE: Differentiate between my mine and adversary's mine, to know whether to shoot size 1's or not
 # TODO: Mine FIS currently doesn't take into account if an asteroid will ALREADY get hit by a mine, and drop another one anyway
-# TODO: When validating a sim is good when there's another ship, make sure the shots hit! The other ship might have shot those asteroids already.
+# DONE: When validating a sim is good when there's another ship, make sure the shots hit! The other ship might have shot those asteroids already.
 
 import random
 import math
 from math import sin, cos, sqrt, floor, ceil, radians, degrees, atan2, asin, pi, dist, isnan
-import heapq
 import time
 import bisect
 from functools import lru_cache
-import copy
-from typing import Any, Optional, Callable, TypedDict, cast, Final, Sequence, Iterable, Generator
+from typing import Any, Optional, TypedDict, cast, Final, Sequence, Iterable
+from collections import deque
 import gc
 from itertools import chain
 #gc.set_debug(gc.DEBUG_STATS)
 gc.set_threshold(50000)
 #gc.disable()
-# import scipy
+
 import numpy as np
 import matplotlib.pyplot as plt  # type: ignore[import-untyped]
 import matplotlib.patches as patches  # type: ignore[import-untyped]
 from skfuzzy import control, trimf  # type: ignore[import-untyped]
 
-from src.kesslergame import KesslerController
+from kesslergame import KesslerController  # type: ignore[import-untyped]
 
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
@@ -51,25 +50,14 @@ DEBUG_MODE: Final = False
 PRINT_EXPLANATIONS: Final = True
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final = 6.0  # Repeated messages within this time window get silenced
 
-# State dumping for debug
-REALITY_STATE_DUMP: Final = False
-SIMULATION_STATE_DUMP: Final = False
-KEY_STATE_DUMP: Final = False
-GAMESTATE_PLOTTING = False  # For whatever reason having this set to final gives a mypyc compilation error
-BULLET_SIM_PLOTTING: Final = False
-NEXT_TARGET_PLOTTING = False  # For whatever reason having this set to final gives a mypyc compilation error
-MANEUVER_SIM_PLOTTING: Final = False
-START_GAMESTATE_PLOTTING_AT_SECOND: Final = 0  # 160//30
-NEW_TARGET_PLOT_PAUSE_TIME_S: Final = 0.5
-SLOW_DOWN_GAME_AFTER_SECOND: Final = math.inf
-SLOW_DOWN_GAME_PAUSE_TIME: Final = 2.0
-
 # These can trade off to get better performance at the expense of safety
-ENABLE_ASSERTIONS: Final = True
-PRUNE_SIM_STATE_SEQUENCE: Final = True
-VALIDATE_SIMULATED_KEY_STATES: Final = False
-VALIDATE_ALL_SIMULATED_STATES: Final = False
-VERIFY_AST_TRACKING: Final = False
+STATE_CONSISTENCY_CHECK_AND_RECOVERY = False  # Enable this if we want to be able to recover from controller exceptions
+CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
+ENABLE_ASSERTIONS: Final = True  # Miscellaneous sanity checks throughout the code
+PRUNE_SIM_STATE_SEQUENCE: Final = True  # Good to have on, because we don't really need the full state
+VALIDATE_SIMULATED_KEY_STATES: Final = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_ALL_SIMULATED_STATES: Final = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
+VERIFY_AST_TRACKING: Final = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -107,6 +95,19 @@ MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS: Final = 150
 MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 2
 MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
 MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS: Final = 10
+
+# State dumping for debug
+REALITY_STATE_DUMP: Final = False  # Dump each game state to json
+SIMULATION_STATE_DUMP: Final = False  # Dump each simulated game state to json
+KEY_STATE_DUMP: Final = False  # Dump only key (base) states to json
+GAMESTATE_PLOTTING = False  # For whatever reason having this set to final gives a mypyc compilation error
+BULLET_SIM_PLOTTING: Final = False
+NEXT_TARGET_PLOTTING = False  # For whatever reason having this set to final gives a mypyc compilation error
+MANEUVER_SIM_PLOTTING: Final = False
+START_GAMESTATE_PLOTTING_AT_SECOND: Final = 0
+NEW_TARGET_PLOT_PAUSE_TIME_S: Final = 0.5
+SLOW_DOWN_GAME_AFTER_SECOND: Final = math.inf
+SLOW_DOWN_GAME_PAUSE_TIME: Final = 2.0
 
 assert MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS >= MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS
 assert MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS >= MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS
@@ -3745,7 +3746,10 @@ class Simulation():
     def update(self, thrust: float = 0.0, turn_rate: float = 0.0, fire: Optional[bool] = None, whole_move_sequence: Optional[list[Action]] = None, wait_out_mines: bool = False) -> bool:
         global total_sim_timesteps
         total_sim_timesteps += 1
-        # This is an optimized simulation of what kessler_game.py does, and should match exactly its behavior
+        #if random.random() < 0.002:
+        #    raise Exception("Bad luck exception!")
+
+        # This should exactly match what kessler_game.py does.
         # Being even one timestep off is the difference between life and death!!!
         return_value: Optional[bool] = None
         '''
@@ -4351,7 +4355,7 @@ class NeoController(KesslerController):
         # DO NOT OVERWRITE self.ship_id. That will cause the controller to break, since Kessler manages that itself. If we want to track our ship id, use a different variable name.
         self.ship_id_internal: int = -1
         self.current_timestep: int = -1
-        self.action_queue: list[tuple[int, float, float, bool, bool]] = []  # This will become our heap
+        self.action_queue: deque[tuple[int, float, float, bool, bool]] = deque()
         self.game_state_plotter: Optional[GameStatePlotter] = None
         self.actioned_timesteps: set[int] = set()
         self.sims_this_planning_period: list[dict[str, Any]] = []  # The first sim in the list is stationary targetting, and the rest is maneuvers
@@ -4365,7 +4369,7 @@ class NeoController(KesslerController):
         self.set_of_base_gamestate_timesteps: set[int] = set()
         self.base_gamestates: dict[int, Any] = {}  # Key is timestep, value is the state
         self.other_ships_exist: bool = False
-        self.reality_move_sequence: list[dict[str, Any]] = []
+        #self.reality_move_sequence: list[dict[str, Any]] = []
         self.simulated_gamestate_history: dict[int, SimState] = {}
         self.lives_remaining_that_we_did_respawn_maneuver_for: set[int] = set()
         self.last_timestep_ship_is_respawning = False
@@ -4403,8 +4407,7 @@ class NeoController(KesslerController):
         # aggression = control.Consequent(np.arange(0, 1, 1), 'asteroid_growth_factor')
 
     def enqueue_action(self, timestep: int, thrust: float = 0.0, turn_rate: float = 0.0, fire: bool = False, drop_mine: bool = False) -> None:
-        # first_nonnone_index is just a unique dummy variable since I don't want my none values being compared and crashing my script ughh
-        heapq.heappush(self.action_queue, (timestep, thrust, turn_rate, fire, drop_mine))
+        self.action_queue.append((timestep, thrust, turn_rate, fire, drop_mine))
 
     def performance_controller_enter(self) -> None:
         # Called when actions() is called
@@ -5094,16 +5097,30 @@ class NeoController(KesslerController):
     def actions(self, ship_state_dict: dict[str, Any], game_state_dict: dict[str, Any]) -> tuple[float, float, bool, bool]:
         # Method processed each time step by this controller.
         self.current_timestep += 1
-        #print(game_state_dict['time_limit'])
+        recovering_from_crash = False
+        #print(f"Calling Neo's actions() on timestep {game_state_dict['sim_frame']}, and Neo thinks it's timestep {self.current_timestep}")
+        #print(self.action_queue)
         ship_state = create_ship_from_dict(cast(ShipDict, ship_state_dict))
         game_state = create_game_state_from_dict(cast(GameStateDict, game_state_dict))
-        if not game_state.sim_frame == self.current_timestep:
-            # debug_print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
-            self.reset()
-            self.current_timestep += 1
-            if not game_state.sim_frame == self.current_timestep:
-                print(f"Setting timestep to match the passed-in game state's nonzero starting timestep of: {game_state.sim_frame}")
-                self.current_timestep = game_state.sim_frame
+
+        if CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS or STATE_CONSISTENCY_CHECK_AND_RECOVERY:
+            timestep_mismatch: bool = not game_state.sim_frame == self.current_timestep
+            # Amid running the scenario, the action queue is desynced with our timestep. This may be caused by an exception that was raised in Neo which was caught by Kessler, so the actions for this timestep were never consumed.
+            action_queue_desync: bool = len(self.action_queue) > 0 and self.action_queue[0][0] != self.current_timestep
+            planning_base_state_outdated: bool = self.game_state_to_base_planning is not None and self.game_state_to_base_planning['timestep'] < self.current_timestep
+            if timestep_mismatch or (STATE_CONSISTENCY_CHECK_AND_RECOVERY and (action_queue_desync or planning_base_state_outdated)):
+                if timestep_mismatch and not (action_queue_desync or planning_base_state_outdated):
+                    print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
+                elif timestep_mismatch:
+                    print(f"Neo didn't start from time 0. Was there a controller exception? Setting timestep to match the passed-in game state's nonzero starting timestep of: {game_state.sim_frame}")
+                self.reset()
+                self.current_timestep += 1
+                if STATE_CONSISTENCY_CHECK_AND_RECOVERY and (action_queue_desync or planning_base_state_outdated):
+                    print("Neo probably crashed or something because the internal state is all messed up. Welp, let's try this again.")
+                    recovering_from_crash = True
+                if timestep_mismatch:
+                    self.current_timestep = game_state.sim_frame
+
         if self.current_timestep == 0:
             # Only do these on the first timestep
             inspect_scenario(game_state, ship_state)
@@ -5262,9 +5279,9 @@ class NeoController(KesslerController):
             # No other ships exist, we're deterministically planning the future
             if not self.game_state_to_base_planning:
                 # set up the actions planning
-                if ENABLE_ASSERTIONS:
-                    assert self.current_timestep == 0
-                if self.current_timestep == 0:
+                if ENABLE_ASSERTIONS and not recovering_from_crash:
+                    assert self.current_timestep == 0, "Why is the game state to plan empty when we're not on timestep 0?!"
+                if self.current_timestep == 0 or recovering_from_crash:
                     iterations_boost = True
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
@@ -5274,11 +5291,13 @@ class NeoController(KesslerController):
                     'ship_respawn_timer': 0,
                     'asteroids_pending_death': {},
                     'forecasted_asteroid_splits': [],
-                    'last_timestep_fired': INT_NEG_INF,  # self.current_timestep - 1, # TODO: CHECK EDGECASE, may need to restore to larger number to be safe
-                    'last_timestep_mined': INT_NEG_INF,
+                    'last_timestep_fired': INT_NEG_INF if not recovering_from_crash else self.current_timestep - 1,  # self.current_timestep - 1, # TODO: CHECK EDGECASE, may need to restore to larger number to be safe
+                    'last_timestep_mined': INT_NEG_INF if not recovering_from_crash else self.current_timestep - 1,
                     'mine_positions_placed': set(),
                     'fire_next_timestep_flag': False,
                 }
+                if recovering_from_crash:
+                    print(f"Recovering from crash! Setting the base gamestate. The timestep is {self.current_timestep}")
                 assert bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state'].is_respawning
             # No matter what, spend some time evaluating the best action from the next predicted state
             # When no ships are around, the stationary targetting is the first thing done
@@ -5291,29 +5310,34 @@ class NeoController(KesslerController):
                     # print("Planning extra iterations to reach minimum threshold!")
                     self.plan_action(self.other_ships_exist, True, False, False)
                 # Nothing's in the action queue. Evaluate the current situation and figure out the best course of action
-                assert self.current_timestep == self.game_state_to_base_planning['timestep']
+                if not self.current_timestep == self.game_state_to_base_planning['timestep'] and not recovering_from_crash:
+                    raise Exception(f"The actions queue is empty, however the base state's timestep {self.game_state_to_base_planning['timestep']} doesn't match the current timestep {self.current_timestep}! That's weird.")
                 # debug_print("Decide the next action.")
                 self.decide_next_action(game_state, ship_state)
 
         # Execute the actions in the queue for this timestep
-
         if self.action_queue and self.action_queue[0][0] == self.current_timestep:
-            _, thrust, turn_rate, fire, drop_mine = heapq.heappop(self.action_queue)
+            _, thrust, turn_rate, fire, drop_mine = self.action_queue.popleft()
+        else:
+            print(f"WTF, sequence error on ts {self.current_timestep}!")
+            print(self.action_queue)
+            thrust, turn_rate, fire, drop_mine = 0.0, 0.0, False, False
 
         # The next action in the queue is for a future timestep. All actions for this timestep are processed.
 
-        # Bounds check the stuff before the Kessler code complains to me about it
-        if thrust < -SHIP_MAX_THRUST or thrust > SHIP_MAX_THRUST:
-            thrust = min(max(-SHIP_MAX_THRUST, thrust), SHIP_MAX_THRUST)
-            raise Exception("Dude the thrust is too high, go fix your code >:(")
-        if turn_rate < -SHIP_MAX_TURN_RATE or turn_rate > SHIP_MAX_TURN_RATE:
-            turn_rate = min(max(-SHIP_MAX_TURN_RATE, turn_rate), SHIP_MAX_TURN_RATE)
-            raise Exception("Dude the turn rate is too high, go fix your code >:(")
-        if fire and not ship_state.can_fire:
-            self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})
-            # debug_print(self.reality_move_sequence)
-            raise Exception("Why are you trying to fire when you haven't waited out the cooldown yet?")
-        # debug_print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust}, turn_rate: {turn_rate}, fire: {fire}, drop_mine: {drop_mine}")
+        if ENABLE_ASSERTIONS:
+            # Bounds check the stuff before the Kessler code complains to me about it
+            if thrust < -SHIP_MAX_THRUST or thrust > SHIP_MAX_THRUST:
+                thrust = min(max(-SHIP_MAX_THRUST, thrust), SHIP_MAX_THRUST)
+                raise Exception("Dude the thrust is too high, go fix your code >:(")
+            if turn_rate < -SHIP_MAX_TURN_RATE or turn_rate > SHIP_MAX_TURN_RATE:
+                turn_rate = min(max(-SHIP_MAX_TURN_RATE, turn_rate), SHIP_MAX_TURN_RATE)
+                raise Exception("Dude the turn rate is too high, go fix your code >:(")
+            if fire and not ship_state.can_fire:
+                #self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})
+                # debug_print(self.reality_move_sequence)
+                raise Exception("Why are you trying to fire when you haven't waited out the cooldown yet?")
+            # debug_print(f"Inputs on timestep {self.current_timestep} - thrust: {thrust}, turn_rate: {turn_rate}, fire: {fire}, drop_mine: {drop_mine}")
 
         if self.current_timestep > SLOW_DOWN_GAME_AFTER_SECOND*FPS:
             time.sleep(SLOW_DOWN_GAME_PAUSE_TIME)
@@ -5328,15 +5352,6 @@ class NeoController(KesslerController):
             'asteroids': game_state.asteroids,
             'bullets': game_state.bullets,
         }
-        '''
-        global heuristic_fis_iterations
-        global heuristic_fis_total_fitness
-        global random_search_iterations
-        global random_search_total_fitness
-        '''
-        #if (heuristic_fis_iterations + random_search_iterations) % 50 == 0 and heuristic_fis_iterations != 0 and random_search_iterations != 0:
-        #    debug_print(f"Average heuristic fitness over {heuristic_fis_iterations} iterations: {heuristic_fis_total_fitness/heuristic_fis_iterations}")
-        #    debug_print(f"Average random fitness over {random_search_iterations} iterations: {random_search_total_fitness/random_search_iterations}")
 
         if REALITY_STATE_DUMP:
             append_dict_to_file(state_dump_dict, 'Reality State Dump.txt')
@@ -5372,7 +5387,7 @@ class NeoController(KesslerController):
                 print("Actual ship state:", ship_state)
                 print("\nSimulated ship state:", self.base_gamestates[self.current_timestep]['ship_state'])
             assert ship_states_match
-        self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})
+        #self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})
         #print(f"TS: {self.current_timestep}, Thrust: {thrust}, Turn Rate: {turn_rate}, Fire: {fire}, Drop Mine: {drop_mine}")
         self.performance_controller_exit()
         self.last_timestep_ship_is_respawning = ship_state.is_respawning

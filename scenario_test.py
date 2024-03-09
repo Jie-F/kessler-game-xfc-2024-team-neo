@@ -273,6 +273,8 @@ if args.portfolio is not None:
         case 'custom':
             selected_portfolio = custom_scenarios
 
+controllers_used = [NeoController(), BabyNeoController()]
+
 while True:
     for scenario in selected_portfolio[0 if not args.index else args.index:]:
         iterations += 1
@@ -329,7 +331,7 @@ while True:
         # closing_ring_scenario more_intense_closing_ring_scenario rotating_square_scenario falling_leaves_scenario shearing_pattern_scenario zigzag_motion_scenario
         #state = 
         #random.seed(randseed)
-        controllers_used = [NeoController(), BabyNeoController()] # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
+         # [ReplayController0(), ReplayController1()] GamepadController()])#, NeoController()])#, TestController()])GamepadController NeoController Neo
         #controllers_used = [NeoController(), NeoController()]
         #random.setstate(state)
         #print(f"RNG State: {random.getstate()}")
