@@ -32,6 +32,7 @@ parser.add_argument('-interp', action='store_true', help='Import the interpreted
 parser.add_argument('-scenario', type=str, help='Name of scenario to evaluate. Must be available in environment.')
 parser.add_argument('-portfolio', type=str, help='Name of portfolio to run')
 parser.add_argument('-index', type=int, help='Pick the starting index of the portfolio. Count from zero.')
+parser.add_argument('-once', action='store_true', help='Only do one iteration.')
 
 args = parser.parse_args()
 
@@ -307,7 +308,7 @@ while True:
                                         #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
                                     ],
                                     map_size=(width, height),
-                                    time_limit=1200.0,
+                                    time_limit=15.0,
                                     ammo_limit_multiplier=random.choice([0]),
                                     stop_if_no_ammo=False)
         
@@ -386,3 +387,9 @@ while True:
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
     if missed:
         color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
+        break
+
+    if args.once:
+        break
+    #break
+

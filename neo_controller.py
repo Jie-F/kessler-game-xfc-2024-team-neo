@@ -20,6 +20,7 @@
 # DONE: Differentiate between my mine and adversary's mine, to know whether to shoot size 1's or not
 # TODO: Mine FIS currently doesn't take into account if an asteroid will ALREADY get hit by a mine, and drop another one anyway
 # DONE: When validating a sim is good when there's another ship, make sure the shots hit! The other ship might have shot those asteroids already.
+# TODO: Try a wider random search for maneuvers
 
 import random
 import math
@@ -40,7 +41,7 @@ import matplotlib.pyplot as plt  # type: ignore[import-untyped]
 import matplotlib.patches as patches  # type: ignore[import-untyped]
 from skfuzzy import control, trimf  # type: ignore[import-untyped]
 
-from kesslergame import KesslerController  # type: ignore[import-untyped]
+from src.kesslergame import KesslerController  # type: ignore[import-untyped]
 
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
@@ -55,7 +56,7 @@ STATE_CONSISTENCY_CHECK_AND_RECOVERY = False  # Enable this if we want to be abl
 CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
 ENABLE_ASSERTIONS: Final = True  # Miscellaneous sanity checks throughout the code
 PRUNE_SIM_STATE_SEQUENCE: Final = True  # Good to have on, because we don't really need the full state
-VALIDATE_SIMULATED_KEY_STATES: Final = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_SIMULATED_KEY_STATES: Final = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
 VERIFY_AST_TRACKING: Final = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
@@ -87,7 +88,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.55
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 5
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
@@ -2280,15 +2281,15 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         theta += theta_0
         cos_theta = cos(theta)
         sin_theta = sin(theta)
-        denom_x = avx - vb*cos_theta
-        denom_y = avy - vb*sin_theta
-        if denom_x == 0.0 and denom_y == 0.0:
+        denominator_x = avx - vb*cos_theta
+        denominator_y = avy - vb*sin_theta
+        if denominator_x == 0.0 and denominator_y == 0.0:
             return math.inf
         # At least one of the denominators is nonzero, so if we choose the one with the larger magnitude, we'll avoid division by zero as well as get the more accurate answer
-        if abs(denom_x) > abs(denom_y):
-            t_bul = (vb*t_0*cos_theta - ax - avx*t_rot)/denom_x
+        if abs(denominator_x) > abs(denominator_y):
+            t_bul = (vb*t_0*cos_theta - ax - avx*t_rot)/denominator_x
         else:
-            t_bul = (vb*t_0*sin_theta - ay - avy*t_rot)/denom_y
+            t_bul = (vb*t_0*sin_theta - ay - avy*t_rot)/denominator_y
         return t_bul
 
     def bullet_travel_time_for_plot(theta: float) -> float:
@@ -2298,11 +2299,11 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         sin_theta = sin(theta)
         t_rot = rotation_time(theta - theta_0)
 
-        denom = avx*sin_theta - avy*cos_theta
-        if denom == 0.0:
+        denominator = avx*sin_theta - avy*cos_theta
+        if denominator == 0.0:
             return math.inf
         else:
-            return max(-200000.0, min(((cos_theta*(ay + avy*t_rot) - sin_theta*(ax + avx*t_rot))/denom)*100000.0, 200000.0))
+            return max(-200000.0, min(((cos_theta*(ay + avy*t_rot) - sin_theta*(ax + avx*t_rot))/denominator)*100000.0, 200000.0))
 
     def plot_function() -> None:
         naive_theta_ans_list = list(naive_desired_heading_calc(timesteps_until_can_fire))  # Assuming this function returns a list of angles
@@ -2502,10 +2503,9 @@ def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(aster
 
 
 def time_travel_asteroid(asteroid: Asteroid, timesteps: int, game_state: Optional[GameState] = None, wrap: bool = True) -> Asteroid:
-    # This modifies the original object instead of returning a copy!
+    asteroid = asteroid.copy()  # TODO: Unsure whether this copy is necessary
     if timesteps == 0:
         return asteroid
-    asteroid = asteroid.copy()  # TODO: Unsure whether this copy is necessary
     if wrap and game_state is not None:
         asteroid.position = ((asteroid.position[0] + asteroid.velocity[0]*timesteps*DELTA_TIME) % game_state.map_size[0], (asteroid.position[1] + asteroid.velocity[1]*timesteps*DELTA_TIME) % game_state.map_size[1])
     else:
@@ -2742,11 +2742,11 @@ class Simulation():
                 # TODO: See whether there's something wrong with counting the move sequence length in this. It might be fine to count it all, or maybe use a discount factor
                 # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
                 # asteroid_safe_time_fitness = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (4, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)  # sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
+                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.025, 1.4, 3.0)  # sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
             else:
                 # Maneuvering
                 # asteroid_safe_time_fitness = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (5, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)
+                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.025, 1.4, 3.0)
             return asteroid_safe_time_fitness
 
         def get_asteroid_shot_frequency_fitness(asteroids_shot: int, move_sequence_length_s: float) -> float:
@@ -3362,9 +3362,9 @@ class Simulation():
         if actual_asteroid_hit is not None:
             assert timesteps_until_bullet_hit_asteroid is not None
             actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state, True)
-            if not math.isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 >= FPS*self.game_state.time_limit:
+            if not math.isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > ceil(FPS*self.game_state.time_limit):
                 # Added one to the timesteps to prevent off by one :P
-                print('WITHHOLDING SHOT IN TARGET SELECTION BECAUSE SCENARIO IS ENDING')
+                #print('WITHHOLDING SHOT IN TARGET SELECTION BECAUSE SCENARIO IS ENDING')
                 self.fire_next_timestep_flag = False
                 sim_complete_without_crash = self.update(0.0, 0.0, False)
                 return sim_complete_without_crash
@@ -3479,7 +3479,8 @@ class Simulation():
             assert check_coordinate_bounds(self.game_state, ship_state.position[0], ship_state.position[1])
         if whole_move_sequence:
             bullet_sim_ship_state = self.get_ship_state()
-        bullet_created: bool = False
+        else:
+            bullet_sim_ship_state = None
         my_bullet: Optional[Bullet] = None
         ship_not_collided_with_asteroid: bool = True
         if skip_half_of_first_cycle:
@@ -3517,7 +3518,7 @@ class Simulation():
                         bullet_remove_idxs.append(b_ind)
                 if bullet_remove_idxs:
                     bullets = [bullet for idx, bullet in enumerate(bullets) if idx not in bullet_remove_idxs]
-                if bullet_created:
+                if my_bullet is not None:
                     assert my_bullet is not None
                     my_new_bullet_pos = (my_bullet.position[0] + my_bullet.velocity[0]*DELTA_TIME, my_bullet.position[1] + my_bullet.velocity[1]*DELTA_TIME)
                     if check_coordinate_bounds(self.game_state, my_new_bullet_pos[0], my_new_bullet_pos[1]):
@@ -3544,15 +3545,6 @@ class Simulation():
                 if check_coordinate_bounds(self.game_state, bullet_x, bullet_y):
                     vx = BULLET_SPEED*cos_heading
                     vy = BULLET_SPEED*sin_heading
-                    '''
-                    initial_timestep_fire_bullet: Bullet = {
-                        'position': (bullet_x, bullet_y),
-                        'velocity': (vx, vy),
-                        'heading': initial_ship_state.heading,
-                        'mass': BULLET_MASS,
-                        'tail_delta': (-BULLET_LENGTH*cos(radians(initial_ship_state.heading)), -BULLET_LENGTH*sin(radians(initial_ship_state.heading))),
-                    }
-                    '''
                     initial_timestep_fire_bullet = Bullet(
                         position=(bullet_x, bullet_y),
                         velocity=(vx, vy),
@@ -3562,7 +3554,7 @@ class Simulation():
                     )
                     bullets.append(initial_timestep_fire_bullet)
             # The new bullet we create will end up at the end of the list of bullets
-            if not bullet_created and timesteps_until_bullet_hit_asteroid + (-1 if not skip_half_of_first_cycle else 0) == fire_after_timesteps:
+            if my_bullet is None and timesteps_until_bullet_hit_asteroid + (-1 if not skip_half_of_first_cycle else 0) == fire_after_timesteps:
                 if ship_state is not None:
                     bullet_fired_from_ship_heading = ship_state.heading
                     bullet_fired_from_ship_position = ship_state.position
@@ -3579,15 +3571,6 @@ class Simulation():
                     return None, None, ship_not_collided_with_asteroid  # The bullet got shot into the void without hitting anything :(
                 vx = BULLET_SPEED*cos_heading
                 vy = BULLET_SPEED*sin_heading
-                '''
-                my_bullet = {
-                    'position': (bullet_x, bullet_y),
-                    'velocity': (vx, vy),
-                    'heading': bullet_fired_from_ship_heading,
-                    'mass': BULLET_MASS,
-                    'tail_delta': (-BULLET_LENGTH*cos_heading, -BULLET_LENGTH*sin_heading),
-                }
-                '''
                 my_bullet = Bullet(
                     position=(bullet_x, bullet_y),
                     velocity=(vx, vy),
@@ -3595,9 +3578,9 @@ class Simulation():
                     mass=BULLET_MASS,
                     tail_delta=(-BULLET_LENGTH*cos_heading, -BULLET_LENGTH*sin_heading)
                 )
-                bullet_created = True
             if whole_move_sequence:
                 assert current_move_index is not None
+                assert bullet_sim_ship_state is not None
                 if current_move_index + timesteps_until_bullet_hit_asteroid + (-1 if not skip_half_of_first_cycle else 0) < len(whole_move_sequence):
                     # Simulate ship dynamics, if we have the full future list of moves to go off of
                     thrust = whole_move_sequence[current_move_index + timesteps_until_bullet_hit_asteroid + (-1 if not skip_half_of_first_cycle else 0)].thrust
@@ -3632,7 +3615,7 @@ class Simulation():
             # Check bullet/asteroid collisions
             bullet_remove_idxs = []
             asteroid_remove_idxs: set[int] = set()
-            for b_idx, b in enumerate(chain(bullets, [my_bullet] if bullet_created and my_bullet is not None else [])):
+            for b_idx, b in enumerate(chain(bullets, [my_bullet] if my_bullet is not None else [])):
                 b_tail = (b.position[0] + b.tail_delta[0], b.position[1] + b.tail_delta[1])
                 for a_idx, a in enumerate(asteroids):
                     if a_idx in asteroid_remove_idxs:
@@ -3676,6 +3659,7 @@ class Simulation():
             # Check ship/asteroid collisions
             if ship_not_collided_with_asteroid:
                 if whole_move_sequence is not None:
+                    assert bullet_sim_ship_state is not None
                     ship_position = bullet_sim_ship_state.position
                 elif ship_state is not None:
                     ship_position = ship_state.position
@@ -3690,6 +3674,7 @@ class Simulation():
                             asteroids.extend(forecast_asteroid_ship_splits(asteroid, 0, (0.0, 0.0), self.game_state, True))
                         asteroid_remove_idxs.add(a_idx)
                         # Stop checking this ship's collisions. And also return saying the ship took damage!
+                        #print('ship ast coll!')
                         ship_not_collided_with_asteroid = False
                         break
             # Cull asteroids marked for removal
@@ -3861,7 +3846,7 @@ class Simulation():
                             # We can shoot this timestep! Loop through all asteroids and see which asteroids we can feasibly hit if we shoot at this angle, and take those and simulate with the bullet sim to see which we'll hit
                             # If mines exist, then we can't cull any asteroids since asteroids can be hit by the mine and get flung into the path of my shooting
                             max_interception_time = 0.0
-                            feasible_targets_list = []
+                            feasible_targets_list: list[Asteroid] = []
                             min_shot_heading_error_rad = math.inf # Keep track of this so we can begin turning roughly toward our next target
                             second_min_shot_heading_error_rad = math.inf
                             for asteroid in chain(self.game_state.asteroids, self.forecasted_asteroid_splits):
@@ -3900,8 +3885,9 @@ class Simulation():
                             if feasible_targets_list:
                                 # Use the bullet sim to confirm that this will hit something
                                 bullet_sim_timestep_limit = ceil(max_interception_time*FPS) + 1 # TODO: Might not need +1, but maybe it's safer to have it anyway at the cost of a tiny bit of performance
-                                actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit, feasible_targets_list if not self.game_state.mines else None)
+                                actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit)# TODO: REENABLE, feasible_targets_list if not self.game_state.mines else None)
                                 if actual_asteroid_hit is not None and ship_was_safe:
+                                    # Confirmed that the shot will land
                                     assert timesteps_until_bullet_hit_asteroid is not None
                                     actual_asteroid_hit_at_fire_time = time_travel_asteroid(actual_asteroid_hit, -timesteps_until_bullet_hit_asteroid, self.game_state, True)
                                     if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, actual_asteroid_hit_at_fire_time):
@@ -3914,9 +3900,9 @@ class Simulation():
                                         # The reason we add one to the timestep we track on, is that once we updated the asteroids' position in the update loop, it's technically the asteroid positions in the game state of the next timestep that gets passed to the controllers!
                                         # So the asteroid positions at a certain timestep is before their positions get updated. After updating, it's the next timestep.
                                         track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
-                                    if not math.isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 >= FPS*self.game_state.time_limit:
+                                    if not math.isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > ceil(FPS*self.game_state.time_limit):
                                         # Added one to the timesteps to prevent off by one :P
-                                        print(f'WITHHOLDING SHOT BECAUSE SCENARIO IS ENDING, self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 = {self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1}, {self.game_state.time_limit=}, {FPS*self.game_state.time_limit=}')
+                                        #print(f'WITHHOLDING SHOT BECAUSE SCENARIO IS ENDING, self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 = {self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1}, {self.game_state.time_limit=}, {FPS*self.game_state.time_limit=}')
                                         fire_this_timestep = False
                             if not math.isinf(second_min_shot_heading_error_rad):
                                 # Might as well start turning toward our next target!
@@ -3930,7 +3916,7 @@ class Simulation():
                                 turn_rate = altered_turn_command
                                 if whole_move_sequence:
                                     whole_move_sequence[self.future_timesteps].turn_rate = altered_turn_command
-                        else:
+                        elif timesteps_until_can_fire <= 2:
                             # if timesteps_until_can_fire == 1, then we're able to fire on the next timestep. We can use this timestep to aim for an asteroid, and we have 6 degrees we're able to turn our ship to do that
                             # On the next timestep, hopefully we'd be aimed at the asteroid and then the above if case will kick in and we will shoot it!
                             # This makes the shot efficiency during maneuvering a lot better because we're not only dodging, but we're also targetting and firing at the same time!
@@ -4491,20 +4477,21 @@ class NeoController(KesslerController):
             ship_line_x = []
             ship_line_y = []
             for state in state_seq:
-                ship_pos = state['ship_state'].position
+                ship_pos = state.ship_state.position
                 all_ship_pos.append(ship_pos)
                 ship_line_x.append(ship_pos[0])
                 ship_line_y.append(ship_pos[1])
             all_ship_x.append(ship_line_x)
             all_ship_y.append(ship_line_y)
-        if len(all_ship_x) > 130:
+        if len(all_ship_x) > 20:
             for i in range(len(all_ship_x)):
                 plt.scatter(all_ship_x[i], all_ship_y[i], linewidths=1.0, label=f"Maneuver {i}")
             plt.xlim(0, 1000)
             plt.ylim(0, 800)
             plt.show()
-        #time.sleep(10)
         '''
+        #time.sleep(10)
+        
         assert self.stationary_targetting_sim_index is not None or self.game_state_to_base_planning['ship_state'].bullets_remaining == 0 or self.game_state_to_base_planning['respawning'] or not is_close_to_zero(self.game_state_to_base_planning['ship_state'].speed)
         # print(f"Deciding next action, Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}")
         # Go through the list of planned maneuvers and pick the one with the best fitness function score
@@ -5050,6 +5037,7 @@ class NeoController(KesslerController):
                     pass
                 # print(f"Maneuver completed without crash: {maneuver_complete_without_crash}")
                 maneuver_fitness = maneuver_sim.get_fitness()
+                #print(f"Maneuver fitness: {maneuver_fitness}, maneuver tuple: {random_ship_heading_angle=} {ship_cruise_speed=} {ship_accel_turn_rate=} {ship_cruise_timesteps=} {ship_cruise_turn_rate=}")
                 maneuver_fitness_breakdown = maneuver_sim.get_fitness_breakdown()
                 #post_fitness = maneuver_sim.get_fitness()
                 #print(f"{pre_fitness=} {pre_fitness_breakdown=}, {maneuver_fitness=} {maneuver_fitness_breakdown=}, {post_fitness=}")
