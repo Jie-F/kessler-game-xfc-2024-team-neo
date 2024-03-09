@@ -21,6 +21,8 @@
 # TODO: Mine FIS currently doesn't take into account if an asteroid will ALREADY get hit by a mine, and drop another one anyway
 # DONE: When validating a sim is good when there's another ship, make sure the shots hit! The other ship might have shot those asteroids already.
 # TODO: Try a wider random search for maneuvers
+# TODO: GA to beat the random maneuver search, and narrow down the search space. In crowded areas, don't cruise for as long, for example!
+# TODO: Do math to see whether asteroid and bullet will miss each other!
 
 import random
 import math
@@ -76,6 +78,9 @@ TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 12.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness)
 DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 15.0, 1.5, 0.5, 6.0, 10.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
+MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF: Final = 60.0
+MAX_CRUISE_TIMESTEPS = 30.0
+MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD: Final = 10
 
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # The reason we need this, is because without it, I'm checking whether I have the budget to do another iteration, but let's say I'm already taking 0 time. Kessler will pause for DELTA_TIME, taking up all the time, and I'd think I have no time to do anything!
@@ -88,7 +93,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.55
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 5
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
@@ -158,12 +163,16 @@ ASTEROIDS_HIT_VERY_GOOD: Final = 40
 ASTEROIDS_HIT_OKAY_CENTER: Final = 12
 
 # Dirty globals
+#total_abs_cruise_speed: float = SHIP_MAX_SPEED/2
+#total_cruise_timesteps: int = round(MAX_CRUISE_TIMESTEPS/2)
+#total_maneuvers_to_learn_from: int = 1
+abs_cruise_speeds: list[float] = [SHIP_MAX_SPEED/2]
+cruise_timesteps: list[int] = [round(MAX_CRUISE_TIMESTEPS/2)]
 #heuristic_fis_iterations = 0
 #heuristic_fis_total_fitness = 0.0
 #random_search_iterations = 0
 #random_search_total_fitness = 0.0
-
-total_sim_timesteps = 0
+total_sim_timesteps: int = 0
 #total_bullet_sim_timesteps = 0
 #total_bullet_sim_iterations = 0
 #update_ts_zero_count = 0
@@ -480,6 +489,27 @@ class GameStateDict(TypedDict):
     delta_time: float
     sim_frame: int
     time_limit: float
+
+class BasePlanningGameState(TypedDict):
+    timestep: int
+    respawning: bool
+    ship_state: Ship
+    game_state: GameState
+    ship_respawn_timer: float
+    asteroids_pending_death: dict[int, list[Asteroid]]
+    forecasted_asteroid_splits: list[Asteroid]
+    last_timestep_fired: int
+    last_timestep_mined: int
+    mine_positions_placed: set[tuple[float, float]]
+    fire_next_timestep_flag: bool
+
+class CompletedSimulation(TypedDict, total=False):
+    sim: 'Simulation'
+    fitness: float
+    fitness_breakdown: tuple[float, float, float, float, float, float, float, float, float]
+    action_type: str
+    state_type: str
+    maneuver_tuple: Optional[tuple[float, float, float, int, float]]
 
 '''
 class Target(TypedDict):
@@ -873,7 +903,7 @@ def linear(x: float, point1: tuple[float, float], point2: tuple[float, float]) -
         return y1 + (x - x1)*(y2 - y1)/(x2 - x1)
 
 
-def weighted_average(numbers: Sequence[float], weights: Optional[Sequence[float]] = None) -> float:
+def weighted_average(numbers: Sequence[float | int], weights: Optional[Sequence[float | int]] = None) -> float:
     """
     Calculate the weighted average of a list of numbers.
     If no weights are provided, the regular average is calculated.
@@ -2996,8 +3026,9 @@ class Simulation():
         # The overall_fitness is the fuzzy output. There's no need to defuzzify it since we're using this as a fitness value to rank the actions and future states
         return overall_fitness
 
-    def get_fitness_breakdown(self) -> tuple[float, float, float, float, float, float, float, float, float] | None:
+    def get_fitness_breakdown(self) -> tuple[float, float, float, float, float, float, float, float, float]:
         # This is used to get the individual fitnesses before they got aggregated into the one fitness that was returned.
+        assert self.fitness_breakdown is not None
         return self.fitness_breakdown
 
     def find_extreme_shooting_angle_error(self, asteroid_list: list[Target], threshold: float, mode: str = 'largest_below') -> Target | None:
@@ -3843,14 +3874,17 @@ class Simulation():
                     fire_this_timestep = False
                     if not self.halt_shooting:
                         if timesteps_until_can_fire == 0:
+                            #print(f"\ntimesteps_until_can_fire == 0, looping through ALL ASTS!")
                             # We can shoot this timestep! Loop through all asteroids and see which asteroids we can feasibly hit if we shoot at this angle, and take those and simulate with the bullet sim to see which we'll hit
                             # If mines exist, then we can't cull any asteroids since asteroids can be hit by the mine and get flung into the path of my shooting
                             max_interception_time = 0.0
-                            feasible_targets_list: list[Asteroid] = []
+                            culled_targets_for_simulation: list[Asteroid]
+                            culled_target_idxs_for_simulation: list[int] = []
+                            feasible_targets_exist: bool = False
                             min_shot_heading_error_rad = math.inf # Keep track of this so we can begin turning roughly toward our next target
                             second_min_shot_heading_error_rad = math.inf
-                            for asteroid in chain(self.game_state.asteroids, self.forecasted_asteroid_splits):
-                                # Loop through all asteroids and make sure at least one asteroid is a valid target
+                            for ast_idx, asteroid in enumerate(chain(self.game_state.asteroids, self.forecasted_asteroid_splits)):
+                                # Loop through ALL asteroids and make sure at least one asteroid is a valid target
                                 # Get the length of time the longest asteroid would take to hit, and that'll be the upper bound of the bullet sim's timesteps
                                 # Avoid shooting my size 1 asteroids that are about to get mined by my mine
                                 if asteroid.size == 1:
@@ -3861,20 +3895,33 @@ class Simulation():
                                             asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state, True)
                                             if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
                                                 continue
+                                if ast_idx < len(self.game_state.asteroids):
+                                    ast_angle = atan2(asteroid.position[1] - self.ship_state.position[1], asteroid.position[0] - self.ship_state.position[0])
+                                    if abs(angle_difference_deg(degrees(ast_angle), self.ship_state.heading)) <= MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF:
+                                        # We also want to add the surrounding asteroids into the bullet sim, just in case any of them aren't added later in the feasible shots
+                                        # The reasons for them not being added later, is that maybe we already shot at it, so we skipped over it.
+                                        # We should be including all the asteroids we shot at, but unfortunately even including all the asteroids in a cone doesn't guarantee that, so this system still isn't perfect!!
+                                        culled_target_idxs_for_simulation.append(ast_idx)
                                 check_next_asteroid = False
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state.map_size[0], self.game_state.map_size[1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
                                         if check_next_asteroid:
                                             break
                                         # Since we need to find the minimum shot heading errors, we can't break out of this loop early. We should just go through them all.
-                                        ast_angle = atan2(a.position[1] - self.ship_state.position[1], a.position[0] - self.ship_state.position[0])
-                                        if abs(angle_difference_deg(degrees(ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
+                                        unwrapped_ast_angle = atan2(a.position[1] - self.ship_state.position[1], a.position[0] - self.ship_state.position[0])
+                                        if abs(angle_difference_deg(degrees(unwrapped_ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
                                             continue
                                         for solution in calculate_interception(self.ship_state.position[0], self.ship_state.position[1], a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state):
                                             #update_ts_zero_count += 1
                                             feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception = solution
                                             if feasible and abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
-                                                feasible_targets_list.append(asteroid)
+                                                if ast_idx < len(self.game_state.asteroids):
+                                                    # Only add real asteroids to the set of asteroids we simulate! Don't simulate the asteroids that don't exist yet.
+                                                    #culled_targets_for_simulation.append(asteroid)
+                                                    if not culled_target_idxs_for_simulation or culled_target_idxs_for_simulation[-1] != ast_idx:
+                                                        culled_target_idxs_for_simulation.append(ast_idx)
+                                                feasible_targets_exist = True
+                                                #print(f"Adding feasible target idx {ast_idx}, while the max idx for a real ast is {len(self.game_state.asteroids) - 1}")
                                                 if interception_time > max_interception_time:
                                                     max_interception_time = interception_time
                                                 if abs(shot_heading_error_rad) < abs(min_shot_heading_error_rad):
@@ -3882,10 +3929,33 @@ class Simulation():
                                                     min_shot_heading_error_rad = shot_heading_error_rad
                                                 check_next_asteroid = True
                                                 break
-                            if feasible_targets_list:
+                            if feasible_targets_exist:
                                 # Use the bullet sim to confirm that this will hit something
+                                # There's technically a chance for culled_targets_for_simulation to be empty at this point, if we're purely shooting asteroids that haven't come into existence yet. In that case, this will detect that and will avoid doing the culling, and do the full sim. This should be rare.
+                                #culled_targets_for_simulation = [asteroid for ast_idx, asteroid in enumerate(self.game_state.asteroids) if ast_idx in culled_target_idxs_for_simulation]
+                                #print(f"{len(self.game_state.asteroids)=}, {len(culled_target_idxs_for_simulation)=}, ratio={len(self.game_state.asteroids)/len(culled_target_idxs_for_simulation)}")
+
+                                '''
+                                # Convert the list to a set to remove any duplicates
+                                unique_set = set(culled_target_idxs_for_simulation)
+
+                                # Convert the set back to a list
+                                unique_list = list(unique_set)
+
+                                # Sort both lists in ascending order
+                                unique_list.sort()
+
+                                # Verify that both lists are the same and their lengths are the same
+                                assert culled_target_idxs_for_simulation == unique_list, "Lists are not identical or contain duplicates"
+                                assert len(culled_target_idxs_for_simulation) == len(unique_list), "List lengths are not equal"
+                                '''
+
+                                culled_targets_for_simulation = [self.game_state.asteroids[ast_idx] for ast_idx in culled_target_idxs_for_simulation]
+                                if not culled_targets_for_simulation:
+                                    print("WARNING: culled_targets_for_simulation is empty, so I think this means we're purely shooting at forecasted asteroid splits. Doing the full sim with all the bullets without the culling.")
+                                    #raise Exception()
                                 bullet_sim_timestep_limit = ceil(max_interception_time*FPS) + 1 # TODO: Might not need +1, but maybe it's safer to have it anyway at the cost of a tiny bit of performance
-                                actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit)# TODO: REENABLE, feasible_targets_list if not self.game_state.mines else None)
+                                actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit, culled_targets_for_simulation if (culled_targets_for_simulation and not self.game_state.mines) else None)
                                 if actual_asteroid_hit is not None and ship_was_safe:
                                     # Confirmed that the shot will land
                                     assert timesteps_until_bullet_hit_asteroid is not None
@@ -3939,8 +4009,8 @@ class Simulation():
                                     for a in unwrap_asteroid(asteroid, self.game_state.map_size[0], self.game_state.map_size[1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON):
                                         if locked_in:
                                             break
-                                        ast_angle = atan2(a.position[1] - self.ship_state.position[1], a.position[0] - self.ship_state.position[0])
-                                        if abs(angle_difference_deg(degrees(ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
+                                        unwrapped_ast_angle = atan2(a.position[1] - self.ship_state.position[1], a.position[0] - self.ship_state.position[0])
+                                        if abs(angle_difference_deg(degrees(unwrapped_ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
                                             continue
                                         # Roughly predict the ship's position on the next timestep using its current heading. This isn't 100% correct but whatever, it's better than nothing.
                                         ship_pred_speed = self.ship_state.speed
@@ -4344,13 +4414,13 @@ class NeoController(KesslerController):
         self.action_queue: deque[tuple[int, float, float, bool, bool]] = deque()
         self.game_state_plotter: Optional[GameStatePlotter] = None
         self.actioned_timesteps: set[int] = set()
-        self.sims_this_planning_period: list[dict[str, Any]] = []  # The first sim in the list is stationary targetting, and the rest is maneuvers
+        self.sims_this_planning_period: list[CompletedSimulation] = []  # The first sim in the list is stationary targetting, and the rest is maneuvers
         self.best_fitness_this_planning_period: float = -math.inf
         self.best_fitness_this_planning_period_index: Optional[int] = None
         self.second_best_fitness_this_planning_period: float = -math.inf
         self.second_best_fitness_this_planning_period_index: Optional[int] = None
         self.stationary_targetting_sim_index: Optional[int] = None
-        self.game_state_to_base_planning: Optional[dict[str, Any]] = None
+        self.game_state_to_base_planning: Optional[BasePlanningGameState] = None
         self.base_gamestate_analysis: Optional[tuple[float, float, float, float, int, float, int, int]] = None
         self.set_of_base_gamestate_timesteps: set[int] = set()
         self.base_gamestates: dict[int, Any] = {}  # Key is timestep, value is the state
@@ -4373,6 +4443,16 @@ class NeoController(KesslerController):
         # Clear globals
         global explanation_messages_with_timestamps
         explanation_messages_with_timestamps.clear()
+        #global total_abs_cruise_speed
+        #total_abs_cruise_speed = SHIP_MAX_SPEED/2
+        #global total_cruise_timesteps
+        #total_cruise_timesteps = round(MAX_CRUISE_TIMESTEPS/2)
+        #global total_maneuvers_to_learn_from
+        #total_maneuvers_to_learn_from = 1
+        global abs_cruise_speeds, cruise_timesteps
+        abs_cruise_speeds = [SHIP_MAX_SPEED/2]
+        cruise_timesteps = [round(MAX_CRUISE_TIMESTEPS/2)]
+
 
     def finish_init(self, game_state: GameState, ship_state: Ship) -> None:
         # If we need the game state or ship state to finish init, we can use this function to do that
@@ -4505,6 +4585,7 @@ class NeoController(KesslerController):
             best_action_sim_predicted: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             # debug_print(f"\nPredicted best action sim first state:", best_action_sim_predicted.get_state_sequence()[0])
             best_action_fitness_predicted = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
+            best_action_maneuver_tuple = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['maneuver_tuple']
             if ENABLE_ASSERTIONS:
                 assert self.current_timestep == self.game_state_to_base_planning['timestep']
                 assert game_state is not None
@@ -4556,16 +4637,20 @@ class NeoController(KesslerController):
                             second_best_action_sim.simulate_maneuver(second_best_action_sim_predicted_move_sequence, True)
                         second_best_action_sim.set_fire_next_timestep_flag(second_best_predicted_sim_fire_next_timestep_flag)
                         second_best_action_fitness = second_best_action_sim.get_fitness()
+                        second_best_action_fitness_breakdown = second_best_action_sim.get_fitness_breakdown()
                     else:
                         # The second best sim uses an exact state
                         assert self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['state_type'] == 'exact'
                         second_best_action_sim = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['sim']
                         second_best_action_fitness = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['fitness']
+                        second_best_action_fitness_breakdown = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['fitness_breakdown']
+                    second_best_action_maneuver_tuple = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['maneuver_tuple']
                     if second_best_action_fitness > best_action_fitness:
                         # debug_print(f"HOORAY, the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} is better than the best!")
                         best_action_fitness = second_best_action_fitness
                         best_action_sim = second_best_action_sim
-                        best_action_fitness_breakdown = best_action_sim.get_fitness_breakdown()
+                        best_action_fitness_breakdown = second_best_action_fitness_breakdown
+                        best_action_maneuver_tuple = second_best_action_maneuver_tuple
                     #else:
                         # debug_print(f"CRAP, even the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} isn't better than the first, so we'll just have to go with what we have and maybe get screwed.")
 
@@ -4576,7 +4661,22 @@ class NeoController(KesslerController):
             assert self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type'] == 'exact'
             best_action_sim = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
             best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
-            best_action_fitness_breakdown = best_action_sim.get_fitness_breakdown()
+            best_action_fitness_breakdown = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown']
+            best_action_maneuver_tuple = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['maneuver_tuple']
+        if best_action_maneuver_tuple is not None and not self.game_state_to_base_planning['respawning'] and best_action_fitness_breakdown[5] != 0.0:
+            # This is either a heuristic or random maneuver
+            #global total_abs_cruise_speed, total_cruise_timesteps, total_maneuvers_to_learn_from
+            #total_abs_cruise_speed += abs(best_action_maneuver_tuple[1])
+            #total_cruise_timesteps += best_action_maneuver_tuple[3]
+            #total_maneuvers_to_learn_from += 1
+            global abs_cruise_speeds, cruise_timesteps
+            abs_cruise_speeds.append(abs(best_action_maneuver_tuple[1]))
+            cruise_timesteps.append(best_action_maneuver_tuple[3])
+            if len(abs_cruise_speeds) > MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:
+                abs_cruise_speeds = abs_cruise_speeds[-MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:]
+            if len(cruise_timesteps) > MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:
+                cruise_timesteps = cruise_timesteps[-MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:]
+            print(f"{best_action_maneuver_tuple=}, and the avg best cruise speed is now {weighted_average(abs_cruise_speeds)} and avg cruise timesteps is {weighted_average(cruise_timesteps)}")
 
         if self.stationary_targetting_sim_index is not None:
             stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
@@ -4599,7 +4699,7 @@ class NeoController(KesslerController):
             if self.stationary_targetting_sim_index is None:
                 print(f"WARNING: There are no stationary targetting sims!")
             if self.stationary_targetting_sim_index is not None:
-                stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_fitness_breakdown()
+                stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['fitness_breakdown']
                 # debug_print('stationary fitneses', stationary_fitness_breakdown)
                 print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
                 if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
@@ -4804,8 +4904,10 @@ class NeoController(KesslerController):
                 self.sims_this_planning_period.append({
                     'sim': maneuver_sim,
                     'fitness': maneuver_fitness,
+                    'fitness_breakdown': maneuver_sim.get_fitness_breakdown(),
                     'action_type': 'respawn',
                     'state_type': 'exact' if base_state_is_exact else 'predicted',
+                    'maneuver_tuple': (random_ship_heading_angle, ship_cruise_speed, ship_accel_turn_rate, ship_cruise_timesteps, ship_cruise_turn_rate)
                 })
                 if maneuver_fitness > self.best_fitness_this_planning_period:
                     self.second_best_fitness_this_planning_period = self.best_fitness_this_planning_period
@@ -4844,8 +4946,10 @@ class NeoController(KesslerController):
                 self.sims_this_planning_period.append({
                     'sim': stationary_targetting_sim,
                     'fitness': best_stationary_targetting_fitness,
+                    'fitness_breakdown': stationary_targetting_sim.get_fitness_breakdown(),
                     'action_type': 'targetting',
                     'state_type': 'exact' if base_state_is_exact else 'predicted',
+                    'maneuver_tuple': None,
                 })
                 self.stationary_targetting_sim_index = len(self.sims_this_planning_period) - 1
                 if best_stationary_targetting_fitness > self.best_fitness_this_planning_period:
@@ -4898,7 +5002,7 @@ class NeoController(KesslerController):
                 else:
                     search_iterations = 6
             '''
-            MAX_CRUISE_TIMESTEPS = 45.0
+
             '''
             if iterations_boost:
                 search_iterations = min(80, (search_iterations + 1)*10)
@@ -4926,8 +5030,14 @@ class NeoController(KesslerController):
                 max_pre_maneuver_turn_timesteps = 3.0
             else:
                 max_pre_maneuver_turn_timesteps = 10.0
-                ship_cruise_speed_mode = math.nan
-                ship_cruise_timesteps_mode = math.nan
+                #ship_cruise_speed_mode = math.nan
+                #ship_cruise_timesteps_mode = math.nan
+                #global total_abs_cruise_speed, total_cruise_timesteps, total_maneuvers_to_learn_from
+                #ship_cruise_speed_mode = total_abs_cruise_speed/total_maneuvers_to_learn_from
+                #ship_cruise_timesteps_mode = total_cruise_timesteps/total_maneuvers_to_learn_from
+                global abs_cruise_speeds, cruise_timesteps
+                ship_cruise_speed_mode = weighted_average(abs_cruise_speeds)
+                ship_cruise_timesteps_mode = weighted_average(cruise_timesteps)
                 '''
                 if nearby_asteroid_count > 15:
                     # Many nearby asteroids
@@ -5058,15 +5168,14 @@ class NeoController(KesslerController):
                     random_search_iterations += 1
                     random_search_total_fitness += maneuver_fitness
                 '''
-                if not heuristic_maneuver:
-                    maneuver_fitness -= 0.0  # TODO: REMOVE FUDGE TO ENABLE RANDOM SEARCH AGAIN
-                else:
-                    maneuver_fitness += 0.0
+
                 self.sims_this_planning_period.append({
                     'sim': maneuver_sim,
                     'fitness': maneuver_fitness,
+                    'fitness_breakdown': maneuver_fitness_breakdown,
                     'action_type': 'heuristic_maneuver' if heuristic_maneuver else 'random_maneuver',
-                    'state_type': 'exact' if base_state_is_exact else 'predicted'
+                    'state_type': 'exact' if base_state_is_exact else 'predicted',
+                    'maneuver_tuple': (random_ship_heading_angle, ship_cruise_speed, ship_accel_turn_rate, ship_cruise_timesteps, ship_cruise_turn_rate)
                 })
                 # if heuristic_maneuver:
                 #    debug_print(f"Heuristic maneuver got fitness of {maneuver_fitness}")
