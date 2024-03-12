@@ -289,7 +289,7 @@ if args.portfolio is not None:
         case 'custom':
             selected_portfolio = custom_scenarios
 
-controllers_used = [NeoController(), NeoController()]
+controllers_used = [NeoController(), BabyNeoController()]
 
 while True:
     for scenario in selected_portfolio[0 if not args.index else args.index:]:

@@ -715,8 +715,12 @@ def heading_diff_within_threshold(a_vec_theta_rad: float, b_vec_x: float, b_vec_
     a_vec_x = cos(a_vec_theta_rad)
     a_vec_y = sin(a_vec_theta_rad)
     dot_product = a_vec_x*b_vec_x + a_vec_y*b_vec_y
-    cos_theta = dot_product/sqrt(b_vec_x*b_vec_x + b_vec_y*b_vec_y) # a_vec_norm is 1.0 since it's a unit vector, so we don't need to multiply by that
-    return cos_theta >= cos_threshold
+    magnitude = sqrt(b_vec_x*b_vec_x + b_vec_y*b_vec_y)
+    if magnitude != 0:
+        cos_theta = dot_product/magnitude # a_vec_norm is 1.0 since it's a unit vector, so we don't need to multiply by that
+        return cos_theta >= cos_threshold
+    else:
+        return True
 
 
 @lru_cache()
