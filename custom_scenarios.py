@@ -83,7 +83,8 @@ num_asteroids = 40  # More asteroids for a denser ring
 speed = 60  # Increased speed for faster closing
 
 # Ship's initial position (center of the screen)
-ship_position = (500, 400)
+ship_position_1 = (400, 400)
+ship_position_2 = (600, 400)
 
 # Calculating initial positions and angles for the asteroids
 theta = np.linspace(0, 2 * np.pi, num_asteroids, endpoint=False)
@@ -99,10 +100,16 @@ more_intense_closing_ring_scenario = Scenario(
     name="more_intense_closing_ring_scenario",
     asteroid_states=asteroid_states,
     ship_states=[{
-        "position": ship_position,
+        "position": ship_position_1,
         "lives": 10, 
         "team": 1, 
-        "mines_remaining": 3
+        "mines_remaining": 6
+    },
+    {
+        "position": ship_position_2,
+        "lives": 10, 
+        "team": 2, 
+        "mines_remaining": 6
     }],
 )
 

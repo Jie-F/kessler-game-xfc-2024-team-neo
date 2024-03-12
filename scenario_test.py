@@ -8,6 +8,7 @@ import cProfile
 import sys
 from r_controller import RController
 from null_controller import NullController
+from test_controller import TestController
 from scenarios import *
 import argparse
 #from controller_0 import ReplayController0
@@ -21,7 +22,7 @@ from custom_scenarios import *
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
 from src.kesslergame.controller_gamepad import GamepadController
-from examples.test_controller import TestController
+#from examples.test_controller import TestController
 
 parser = argparse.ArgumentParser(description='Run Kessler Game with optional CLI flags.')
 parser.add_argument('-invisible', action='store_true', help='Use NoGraphics for the game visualization.')
@@ -288,7 +289,7 @@ if args.portfolio is not None:
         case 'custom':
             selected_portfolio = custom_scenarios
 
-controllers_used = [NeoController(), BabyNeoController()]
+controllers_used = [NeoController(), NeoController()]
 
 while True:
     for scenario in selected_portfolio[0 if not args.index else args.index:]:
@@ -297,12 +298,12 @@ while True:
             randseed = args.seed
         else:
             pass
-            randseed = random.randint(1, 1000000000) # 187709936 # Try XFC 2023 adv_multi_ring_closing_both_inside with seed 989425266, with [SomeController(), Neo()] and Neo will die because it doesn't use respawn cooldown properly!
+            randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
 
         asteroids_random = generate_asteroids(
-                                        num_asteroids=random.randint(5, 40),
+                                        num_asteroids=random.randint(5, 50),
                                         position_range_x=(0, width),
                                         position_range_y=(0, height),
                                         speed_range=(-300, 300, 0),
@@ -399,7 +400,7 @@ while True:
         print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
         print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
-    if missed:
+    if missed and len(team_deaths) == 1:
         color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
         break
 
