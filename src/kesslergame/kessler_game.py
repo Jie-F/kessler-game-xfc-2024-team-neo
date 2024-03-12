@@ -124,11 +124,11 @@ class KesslerGame:
                     # Evaluate each controller letting control be applied
                     if controllers[idx].ship_id != ship.id:
                         raise RuntimeError("Controller and ship ID do not match")
-                    try:
-                        ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine = controllers[idx].actions(ship.ownstate, game_state)
-                    except Exception as e:
-                        print(f"Exception in controller idx {idx}! Taking no actions. {e}")
-                        ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine = 0.0, 0.0, False, False
+                    #try:
+                    ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine = controllers[idx].actions(ship.ownstate, game_state)
+                    #except Exception as e:
+                    #    print(f"Exception in controller idx {idx}! Taking no actions. {e}")
+                    #    ship.thrust, ship.turn_rate, ship.fire, ship.drop_mine = 0.0, 0.0, False, False
 
                 # Update controller evaluation time if performance tracking
                 if self.perf_tracker:
@@ -223,14 +223,13 @@ class KesslerGame:
                             new_asteroids.extend(asteroid.destruct(impactor=mine))
                             asteroid_remove_idxs.add(idx_ast)
                     for ship in liveships:
-                        dx = ship.position[0] - mine.position[0]
-                        dy = ship.position[1] - mine.position[1]
-                        radius_sum = mine.blast_radius + ship.radius
-                        if dx * dx + dy * dy <= radius_sum * radius_sum:
-                            # Ship destruct function. Add one to asteroids_hit
-                            ship.destruct(map_size=scenario.map_size)
-                            # Stop checking this ship's collisions
-                            break
+                        if not ship.is_respawning:
+                            dx = ship.position[0] - mine.position[0]
+                            dy = ship.position[1] - mine.position[1]
+                            radius_sum = mine.blast_radius + ship.radius
+                            if dx * dx + dy * dy <= radius_sum * radius_sum:
+                                # Ship destruct function.
+                                ship.destruct(map_size=scenario.map_size)
                     if idx_mine not in mine_remove_idxs:
                         mine_remove_idxs.append(idx_mine)
                     mine.destruct()
