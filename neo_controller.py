@@ -88,7 +88,7 @@ MINE_OTHER_SHIP_RADIUS_FUDGE: Final = 40.0
 MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final = 6
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
-DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 20.0, 1.5, 0.5, 6.0, 10.0, 0.5, 2.0, 7.0)
+DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE: Final = cos(math.radians(MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF))
 MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF: Final = 60.0
@@ -149,7 +149,7 @@ FIRE_COOLDOWN_TS: Final = 3
 MINE_COOLDOWN_TS: Final = 30
 FPS: Final = 30
 DELTA_TIME: Final = 1/FPS  # s/ts
-# FIRE_TIME: Final = 1/10  # seconds
+SHIP_FIRE_TIME: Final = 1/10  # seconds
 BULLET_SPEED: Final = 800.0  # px/s
 BULLET_MASS: Final = 1.0  # kg
 BULLET_LENGTH: Final = 12.0  # px
@@ -1274,7 +1274,7 @@ def inspect_scenario(game_state: GameState, ship_state: Ship) -> None:
         print_explanation("There's no asteroids on the screen! I'm lonely.", 0)
         return
     print_explanation(f"The starting field has {current_count} asteroids on the screen, with a total of {asteroids_count} counting splits.", 0)
-    print_explanation(f"At my max shot rate, it'll take {asteroids_count/6.0:.01f} seconds to clear the field.", 0)
+    print_explanation(f"At my max shot rate, it'll take {asteroids_count*SHIP_FIRE_TIME:.01f} seconds to clear the field.", 0)
     if ship_state.bullets_remaining == -1:
         print_explanation(f"Yay I have unlimited bullets!", 0)
     elif ship_state.bullets_remaining == 0:
@@ -1556,8 +1556,8 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     accelerate(ship_cruise_speed, ship_accel_turn_rate)
     cruise(ship_cruise_timesteps, ship_cruise_turn_rate)
     accelerate(0.0, 0.0)  # TODO: If we remove this, we get some interesting results and emergent behavior. Neo would spazz around the map, going from one maneuver directly into another. I might even be able to tweak it to work. Maybe in the stationary targeting, apply a thrust to slow down the ship, so the targeting works a bit better. That could fix the issue, and it might be worth exploring if I have time! But for now, let’s just eat the slight time loss and regain the control of node based movement without drifting around like driftwood.
-    #if not isclose(ship_starting_speed, 0.0):
-        #print(f"Interesting move sequence! The ship didn't start stationary. It had speed {ship_starting_speed}, and we used sequence {move_sequence} to return the ship to speed {ship_speed}")
+    if not is_close(ship_starting_speed, 0.0):
+        print(f"Interesting move sequence! The ship didn't start stationary. It had speed {ship_starting_speed}, and we used sequence {move_sequence} to return the ship to speed {ship_speed}")
     if not move_sequence:
         # We still need a null sequence here, so that we don't end up with a 0 frame maneuver!
         move_sequence.append(Action(thrust=0.0, turn_rate=0.0, fire=False))
@@ -1985,14 +1985,14 @@ def forecast_asteroid_bullet_splits_from_heading(a: Asteroid, timesteps_until_ap
     return forecast_asteroid_splits(a, timesteps_until_appearance, vfx, vfy, v, 15.0, game_state)
 
 
-def forecast_instantaneous_asteroid_bullet_splits_from_velocity(a: Asteroid, bullet_velocity: tuple[float, float]) -> list[Asteroid]:
+def forecast_instantaneous_asteroid_bullet_splits_from_velocity(a: Asteroid, bullet_velocity: tuple[float, float], game_state: GameState) -> list[Asteroid]:
     # assert a.size != 1 # Asteroids of size 1 don't split
     # Look at asteroid.py in the Kessler game's code
     bullet_vel_x, bullet_vel_y = bullet_velocity
     vfx = (1/(BULLET_MASS + a.mass))*(BULLET_MASS*bullet_vel_x + a.mass*a.velocity[0])
     vfy = (1/(BULLET_MASS + a.mass))*(BULLET_MASS*bullet_vel_y + a.mass*a.velocity[1])
     v = sqrt(vfx*vfx + vfy*vfy)
-    return forecast_asteroid_splits(a, 0, vfx, vfy, v, 15.0)
+    return forecast_asteroid_splits(a, 0, vfx, vfy, v, 15.0, game_state)
 
 
 def forecast_asteroid_mine_instantaneous_splits(asteroid: Asteroid, mine: Mine, game_state: GameState) -> list[Asteroid]:
@@ -2656,6 +2656,8 @@ class Matrix():
         self.fire_first_timestep: bool = fire_first_timestep
         self.game_state_plotter: Optional[GameStatePlotter] = game_state_plotter
         self.sim_id = random.randint(1, 100000)
+        #if self.sim_id == 333:
+        #    print(f"Starting sim 333 with ship state {ship_state}")
         self.explanation_messages: list[str] = []
         self.safety_messages: list[str] = []
         self.respawn_timer: float = respawn_timer
@@ -2878,7 +2880,7 @@ class Matrix():
                 time_per_asteroids_shot = move_sequence_length_s/fudged_asteroids_shot
 
                 # Applying the sigmoid function to smooth the transition
-                asteroids_fitness = sigmoid(time_per_asteroids_shot, -0.3*FPS, 13.0*DELTA_TIME)
+                asteroids_fitness = sigmoid(time_per_asteroids_shot, -0.5*FPS, 10.8*DELTA_TIME)
             return asteroids_fitness
 
         def get_mine_safety_fitness(next_extrapolated_mine_collision_times: list[tuple[float, tuple[float, float]]]) -> tuple[float, float]:
@@ -3777,7 +3779,7 @@ class Matrix():
                             bullet_remove_idxs.append(b_idx)
                             # Create asteroid splits and mark it for removal
                             if a.size != 1:
-                                asteroids.extend(forecast_instantaneous_asteroid_bullet_splits_from_velocity(a, b.velocity))
+                                asteroids.extend(forecast_instantaneous_asteroid_bullet_splits_from_velocity(a, b.velocity, self.game_state))
                             asteroid_remove_idxs.add(a_idx)
                             # Stop checking this bullet
                             break
@@ -3857,8 +3859,8 @@ class Matrix():
     def simulate_maneuver(self, move_sequence: list[Action], allow_firing: bool) -> bool:
         self.intended_move_sequence = move_sequence  # Record down the intended move sequence, so if I crash and the recorded move sequence gets cut short, we still have the intended move sequence!
         #flag = False
-        if not is_close_to_zero(self.ship_state.speed):
-            print(f"When starting in simulate maneuver where the sim was safe, the ship speed is not zero! {self.ship_state.speed=}, {self.ship_state.velocity=}. The whole move sequence is REDACTED move_sequence")
+        #if not is_close_to_zero(self.ship_state.speed) and self.sim_id == 333:
+        #    print(f"When starting in simulate maneuver where the sim was safe, the ship speed is not zero! {self.ship_state.speed=}, {self.ship_state.velocity=}. The whole move sequence is REDACTED move_sequence")
             #flag = True
         for move in move_sequence:
             thrust = 0.0
@@ -3873,7 +3875,8 @@ class Matrix():
             if not self.update(thrust, turn_rate, None if allow_firing else False, move_sequence):
                 return False
             #if flag:
-                #print(f"After thrusting by {thrust} the true simmed ship speed is {self.ship_state.speed}")
+            #if self.sim_id == 333:
+            #    print(f"In sim {self.sim_id} After thrusting by {thrust} the true simmed ship speed is {self.ship_state.speed}")
         assert is_close_to_zero(self.ship_state.speed), f"When returning in simulate maneuver where the sim was safe, the ship speed is not zero! {self.ship_state.speed=}, {self.ship_state.velocity=}. The whole move sequence is {move_sequence}"
         return True
 
@@ -4317,7 +4320,7 @@ class Matrix():
                     bullet_remove_idxs.append(b_idx)
                     # Create asteroid splits and mark it for removal
                     if a.size != 1:
-                        self.game_state.asteroids.extend(forecast_instantaneous_asteroid_bullet_splits_from_velocity(a, bullet_velocity=b.velocity))
+                        self.game_state.asteroids.extend(forecast_instantaneous_asteroid_bullet_splits_from_velocity(a, b.velocity, self.game_state))
                     asteroid_remove_idxs.add(a_idx)
                     # Stop checking this bullet
                     break
@@ -4677,7 +4680,7 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims, and their fitnesses are as follows:")
+        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         # print([x['fitness'] for x in self.sims_this_planning_period])
         '''
         all_ship_pos = []
@@ -4756,6 +4759,7 @@ class NeoController(KesslerController):
                 best_action_sim.apply_move_sequence(best_action_sim_predicted_move_sequence, True)
             else:
                 # This can only be maneuvering, and this gives the freedom to aim and shoot during the maneuver
+                #print(f'\ncalling sim maneuver in decide best with intended move sequence of {best_action_sim_predicted_move_sequence} and actual move sequence of {best_action_sim_predicted.get_move_sequence()}')
                 best_action_sim.simulate_maneuver(best_action_sim_predicted_move_sequence, True) # TODO: Investigate. This completely takes out the shooting that we planned before!
             best_action_sim.set_fire_next_timestep_flag(best_predicted_sim_fire_next_timestep_flag)
             best_action_fitness = best_action_sim.get_fitness()
@@ -4773,7 +4777,7 @@ class NeoController(KesslerController):
                         if ENABLE_ASSERTIONS:
                             assert second_best_action_fitness_predicted == self.second_best_fitness_this_planning_period
                         second_best_predicted_sim_fire_next_timestep_flag = second_best_action_sim_predicted.get_fire_next_timestep_flag()
-                        print(f"Doing second best action sim. Ship respawn timer: {self.game_state_to_base_planning['ship_respawn_timer']}, asts pending death: {self.game_state_to_base_planning['asteroids_pending_death']}, forecasted splits: {self.game_state_to_base_planning['forecasted_asteroid_splits']}, is respawning: {self.game_state_to_base_planning['respawning']}, fire next ts flag: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
+                        #print(f"Doing second best action sim. Ship respawn timer: {self.game_state_to_base_planning['ship_respawn_timer']}, asts pending death: {self.game_state_to_base_planning['asteroids_pending_death']}, forecasted splits: {self.game_state_to_base_planning['forecasted_asteroid_splits']}, is respawning: {self.game_state_to_base_planning['respawning']}, fire next ts flag: {self.game_state_to_base_planning['fire_next_timestep_flag']}")
                         second_best_action_sim = Matrix(game_state=game_state,
                                                             ship_state=ship_state,
                                                             initial_timestep=self.current_timestep,
@@ -4795,6 +4799,7 @@ class NeoController(KesslerController):
                             second_best_action_sim.apply_move_sequence(second_best_action_sim_predicted_move_sequence, True)
                         else:
                             # This can only be maneuvering, and this gives the freedom to aim and shoot during the maneuver
+                            print('calling sim maneuver in decide second best')
                             second_best_action_sim.simulate_maneuver(second_best_action_sim_predicted_move_sequence, True)
                         second_best_action_sim.set_fire_next_timestep_flag(second_best_predicted_sim_fire_next_timestep_flag)
                         second_best_action_fitness = second_best_action_sim.get_fitness()
@@ -4826,7 +4831,7 @@ class NeoController(KesslerController):
                 best_action_sim_respawn_first_pass: Matrix = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
                 best_action_sim_respawn_first_pass_fitness: float = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
                 best_respawn_first_pass_sim_fire_next_timestep_flag = best_action_sim_respawn_first_pass.get_fire_next_timestep_flag()
-                print(f"RUNNING SECOND PASS OF RESPAWN MANEUVER. {best_action_sim_respawn_first_pass.get_last_timestep_colliding_with_asteroid()=}")
+                #print(f"RUNNING SECOND PASS OF RESPAWN MANEUVER. {best_action_sim_respawn_first_pass.get_last_timestep_colliding_with_asteroid()=}")
                 best_action_sim = Matrix(game_state=game_state,
                                             ship_state=ship_state,
                                             initial_timestep=self.current_timestep,
@@ -4887,6 +4892,7 @@ class NeoController(KesslerController):
         if best_action_fitness_breakdown[5] == 0.0:
             # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
             print_explanation("RIP, I'm gonna die", self.current_timestep)
+            #print('IT LOOKS LIKE THIS NEW ACTION WE ARE DOING ENDS IN DEATH!!!')
             # if self.stationary_targetting_sim_index:
             #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
             #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
@@ -5019,6 +5025,7 @@ class NeoController(KesslerController):
         self.base_gamestate_analysis = None
 
     def plan_action(self, other_ships_exist: bool, base_state_is_exact: bool, iterations_boost: bool = False, plan_stationary: bool = False) -> None:
+        #print("Calling plan action")
         # gc.disable()
         # Simulate and look for a good move
         # We have two options. Stay put and focus on targetting asteroids, or we can come up with an avoidance maneuver and target asteroids along the way if convenient
@@ -5040,7 +5047,7 @@ class NeoController(KesslerController):
             # ship_random_range, ship_random_max_maneuver_length = get_simulated_ship_max_range(max_cruise_seconds)
             # print(f"Respawn maneuver max length: {ship_random_max_maneuver_length}s")
 
-            print("Looking for a respawn maneuver")
+            #print("Looking for a respawn maneuver")
             # Run a simulation and find a course of action to put me to safety
             search_iterations_count = 0
 
@@ -5256,7 +5263,7 @@ class NeoController(KesslerController):
                 max_pre_maneuver_turn_timesteps = 6.0
             elif any(m.position in self.game_state_to_base_planning['mine_positions_placed'] for m in self.game_state_to_base_planning['game_state'].mines):
                 # We're probably within the radius of a mine we placed
-                print("We're probably within the radius of a mine we placed!")
+                print_explanation("We're probably within the radius of a mine we placed! Biasing faster/longer moves to be more likely to escape the mine.", self.current_timestep)
                 ship_cruise_speed_mode = SHIP_MAX_SPEED
                 ship_cruise_timesteps_mode = MAX_CRUISE_TIMESTEPS*0.75
                 max_pre_maneuver_turn_timesteps = 10.0
@@ -5375,19 +5382,22 @@ class NeoController(KesslerController):
                                           game_state_plotter=self.game_state_plotter)
                 # While evaluating, the simulation is advancing, and if it crashes, then it'll evaluate to false and stop the sim.
                 #print(preview_move_sequence)
-                
+                #if maneuver_sim.get_sim_id() == 333:
+                #    print('\ncalling sim maneuver in plan maneuver')
                 if maneuver_sim.simulate_maneuver(preview_move_sequence, True):
                     # The ship went through all the steps without colliding
                     #pre_fitness = maneuver_sim.get_fitness()
                     #pre_fitness_breakdown = maneuver_sim.get_fitness_breakdown()
-                    #print(f"The ship went through all the steps without colliding and lasted {len(maneuver_sim.get_state_sequence())}")
+                    #if maneuver_sim.get_sim_id() == 333:
+                    #    print(f"After sim maneuver in plan maneuver, The ship went through all the steps without colliding and lasted {len(maneuver_sim.get_state_sequence())}")
                     # maneuver_complete_without_crash = True
                     pass
                 else:
                     # The ship crashed somewhere before reaching the final resting spot
                     #pre_fitness = maneuver_sim.get_fitness()
                     #pre_fitness_breakdown = maneuver_sim.get_fitness_breakdown()
-                    #print(f"The ship crashed somewhere before reaching the final resting spot and only lasted {len(maneuver_sim.get_state_sequence())}")
+                    #if maneuver_sim.get_sim_id() == 333:
+                    #    print(f"After sim maneuver in plan maneuver, The ship crashed somewhere before reaching the final resting spot and only lasted {len(maneuver_sim.get_state_sequence())}")
                     # maneuver_complete_without_crash = False
                     pass
                 # print(f"Maneuver completed without crash: {maneuver_complete_without_crash}")
@@ -5486,7 +5496,9 @@ class NeoController(KesslerController):
             unexpected_death = False
             # If we're dead/respawning but we didn't plan a respawn maneuver for it, OR if we do expect to die at the end of the maneuver, however we actually died mid-maneuver
             #print(f"{ship_state.is_respawning=}, ts: {self.current_timestep}, Action queue length: {len(self.action_queue)}")
-            if (not self.last_timestep_ship_is_respawning and ship_state.is_respawning and ship_state.lives_remaining not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and not self.last_timestep_ship_is_respawning and ship_state.is_respawning and ship_state.lives_remaining in self.lives_remaining_that_we_did_respawn_maneuver_for):
+            # Originally I thought it'd be a necessary condition to check (not self.last_timestep_ship_is_respawning and ship_state.is_respawning and ship_state.lives_remaining not in self.lives_remaining_that_we_did_respawn_maneuver_for) however WE DO NOT want to check that the last timestep we weren't respawning!
+            # Because a sneaky edge case is, what if we did a respawn maneuver, and then we began to shoot in the middle of the respawn maneuver RIGHT AS the other ship is inside of us? Then we stay in the respawning state without ever getting out of it, but we just lose a life. Losing a life is the main thing we need to check for! And yes, this is an edge case I experienced and spent an hour tracking down.
+            if (ship_state.is_respawning and ship_state.lives_remaining not in self.lives_remaining_that_we_did_respawn_maneuver_for) or (self.action_queue and not self.last_timestep_ship_is_respawning and ship_state.is_respawning and ship_state.lives_remaining in self.lives_remaining_that_we_did_respawn_maneuver_for):
                 print(f"Ouch, I died in the middle of a maneuver where I expected to survive, due to other ships being present! We have {ship_state.lives_remaining} lives left, and here's the set of lives left we did respawn maneuvers for: {self.lives_remaining_that_we_did_respawn_maneuver_for}")
                 # Clear the move queue, since previous moves have been invalidated by us taking damage
                 self.action_queue.clear()
@@ -5533,7 +5545,7 @@ class NeoController(KesslerController):
             # set up the actions planning
             if unexpected_death:
                 # We need to refresh the state if we died unexpectedly
-                print_explanation(f"\nDue to the other ship, I unexpectedly died!", self.current_timestep)
+                print_explanation(f"\nOuch! Due to the other ship, I unexpectedly died!", self.current_timestep)
                 assert self.game_state_to_base_planning is not None
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
@@ -5550,7 +5562,7 @@ class NeoController(KesslerController):
                 }
 
                 if self.game_state_to_base_planning['respawning']:
-                    # print(f"Adding to lives remaining that we did respawn for, in the unexpected death: {ship_state.lives_remaining}")
+                    print(f"Adding to lives remaining that we did respawn for, in the unexpected death: {ship_state.lives_remaining}")
                     self.lives_remaining_that_we_did_respawn_maneuver_for.add(ship_state.lives_remaining)
             elif unexpected_survival:
                 print(f"Unexpected survival, the ship state is {ship_state}")
