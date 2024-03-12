@@ -86,7 +86,7 @@ MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final = 80.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final = 10
 MINE_OTHER_SHIP_RADIUS_FUDGE: Final = 40.0
 MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final = 6
-TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 12.0
+TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
 DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 20.0, 1.5, 0.5, 6.0, 10.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
@@ -95,7 +95,7 @@ MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF: Final = 60.0
 MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF_COSINE: Final = cos(math.radians(MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF))
 MAX_CRUISE_TIMESTEPS = 30.0
 MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD: Final = 10
-AIMING_CONE_FITNESS_CONE_WIDTH_HALF: Final = 30.0
+AIMING_CONE_FITNESS_CONE_WIDTH_HALF: Final = 18.0 # This has to do with how fast we turn vs how often we can shoot. This can be thought of as some percentage of DEGREES_BETWEEN_SHOTS defined later
 AIMING_CONE_FITNESS_CONE_WIDTH_HALF_COSINE: Final = cos(math.radians(AIMING_CONE_FITNESS_CONE_WIDTH_HALF))
 
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
@@ -2031,6 +2031,7 @@ def forecast_asteroid_splits(a: Asteroid, timesteps_until_appearance: int, vfx: 
     theta = degrees(atan2(vfy, vfx)) # DO NOT USE AN APPROXIMATION FOR ATAN2!! This needs to match Kessler or else we can get desyncs.
     # Split angle is the angle off of the new velocity vector for the two asteroids to the sides, the center child asteroid continues on the new velocity path
     angles = (radians(theta + split_angle), radians(theta), radians(theta - split_angle))
+    # We redundantly convert to degrees, add split angle, and back to radians. But it has to do this to match Kessler. No way to optimize without risking desyncs.
     # This is wacky because we're back-extrapolation the position of the asteroid BEFORE IT WAS BORN!!!!11!
     new_size = a.size - 1
     new_mass = ASTEROID_MASS_LOOKUP[new_size]
@@ -2617,6 +2618,7 @@ def time_travel_asteroid(asteroid: Asteroid, timesteps: int, game_state: GameSta
         timesteps_until_appearance=asteroid.timesteps_until_appearance
     )
 
+
 class Matrix():
     # Simulates kessler_game.py and ship.py and other game mechanics
     # Has built-in controllers to do stationary targeting, maneuvers, and respawn maneuvers
@@ -2827,6 +2829,7 @@ class Matrix():
         return times_and_mine_pos
 
     def coordinates_in_same_wrap(self, pos1: tuple[float, float], pos2: tuple[float, float]) -> bool:
+        # UNUSED
         # Checks whether the coordinates are in the same universe
         max_width = self.game_state.map_size[0]
         max_height = self.game_state.map_size[1]
@@ -3309,7 +3312,7 @@ class Matrix():
         # Check whether we have enough time to aim at it and shoot it down
         # PROBLEM, what if the asteroid breaks into pieces and I need to shoot those down too? But I have plenty of time, and I still want the fitness function to be good in that case, but there's no easy way to evaluate that. It's hard to decide whether we want to shoot the asteroids that are about to hit us, or to just dodge it by moving myself.
 
-        turn_angle_deg_until_can_fire = timesteps_until_can_fire*SHIP_MAX_TURN_RATE*DELTA_TIME  # Can be up to 30 degrees
+        turn_angle_deg_until_can_fire = timesteps_until_can_fire*SHIP_MAX_TURN_RATE*DELTA_TIME  # Can be up to 18 degrees
         # print(target_asteroids_list)
         # if there’s an imminent shot coming toward me, I will aim at the asteroid that gets me CLOSEST to the direction of the imminent shot.
         # So it only plans one shot at a time instead of a series of shots, and it’ll keep things simpler
@@ -3379,7 +3382,7 @@ class Matrix():
                     # Sort by angular distance, with the unlikely tie broken by shot size
                     sorted_targets = target_asteroids_list
                     sorted_targets.sort(key=lambda t: (round(t.shooting_angle_error_deg), ASTEROID_SIZE_SHOT_PRIORITY[t.asteroid.size]))
-                    # debug_print(f"Turn angle deg until we can fire (max 30 degrees): {turn_angle_deg_until_can_fire}")
+                    # debug_print(f"Turn angle deg until we can fire (max 18 degrees): {turn_angle_deg_until_can_fire}")
                     if most_imminent_asteroid_shooting_angle_error_deg > 0.0:
                         # debug_print("The imminent shot requires us to turn the ship to the left")
                         target = self.find_extreme_shooting_angle_error(sorted_targets, turn_angle_deg_until_can_fire, 'largest_below')
