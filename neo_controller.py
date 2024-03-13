@@ -69,7 +69,7 @@ EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final = 6.0  # Repeated messages within 
 # These can trade off to get better performance at the expense of safety
 STATE_CONSISTENCY_CHECK_AND_RECOVERY = True  # Enable this if we want to be able to recover from controller exceptions
 CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
-ENABLE_SANITY_CHECKS: Final = True  # Miscellaneous sanity checks throughout the code
+ENABLE_SANITY_CHECKS: Final = False  # Miscellaneous sanity checks throughout the code
 PRUNE_SIM_STATE_SEQUENCE: Final = True  # Good to have on, because we don't really need the full state
 VALIDATE_SIMULATED_KEY_STATES: Final = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
@@ -110,7 +110,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final = 0.55
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 5
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final = 100
@@ -157,6 +157,10 @@ BULLET_LENGTH: Final = 12.0  # px
 BULLET_LENGTH_RECIPROCAL: Final = 1.0/BULLET_LENGTH
 TWICE_BULLET_LENGTH_RECIPROCAL: Final = 2.0/BULLET_LENGTH
 SHIP_MAX_TURN_RATE: Final = 180.0  # deg/s
+SHIP_MAX_TURN_RATE_RAD: Final = math.radians(SHIP_MAX_TURN_RATE)
+SHIP_MAX_TURN_RATE_RAD_RECIPROCAL: Final = 1.0/SHIP_MAX_TURN_RATE_RAD
+SHIP_MAX_TURN_RATE_DEG_TS: Final = DELTA_TIME*SHIP_MAX_TURN_RATE
+SHIP_MAX_TURN_RATE_RAD_TS: Final = math.radians(SHIP_MAX_TURN_RATE_DEG_TS)
 SHIP_MAX_THRUST: Final = 480.0  # px/s^2
 SHIP_DRAG: Final = 80.0  # px/s^2
 SHIP_MAX_SPEED: Final = 240.0  # px/s
@@ -1767,7 +1771,7 @@ def predict_next_imminent_collision_time_with_asteroid(ship_pos_x: float, ship_p
 
 
 # It helps a bit to LRU cache this, but I turned this into a generator function so we can't do that anymore, RIP
-def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: float, H: float, c: float) -> Iterable[tuple[int, int]]:
+def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: float, H: float, c: float) -> list[tuple[int, int]]:
     # Initialize lists to hold crossing times
     x_crossings_times = []
     y_crossings_times = []
@@ -1838,23 +1842,23 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
     #universes = [(current_universe_x, current_universe_y)]
 
     # Iterate through merged crossing times and sequence
+    universes = []
     for crossing in border_crossing_sequence:
         if crossing == 'x':
             current_universe_x += universe_increment_direction_x
         else:  # crossing == 'y'
             current_universe_y += universe_increment_direction_y
-        #universes.append((current_universe_x, current_universe_y))
-        yield (current_universe_x, current_universe_y)
-    #return universes
+        universes.append((current_universe_x, current_universe_y))
+        #yield (current_universe_x, current_universe_y)
+    return universes
 
 
-def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon_s: float = 10.0) -> Iterable[Asteroid]:
-    yield asteroid
+def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon_s: float = 10.0) -> list[Asteroid]:
+    unwrapped_asteroids: list[Asteroid] = [asteroid]
     if abs(asteroid.velocity[0]) < EPS and abs(asteroid.velocity[1]) < EPS:
         # An asteroid that is stationary will never move across borders
-        return
-
-    #unwrapped_asteroids: list[Asteroid] = []
+        return unwrapped_asteroids
+    
     # The idea is to track which universes the asteroid visits from t=t_0 until t=t_0 + time_horizon_s.
     # The current universe is (0, 0) and if the asteroid wraps to the right, it visits (1, 0). If it wraps down, it visits (0, -1). If it wraps right and then down, it starts in (0, 0), visits (1, 0), and finally (1, -1).
     #border_crossings = calculate_border_crossings(asteroid.position[0], asteroid.position[1], asteroid.velocity[0], asteroid.velocity[1], max_x, max_y, time_horizon_s)
@@ -1865,17 +1869,17 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
         #unwrapped_asteroid: Asteroid = asteroid.copy()
         #unwrapped_asteroid.position = (unwrapped_asteroid.position[0] + dx, unwrapped_asteroid.position[1] + dy)
         #unwrapped_asteroids.append(unwrapped_asteroid)
-        yield Asteroid(
+        unwrapped_asteroids.append(Asteroid(
             position=(asteroid.position[0] + dx, asteroid.position[1] + dy),
             velocity=asteroid.velocity,
             size=asteroid.size,
             mass=asteroid.mass,
             radius=asteroid.radius,
             timesteps_until_appearance=asteroid.timesteps_until_appearance
-        )
+        ))
         #yield unwrapped_asteroid
     # print(f"Returning unwrapped asteroids: {unwrapped_asteroids}")
-    #return unwrapped_asteroids
+    return unwrapped_asteroids
 
 
 def check_coordinate_bounds(game_state: GameState, x: float, y: float) -> bool:
@@ -1931,7 +1935,7 @@ def solve_quadratic(a: float, b: float, c: float) -> tuple[float, float]:
     return r1, r2
 
 
-def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x: float, asteroid_pos_y: float, asteroid_vel_x: float, asteroid_vel_y: float, asteroid_r: float, ship_heading_deg: float, game_state: GameState, future_shooting_timesteps: int = 0) -> Iterable[tuple[bool, float, float, float, float, float, float]]:
+def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x: float, asteroid_pos_y: float, asteroid_vel_x: float, asteroid_vel_y: float, asteroid_r: float, ship_heading_deg: float, game_state: GameState, future_shooting_timesteps: int = 0) -> tuple[bool, float, float, float, float, float, float]:
     # This is a simplified version of solve_interception(). This will, given the position of the ship and an asteroid, tell you which angle you need to fire at after future_shooting_timesteps to shoot the asteroid
     # The bullet's head originates from the edge of the ship's radius.
     # We want to set the position of the bullet to the center of the bullet, so we have to do some fanciness here so that at t=0, the bullet's center is where it should be
@@ -1958,6 +1962,7 @@ def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x:
     B = 2.0*(ax_delayed*avx + ay_delayed*avy - vb_sq*t_0)
     C = ax_delayed*ax_delayed + ay_delayed*ay_delayed - vb_sq*t_0*t_0
 
+    #solutions = []
     for t in solve_quadratic(A, B, C):
         if isnan(t) or t < 0.0:
             # Invalid interception time
@@ -1970,12 +1975,18 @@ def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x:
         intercept_x = x + origin_x
         intercept_y = y + origin_y
         feasible = check_coordinate_bounds(game_state, intercept_x, intercept_y)
+        if not feasible:
+            continue
         asteroid_dist = sqrt(x*x + y*y)
         if asteroid_r < asteroid_dist:
             shot_heading_tolerance_rad = super_fast_asin((asteroid_r - ASTEROID_AIM_BUFFER_PIXELS)/asteroid_dist)
         else:
             shot_heading_tolerance_rad = pi/2.0
-        yield (feasible, angle_difference_rad(theta, theta_0), shot_heading_tolerance_rad, t, intercept_x, intercept_y, asteroid_dist)
+        return feasible, angle_difference_rad(theta, theta_0), shot_heading_tolerance_rad, t, intercept_x, intercept_y, asteroid_dist
+    #if len(solutions) > 1:
+    #    print(len(solutions))
+    #return solutions
+    return False, math.nan, math.nan, math.nan, math.nan, math.nan, math.nan
     # feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time_s + 0*future_shooting_timesteps*delta_time, intercept_x, intercept_y, asteroid_dist, asteroid_dist_during_interception
 
 
@@ -2248,7 +2259,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
     k2 = ax*vb - avx*vb*t_0
     k3 = avy*ax - avx*ay
 
-    def naive_desired_heading_calc(timesteps_until_fire: int = 0) -> Iterable[tuple[float, float, int, float, float, float]]:
+    def naive_desired_heading_calc(timesteps_until_fire: int = 0) -> tuple[float, float, int, float, float, float]:
         # Here's a good resource to learn about this: https://www.youtube.com/watch?v=MpUUsDDE1sI
         # https://medium.com/andys-coding-blog/ai-projectile-intercept-formula-for-gaming-without-trigonometry-37b70ef5718b
         time_until_can_fire_s = timesteps_until_fire*DELTA_TIME
@@ -2259,6 +2270,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         B = 2.0*(ax_delayed*avx + ay_delayed*avy - vb_sq*t_0)
         C = ax_delayed*ax_delayed + ay_delayed*ay_delayed - vb_sq*t_0*t_0
 
+        #solutions = []
         for t in solve_quadratic(A, B, C):
             if isnan(t) or t < 0.0:
                 continue
@@ -2269,7 +2281,12 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
             # However, if an unwrapped asteroid was passed into this function and the interception is inbounds, then it's a feasible shot
             intercept_x = x + origin_x
             intercept_y = y + origin_y
-            yield (t, angle_difference_rad(theta, theta_0), timesteps_until_fire, intercept_x, intercept_y, dist(ship_position, (intercept_x, intercept_y)))
+            # Return the first answer we get
+            return t, angle_difference_rad(theta, theta_0), timesteps_until_fire, intercept_x, intercept_y, dist(ship_position, (intercept_x, intercept_y))
+        #if len(solutions) > 1:
+        #    print(len(solutions))
+        #return solutions
+        return math.nan, math.nan, 0, math.nan, math.nan, math.nan
         # Returned tuple is (interception time in seconds from firing to hit, delta theta rad, timesteps until fire, None, intercept_x, intercept_y, dist)
 
     def naive_root_function(theta: float, time_until_can_fire_s: int = 0) -> float:
@@ -2376,7 +2393,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         return nan
 
     def rotation_time(delta_theta_rad: float) -> float:
-        return abs(delta_theta_rad)/radians(SHIP_MAX_TURN_RATE)
+        return abs(delta_theta_rad)*SHIP_MAX_TURN_RATE_RAD_RECIPROCAL
 
     def bullet_travel_time(theta: float, t_rot: float) -> float:
         # Convert heading error to absolute heading
@@ -2408,7 +2425,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
             return max(-200000.0, min(((cos_theta*(ay + avy*t_rot) - sin_theta*(ax + avx*t_rot))/denominator)*100000.0, 200000.0))
 
     def plot_function() -> None:
-        naive_theta_ans_list = list(naive_desired_heading_calc(timesteps_until_can_fire))  # Assuming this function returns a list of angles
+        naive_theta_ans_list = [naive_desired_heading_calc(timesteps_until_can_fire)]  # Assuming this function returns a list of angles
         theta_0 = radians(ship_state.heading)
         # theta_range = np.linspace(theta_0 - pi, theta_0 + pi, 400)
         theta_delta_range = np.linspace(-pi, pi, 400)
@@ -2468,82 +2485,67 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         plt.show()
 
     # plot_function()
-    valid_solutions = []
+    #valid_solutions = []
     # print_debug = False
-    amount_we_can_turn_before_we_can_shoot_rad = radians(timesteps_until_can_fire*DELTA_TIME*SHIP_MAX_TURN_RATE)
-    for naive_solution in naive_desired_heading_calc(timesteps_until_can_fire):
-        # naive_solution is this tuple: (interception time in seconds from firing to hit, delta theta rad, timesteps until fire, None, intercept_x, intercept_y, None)
-        # debug_print("Evaluating naive solution:", naive_solution)
-        if abs(naive_solution[1]) <= amount_we_can_turn_before_we_can_shoot_rad + EPS:
-            # The naive solution works because there's no turning delay
-            # debug_print('Naive solution works!', naive_solution)
-            if check_coordinate_bounds(game_state, naive_solution[3], naive_solution[4]):
-                # Tuple is: (feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
-                valid_solutions.append((True, degrees(naive_solution[1]), timesteps_until_can_fire, naive_solution[0], naive_solution[3], naive_solution[4], naive_solution[5]))
-        else:
-            if abs(avx) < GRAIN and abs(avy) < GRAIN:
-                # The asteroid is pretty much stationary. Naive solution works fine.
-                # debug_print("The asteroid is pretty much stationary. Naive solution works fine.")
-                sol = naive_solution[1]
-            else:
-                # Use more advanced solution
-                # debug_print('Using more advanced root finder')
-                sol = turbo_rootinator_5000(naive_solution[1], TAD, 4)  # root_function, root_function_derivative, root_function_second_derivative
-                # debug_print('Root finder gave us:', sol)
-            if isnan(sol):
-                continue
-            delta_theta_solution = sol
-            absolute_theta_solution = delta_theta_solution + theta_0
-            assert -pi <= delta_theta_solution <= pi  # REMOVE_FOR_COMPETITION
-            # if not (-pi <= delta_theta_solution <= pi):
-                # debug_print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
-                # delta_theta_solution = (delta_theta_solution + pi)%(2.0*pi) - pi
-            # Check validity of solution to make sure time is positive and stuff
-            delta_theta_solution_deg = degrees(delta_theta_solution)
-            t_rot = rotation_time(delta_theta_solution)
-            assert is_close(t_rot, abs(delta_theta_solution_deg)/SHIP_MAX_TURN_RATE)  # REMOVE_FOR_COMPETITION
-            t_bullet = bullet_travel_time(delta_theta_solution, t_rot)
-            # debug_print(f't_bullet: {t_bullet}')
-            if t_bullet < 0:
-                continue
-            # t_total = t_rot + t_bullet
-
-            intercept_x = origin_x + vb*cos(absolute_theta_solution)*(t_bullet + t_0)
-            intercept_y = origin_y + vb*sin(absolute_theta_solution)*(t_bullet + t_0)
-            # debug_print(f"Intercept_x ({intercept_x}) = origin_x ({origin_x}) + vb*cos({absolute_theta_solution})*(t_bullet ({t_bullet}) + t_0 ({t_0}))")
-            # debug_print(f"Intercept_y ({intercept_y}) = origin_y ({origin_y}) + vb*sin({absolute_theta_solution})*(t_bullet ({t_bullet}) + t_0 ({t_0}))")
-
-            feasible = check_coordinate_bounds(game_state, intercept_x, intercept_y)
-            if feasible:
-                # debug_print(f"The coordinates of {intercept_x}, {intercept_y} are GUCCI! We'd have to turn this many ts: {t_rot*FPS}")
-                # Since half timesteps don't exist, we need to discretize this solution by rounding up the amount of timesteps, and now we can use the naive method to confirm and get the exact angle
-                # We max this with ts until can fire, because that's the floor and we can't go below it
-                t_rot_ts = max(timesteps_until_can_fire, ceil(t_rot*FPS))
-                # debug_print(f"The rotation timesteps we've calculated is {t_rot_ts}, from a t_rot of {t_rot}")
-                # valid_solutions.append((True, delta_theta_solution_deg, t_rot_ts, None, intercept_x, intercept_y, None))
-                for discrete_solution in naive_desired_heading_calc(t_rot_ts):
-                    # Only expecting there to be one
-                    if not abs(degrees(discrete_solution[1])) - EPS <= t_rot_ts*DELTA_TIME*SHIP_MAX_TURN_RATE:
-                        continue
-                    assert t_rot_ts == discrete_solution[2]  # REMOVE_FOR_COMPETITION
-                    if check_coordinate_bounds(game_state, discrete_solution[3], discrete_solution[4]):
-                        # debug_print('Valid solution found!', disc_sol)
-                        valid_solutions.append((True, degrees(discrete_solution[1]), t_rot_ts, discrete_solution[0], discrete_solution[3], discrete_solution[4], discrete_solution[5]))
-            else:
-                pass
-                # debug_print(f"The coordinates of {intercept_x}, {intercept_y} are outside the bounds! Invalid solution. We'd have to turn this many ts: {t_rot*FPS}")
-
-    
-    if len(valid_solutions) == 1:
-        # Most common case
-        return valid_solutions[0]
-    elif valid_solutions:
-        # Multiple (2) solutions
-        valid_solutions.sort(key=lambda x: x[2])  # Sort by aiming timesteps required
-        # TODO: Maybe return all solutions just so we have more options
-        return valid_solutions[0]
+    amount_we_can_turn_before_we_can_shoot_rad = timesteps_until_can_fire*SHIP_MAX_TURN_RATE_RAD_TS
+    naive_solution = naive_desired_heading_calc(timesteps_until_can_fire)
+    # naive_solution is this tuple: (interception time in seconds from firing to hit, delta theta rad, timesteps until fire, None, intercept_x, intercept_y, None)
+    # debug_print("Evaluating naive solution:", naive_solution)
+    if abs(naive_solution[1]) <= amount_we_can_turn_before_we_can_shoot_rad + EPS:
+        # The naive solution works because there's no turning delay
+        # debug_print('Naive solution works!', naive_solution)
+        if check_coordinate_bounds(game_state, naive_solution[3], naive_solution[4]):
+            # Tuple is: (feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
+            return True, degrees(naive_solution[1]), timesteps_until_can_fire, naive_solution[0], naive_solution[3], naive_solution[4], naive_solution[5]
     else:
-        return False, nan, -1, nan, nan, nan, nan
+        if abs(avx) < GRAIN and abs(avy) < GRAIN:
+            # The asteroid is pretty much stationary. Naive solution works fine.
+            # debug_print("The asteroid is pretty much stationary. Naive solution works fine.")
+            delta_theta_solution = naive_solution[1]
+        else:
+            # Use more advanced solution
+            # debug_print('Using more advanced root finder')
+            delta_theta_solution = turbo_rootinator_5000(naive_solution[1], TAD, 4)  # root_function, root_function_derivative, root_function_second_derivative
+            # debug_print('Root finder gave us:', sol)
+        if isnan(delta_theta_solution):
+            return False, nan, -1, nan, nan, nan, nan
+        absolute_theta_solution = delta_theta_solution + theta_0
+        assert -pi <= delta_theta_solution <= pi  # REMOVE_FOR_COMPETITION
+        # if not (-pi <= delta_theta_solution <= pi):
+            # debug_print(f"SOLUTION WAS OUT OUT BOUNDS AT {delta_theta_solution} AND WRAPPED TO -pi, pi")
+            # delta_theta_solution = (delta_theta_solution + pi)%(2.0*pi) - pi
+        # Check validity of solution to make sure time is positive and stuff
+        delta_theta_solution_deg = degrees(delta_theta_solution)
+        t_rot = rotation_time(delta_theta_solution)
+        assert is_close(t_rot, abs(delta_theta_solution_deg)/SHIP_MAX_TURN_RATE)  # REMOVE_FOR_COMPETITION
+        t_bullet = bullet_travel_time(delta_theta_solution, t_rot)
+        # debug_print(f't_bullet: {t_bullet}')
+        if t_bullet < 0:
+            return False, nan, -1, nan, nan, nan, nan
+        # t_total = t_rot + t_bullet
+
+        intercept_x = origin_x + vb*cos(absolute_theta_solution)*(t_bullet + t_0)
+        intercept_y = origin_y + vb*sin(absolute_theta_solution)*(t_bullet + t_0)
+        # debug_print(f"Intercept_x ({intercept_x}) = origin_x ({origin_x}) + vb*cos({absolute_theta_solution})*(t_bullet ({t_bullet}) + t_0 ({t_0}))")
+        # debug_print(f"Intercept_y ({intercept_y}) = origin_y ({origin_y}) + vb*sin({absolute_theta_solution})*(t_bullet ({t_bullet}) + t_0 ({t_0}))")
+
+        if check_coordinate_bounds(game_state, intercept_x, intercept_y):
+            # debug_print(f"The coordinates of {intercept_x}, {intercept_y} are GUCCI! We'd have to turn this many ts: {t_rot*FPS}")
+            # Since half timesteps don't exist, we need to discretize this solution by rounding up the amount of timesteps, and now we can use the naive method to confirm and get the exact angle
+            # We max this with ts until can fire, because that's the floor and we can't go below it
+            t_rot_ts = max(timesteps_until_can_fire, ceil(t_rot*FPS))
+            # debug_print(f"The rotation timesteps we've calculated is {t_rot_ts}, from a t_rot of {t_rot}")
+            # valid_solutions.append((True, delta_theta_solution_deg, t_rot_ts, None, intercept_x, intercept_y, None))
+            discrete_solution = naive_desired_heading_calc(t_rot_ts)
+            if not isnan(discrete_solution[0]):
+                if not abs(degrees(discrete_solution[1])) - EPS <= t_rot_ts*SHIP_MAX_TURN_RATE_DEG_TS:
+                    return False, nan, -1, nan, nan, nan, nan
+                assert t_rot_ts == discrete_solution[2]  # REMOVE_FOR_COMPETITION
+                if check_coordinate_bounds(game_state, discrete_solution[3], discrete_solution[4]):
+                    # debug_print('Valid solution found!', disc_sol)
+                    return True, degrees(discrete_solution[1]), t_rot_ts, discrete_solution[0], discrete_solution[3], discrete_solution[4], discrete_solution[5]
+    
+    return False, nan, -1, nan, nan, nan, nan
     # The returned interception time is the time AFTER FIRING! NOT INCLUDING TURNING!
     # return (feasible, shooting_angle_error_deg, aiming_timesteps_required, interception_time_s, intercept_x, intercept_y, asteroid_dist_during_interception)
 
@@ -4041,24 +4043,23 @@ class Matrix():
                                         #if abs(angle_difference_deg(degrees(unwrapped_ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
                                         if not heading_diff_within_threshold(ship_heading_rad, a.position[0] - self.ship_state.position[0], a.position[1] - self.ship_state.position[1], MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE):
                                             continue
-                                        for solution in calculate_interception(self.ship_state.position[0], self.ship_state.position[1], a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state):
-                                            #update_ts_zero_count += 1
-                                            feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception = solution
-                                            if feasible and abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
-                                                if ast_idx < len_asteroids:
-                                                    # Only add real asteroids to the set of asteroids we simulate! Don't simulate the asteroids that don't exist yet.
-                                                    #culled_targets_for_simulation.append(asteroid)
-                                                    if not culled_target_idxs_for_simulation or culled_target_idxs_for_simulation[-1] != ast_idx:
-                                                        culled_target_idxs_for_simulation.append(ast_idx)
-                                                feasible_targets_exist = True
-                                                #print(f"Adding feasible target idx {ast_idx}, while the max idx for a real ast is {len(self.game_state.asteroids) - 1}")
-                                                if interception_time > max_interception_time:
-                                                    max_interception_time = interception_time
-                                                if abs(shot_heading_error_rad) < abs(min_shot_heading_error_rad):
-                                                    second_min_shot_heading_error_rad = min_shot_heading_error_rad
-                                                    min_shot_heading_error_rad = shot_heading_error_rad
-                                                check_next_asteroid = True
-                                                break
+                                        # feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception
+                                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, _, _, _ = calculate_interception(self.ship_state.position[0], self.ship_state.position[1], a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state)
+                                        if feasible and abs(shot_heading_error_rad) <= shot_heading_tolerance_rad:
+                                            if ast_idx < len_asteroids:
+                                                # Only add real asteroids to the set of asteroids we simulate! Don't simulate the asteroids that don't exist yet.
+                                                #culled_targets_for_simulation.append(asteroid)
+                                                if not culled_target_idxs_for_simulation or culled_target_idxs_for_simulation[-1] != ast_idx:
+                                                    culled_target_idxs_for_simulation.append(ast_idx)
+                                            feasible_targets_exist = True
+                                            #print(f"Adding feasible target idx {ast_idx}, while the max idx for a real ast is {len(self.game_state.asteroids) - 1}")
+                                            if interception_time > max_interception_time:
+                                                max_interception_time = interception_time
+                                            if abs(shot_heading_error_rad) < abs(min_shot_heading_error_rad):
+                                                second_min_shot_heading_error_rad = min_shot_heading_error_rad
+                                                min_shot_heading_error_rad = shot_heading_error_rad
+                                            check_next_asteroid = True
+                                            break
                             if feasible_targets_exist:
                                 # Use the bullet sim to confirm that this will hit something
                                 # There's technically a chance for culled_targets_for_simulation to be empty at this point, if we're purely shooting asteroids that haven't come into existence yet. In that case, this will detect that and will avoid doing the culling, and do the full sim. This should be rare.
@@ -4161,8 +4162,9 @@ class Matrix():
                                         #if abs(angle_difference_deg(degrees(unwrapped_ast_angle), self.ship_state.heading)) > MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF:
                                         if not heading_diff_within_threshold(ship_heading_rad, a.position[0] - self.ship_state.position[0], a.position[1] - self.ship_state.position[1], MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE):
                                             continue
-                                        for solution in calculate_interception(ship_predicted_pos_x, ship_predicted_pos_y, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state, timesteps_until_can_fire):
-                                            feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception = solution
+                                        # feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception
+                                        feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, _, _, _ = calculate_interception(ship_predicted_pos_x, ship_predicted_pos_y, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state, timesteps_until_can_fire)
+                                        if feasible:
                                             shot_heading_error_deg = degrees(shot_heading_error_rad)
                                             shot_heading_tolerance_deg = degrees(shot_heading_tolerance_rad)
                                             if abs(shot_heading_error_deg) - shot_heading_tolerance_deg < abs(asteroid_least_shot_heading_error):
