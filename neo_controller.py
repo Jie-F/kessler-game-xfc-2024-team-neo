@@ -204,11 +204,16 @@ total_sim_timesteps: int = 0
 #total_bullet_sim_iterations = 0
 #update_ts_zero_count = 0
 #update_ts_multiple_count = 0
-unwrap_cache: dict[float, list['Asteroid']] = {} #tuple[float, float, float, float, float]
+unwrap_cache: dict[int, list['Asteroid']] = {} #tuple[float, float, float, float, float]
 unwrap_cache_hits: int = 0
 unwrap_cache_misses: int = 0
 bullet_sim_time: float = 0.0
 sim_update_total_time: float = 0.0
+sim_cull_total_time: float = 0.0
+unwrap_total_time: float = 0.0
+asteroids_pending_death_total_cull_time: float = 0.0
+asteroid_tracking_total_time: float = 0.0
+asteroid_new_track_total_time: float = 0.0
 
 
 class Asteroid:
@@ -227,6 +232,29 @@ class Asteroid:
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Asteroid):
+            return NotImplemented
+        return (self.position == other.position and
+                self.velocity == other.velocity and
+                self.size == other.size)
+
+    def __hash__(self) -> int:
+        # Combine position, velocity, and size into a single float
+        combined: float = self.position[0] + 0.4266548291679171*self.position[1] + 0.8164926348982552*self.velocity[0] + 0.8397584399461026*self.velocity[1]
+        # Scale to reduce the likelihood of collisions after conversion to integer
+        scaled_combined: float = combined * 1_000_000_000
+        # Convert to integer
+        hash_val = int(scaled_combined) + self.size
+        #print(hash_val)
+        return hash_val
+
+    def float_hash(self) -> float:
+        return self.position[0] + 0.4266548291679171*self.position[1] + 0.8164926348982552*self.velocity[0] + 0.8397584399461026*self.velocity[1]
+
+    def int_hash(self) -> int:
+        return int(1_000_000_000*(self.position[0] + 0.4266548291679171*self.position[1] + 0.8164926348982552*self.velocity[0] + 0.8397584399461026*self.velocity[1]))
 
     def copy(self) -> 'Asteroid':
         return Asteroid(
@@ -628,7 +656,7 @@ def fast_asin(x: float) -> float:
     negate = float(x < 0)
     x = abs(x)
     ret = (((-0.0187293*x + 0.0742610)*x - 0.2121144)*x + 1.5707288)
-    ret = pi*0.5 - sqrt(1.0 - x)*ret
+    ret = 0.5*pi - sqrt(1.0 - x)*ret
     return ret - 2.0*negate*ret
 
 
@@ -640,7 +668,7 @@ def super_fast_atan2(y: float, x: float) -> float:
         if y == 0.0:
             return 0.0  # atan2(0, 0) is undefined; returning 0 for simplicity
         else:
-            return pi/2.0 if y > 0.0 else -pi/2.0
+            return 0.5*pi if y > 0.0 else -0.5*pi
     if y == 0.0:
         if x > 0.0:
             return 0.0
@@ -662,9 +690,9 @@ def super_fast_atan2(y: float, x: float) -> float:
     # Adjust the result based on the original input quadrant
     if swap:
         if atan_input >= 0.0:
-            atan_result = pi/2.0 - atan_result
+            atan_result = 0.5*pi - atan_result
         else:
-            atan_result = -pi/2.0 - atan_result
+            atan_result = -0.5*pi - atan_result
     
     # Adjust for the correct quadrant
     if x < 0.0:
@@ -684,7 +712,7 @@ def fast_atan2(y: float, x: float) -> float:
         if y == 0.0:
             return 0.0  # atan2(0, 0) is undefined; returning 0 for simplicity
         else:
-            return pi/2.0 if y > 0.0 else -pi/2.0
+            return 0.5*pi if y > 0.0 else -0.5*pi
     if y == 0.0:
         if x > 0.0:
             return 0.0
@@ -706,9 +734,9 @@ def fast_atan2(y: float, x: float) -> float:
     # Adjust the result based on the original input quadrant
     if swap:
         if atan_input >= 0.0:
-            atan_result = pi/2.0 - atan_result
+            atan_result = 0.5*pi - atan_result
         else:
-            atan_result = -pi/2.0 - atan_result
+            atan_result = -0.5*pi - atan_result
     
     # Adjust for the correct quadrant
     if x < 0.0:
@@ -1610,7 +1638,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
             # No asteroids mean the entire space is a gap.
             return 0.0, TAU
 
-        angles: list[tuple[float, str]] = []
+        angles: list[tuple[float, bool]] = []
         initial_cover_count: int = 0  # Counter for asteroids covering angle 0
 
         for asteroid in asteroids:
@@ -1627,10 +1655,11 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
                 initial_cover_count += 1
 
             # Add angles in the original and offset positions
-            angles.append((start_angle, 'start'))
-            angles.append((end_angle, 'end'))
-            angles.append((start_angle + TAU, 'start'))
-            angles.append((end_angle + TAU, 'end'))
+            # True is for start and False is for end
+            angles.append((start_angle, True))
+            angles.append((end_angle, False))
+            angles.append((start_angle + TAU, True))
+            angles.append((end_angle + TAU, False))
 
         # Sort by angle
         angles.sort(key=lambda x: x[0])
@@ -1643,7 +1672,8 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
 
         for angle, marker in angles:
             assert counter >= 0  # REMOVE_FOR_COMPETITION
-            if marker == 'start':
+            if marker:
+                # Start
                 if counter == 0 and gap_start is not None:
                     # Calculate and check the gap size
                     gap = angle - gap_start
@@ -1653,6 +1683,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
                         largest_gap_midpoint = 0.5*(gap_start + angle) % TAU
                 counter += 1
             else:
+                # End
                 counter -= 1
                 if counter == 0:
                     # Mark the start of a new gap
@@ -1814,30 +1845,31 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
     # print(f"y crossing times: {y_crossings_times}")
     # Merge the two lists while tracking the origin of each time
     #merged_times = []
-    border_crossing_sequence = []
+    border_crossing_sequence: list[bool] = []
     i = 0
     j = 0
 
+    # True is for x, False is for y
     while i < x_crossings and j < y_crossings:
         if x_crossings_times[i] < y_crossings_times[j]:
             #merged_times.append(x_crossings_times[i])
-            border_crossing_sequence.append('x')
+            border_crossing_sequence.append(True)
             i += 1
         else:
             #merged_times.append(y_crossings_times[j])
-            border_crossing_sequence.append('y')
+            border_crossing_sequence.append(False)
             j += 1
 
     # Add any remaining times from the x_crossings_times list
     while i < x_crossings:
         #merged_times.append(x_crossings_times[i])
-        border_crossing_sequence.append('x')
+        border_crossing_sequence.append(True)
         i += 1
 
     # Add any remaining times from the y_crossings_times list
     while j < y_crossings:
         #merged_times.append(y_crossings_times[j])
-        border_crossing_sequence.append('y')
+        border_crossing_sequence.append(False)
         j += 1
 
     # Initialize current universe coordinates and list of visited universes
@@ -1845,31 +1877,33 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
     current_universe_y: int = 0
     universe_increment_direction_x: int = 1 if vx > 0.0 else -1
     universe_increment_direction_y: int = 1 if vy > 0.0 else -1
-    #universes = [(current_universe_x, current_universe_y)]
 
     # Iterate through merged crossing times and sequence
+    #universes = [(current_universe_x, current_universe_y)]
     universes = []
     for crossing in border_crossing_sequence:
-        if crossing == 'x':
+        if crossing: # Crossing is for x
             current_universe_x += universe_increment_direction_x
-        else:  # crossing == 'y'
+        else:  # crossing is for y
             current_universe_y += universe_increment_direction_y
         universes.append((current_universe_x, current_universe_y))
-        #yield (current_universe_x, current_universe_y)
     return universes
 
 
 def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon_s: float = 10.0, use_cache: bool = True) -> list[Asteroid]:
+    start_time = time.perf_counter()
+    global unwrap_total_time
     #time_horizon_s = UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON
     #use_cache = UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON == time_horizon_s
     #hash_tuple = (asteroid.position[0], asteroid.position[1], asteroid.velocity[0], asteroid.velocity[1], time_horizon_s)
     if use_cache:
-        ast_hash = asteroid.position[0] + asteroid.position[1] + asteroid.velocity[0] + asteroid.velocity[1]# + time_horizon_s
+        ast_hash = asteroid.int_hash()
         global unwrap_cache
         if ast_hash in unwrap_cache:
             #print("CACHE HIT")
             #global unwrap_cache_hits
             #unwrap_cache_hits += 1
+            unwrap_total_time += time.perf_counter() - start_time
             return unwrap_cache[ast_hash]
     #print("CACHE MISS")
     #global unwrap_cache_misses
@@ -1879,6 +1913,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
         # An asteroid that is stationary will never move across borders
         if use_cache:
             unwrap_cache[ast_hash] = unwrapped_asteroids
+        unwrap_total_time += time.perf_counter() - start_time
         return unwrapped_asteroids
 
     # The idea is to track which universes the asteroid visits from t=t_0 until t=t_0 + time_horizon_s.
@@ -1903,6 +1938,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
     # print(f"Returning unwrapped asteroids: {unwrapped_asteroids}")
     if use_cache:
         unwrap_cache[ast_hash] = unwrapped_asteroids
+    unwrap_total_time += time.perf_counter() - start_time
     return unwrapped_asteroids
 
 
@@ -2005,7 +2041,7 @@ def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x:
         if asteroid_r < asteroid_dist:
             shot_heading_tolerance_rad = super_fast_asin((asteroid_r - ASTEROID_AIM_BUFFER_PIXELS)/asteroid_dist)
         else:
-            shot_heading_tolerance_rad = pi/2.0
+            shot_heading_tolerance_rad = 0.5*pi
         return feasible, angle_difference_rad(theta, theta_0), shot_heading_tolerance_rad, t, intercept_x, intercept_y, asteroid_dist
     #if len(solutions) > 1:
     #    print(len(solutions))
@@ -2126,6 +2162,7 @@ def is_asteroid_in_list(list_of_asteroids: list[Asteroid], a: Asteroid) -> bool:
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
     for asteroid in list_of_asteroids:
         if is_close(a.position[0], asteroid.position[0]) and is_close(a.position[1], asteroid.position[1]) and is_close(a.velocity[0], asteroid.velocity[0]) and is_close(a.velocity[1], asteroid.velocity[1]) and a.size == asteroid.size:
+            #assert is_close(a.position[0], asteroid.position[0]) and is_close(a.position[1], asteroid.position[1]) and a.velocity[0] == asteroid.velocity[0] and a.velocity[1] == asteroid.velocity[1] and a.size == asteroid.size
             return True
     return False
 
@@ -2577,6 +2614,8 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
 
 
 def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]], current_timestep: int, game_state: GameState, bullet_travel_timesteps: int, original_asteroid: Asteroid) -> None:
+    global asteroid_tracking_total_time
+    start_time = time.perf_counter()
     # This modifies asteroids_pending_death in place instead of returning it
     # Make a copy of the asteroid so we don't mess up the original object
     asteroid = original_asteroid.copy()
@@ -2599,9 +2638,12 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]]
         if future_timesteps != bullet_travel_timesteps:
             # Skip this operation on the last for loop iteration
             asteroid.position = (asteroid.position[0] + asteroid.velocity[0]*DELTA_TIME, asteroid.position[1] + asteroid.velocity[1]*DELTA_TIME)
+    asteroid_tracking_total_time += time.perf_counter() - start_time
 
 
 def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(asteroids_pending_death: dict[int, list[Asteroid]], current_timestep: int, game_state: GameState, asteroid: Asteroid) -> bool:
+    global asteroid_new_track_total_time
+    start_time = time.perf_counter()
     # This assumes all asteroids are wrapped/within the game bounds!
     # print(f"Checking pending shots for timestep {current_timestep}")
     def verify_asteroid_does_not_appear_in_wrong_timestep(a: Asteroid) -> bool:  # REMOVE_FOR_COMPETITION
@@ -2623,11 +2665,14 @@ def check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(aster
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
             if not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid):  # REMOVE_FOR_COMPETITION
                 return verify_asteroid_does_not_appear_in_wrong_timestep(asteroid)  # REMOVE_FOR_COMPETITION
-        return not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
+        return_value = not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
+        asteroid_new_track_total_time += time.perf_counter() - start_time
+        return return_value
     else:
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
             # print(asteroids_pending_death)  # REMOVE_FOR_COMPETITION
             return verify_asteroid_does_not_appear_in_wrong_timestep(asteroid)  # REMOVE_FOR_COMPETITION
+        asteroid_new_track_total_time += time.perf_counter() - start_time
         return True
 
 
@@ -3515,7 +3560,7 @@ class Matrix():
                     idle_thrust = 0.0
                 else:
                     self.explanation_messages.append("Asteroids no longer exist. We're all done!")
-                    self.explanation_messages.append(f"In this scenario, I have simulated {total_sim_timesteps*DELTA_TIME/60:0.0f} minutes of gameplay! Bullet sim took {bullet_sim_time} s and the sim update took {sim_update_total_time} s")
+                    self.explanation_messages.append(f"In this scenario, I have simulated {total_sim_timesteps*DELTA_TIME/60:0.0f} minutes of gameplay! Bullet sim took {bullet_sim_time} s and the sim update took {sim_update_total_time} s with the sim culling taking {sim_cull_total_time} s, unwrapping taking {unwrap_total_time} s, and culling asteroids_pending_death is {asteroids_pending_death_total_cull_time} s, {asteroid_tracking_total_time=}, {asteroid_new_track_total_time=}")
                     #self.explanation_messages.append(f"We simulated {total_bullet_sim_timesteps} bullet sim timesteps and {total_bullet_sim_iterations} iterations, and {total_sim_timesteps} timesteps, and {update_ts_multiple_count=} {update_ts_zero_count=}")
                     turn_direction = 0
                     idle_thrust = 0.0
@@ -3924,7 +3969,7 @@ class Matrix():
     def update(self, thrust: float = 0.0, turn_rate: float = 0.0, fire: Optional[bool] = None, whole_move_sequence: Optional[list[Action]] = None, wait_out_mines: bool = False) -> bool:
         global total_sim_timesteps
         total_sim_timesteps += 1
-        global sim_update_total_time
+        global sim_update_total_time, sim_cull_total_time
         #if random.random() < 0.002:
         #    raise Exception("Bad luck exception!")
         start_time = time.perf_counter()
@@ -4437,7 +4482,9 @@ class Matrix():
                         break
         # Cull asteroids marked for removal
         if asteroid_remove_idxs:
+            start_cull_time = time.perf_counter()
             self.game_state.asteroids = [asteroid for idx, asteroid in enumerate(self.game_state.asteroids) if idx not in asteroid_remove_idxs]
+            sim_cull_total_time += time.perf_counter() - start_cull_time
         
         if not wait_out_mines:
             # Checking collisions with the other ship isn't a great idea since this isn't 100% sure. This models the other ship as stationary, which probably won't be true, unless their controller is the null controller.
@@ -4981,9 +5028,16 @@ class NeoController(KesslerController):
         asteroids_pending_death = best_action_sim.get_asteroids_pending_death()
         # debug_print(f"Timesteps in asteroids pending death: {[timestep for timestep in asteroids_pending_death.keys()]}")
         #print(f"Size of asts pending death: {sys.getsizeof()}")
-        asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep >= best_action_sim_last_state.timestep}
+        global asteroids_pending_death_total_cull_time
+        start_time = time.perf_counter()
+        #asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep >= best_action_sim_last_state.timestep}
+        for timestep in range(self.current_timestep, best_action_sim_last_state.timestep):
+            if timestep in asteroids_pending_death:
+                del asteroids_pending_death[timestep]
+        asteroids_pending_death_total_cull_time += time.perf_counter() - start_time
         forecasted_asteroid_splits = best_action_sim.get_forecasted_asteroid_splits()
         next_base_game_state = best_action_sim.get_game_state()
+        #print(f"Ast pending death keys: {asteroids_pending_death.keys()}")
         # Made this change, because if we're waiting out mines, that'll mess up the game state. But the state sequence still has the last actual game state, so we'll use that!
         # next_base_game_state = best_action_sim_last_state['game_state']
         # print(f'\nNext base game state for timestep {best_action_sim_last_state["timestep"]}:')
