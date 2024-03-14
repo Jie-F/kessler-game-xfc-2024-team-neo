@@ -83,10 +83,10 @@ UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON: Final[float] = 2.0 # The upper bo
 ASTEROID_SIZE_SHOT_PRIORITY: Final = (nan, 1, 2, 3, 4)  # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None
 MINE_DROP_COOLDOWN_FUDGE_TS: Final[int] = 60  # We can drop a mine every 30 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
-MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final[float] = 80.0
+MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final[float] = 50.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final[int] = 10
 MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
-MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[int] = 6
+MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[int] = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
 DEFAULT_FITNESS_WEIGHTS: Final = (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
@@ -184,8 +184,8 @@ SHIP_AVOIDANCE_SPEED_PADDING_RATIO: Final[float] = 1/100
 ASTEROID_COUNT_LOOKUP: Final = (0, 1, 4, 13, 40)  # A size 2 asteroid is 4 asteroids, size 4 is 30, etc. Each asteroid splits into 3, and itself is counted as well. Explicit formula is count(n) = (3^n - 1)/2
 DEGREES_BETWEEN_SHOTS: Final[float] = FIRE_COOLDOWN_TS*SHIP_MAX_TURN_RATE*DELTA_TIME
 # FIS PARAMS
-ASTEROIDS_HIT_VERY_GOOD: Final[int] = 40
-ASTEROIDS_HIT_OKAY_CENTER: Final = 12
+ASTEROIDS_HIT_VERY_GOOD: Final[int] = 65
+ASTEROIDS_HIT_OKAY_CENTER: Final = 20
 
 # Dirty globals
 # Store messages and their last printed timestep
@@ -2171,8 +2171,9 @@ def count_asteroids_in_mine_blast_radius(game_state: GameState, mine_x: float, m
     count = 0
     for a in game_state.asteroids:
         # Extrapolate the asteroid position into the time of the mine detonation to check its bounds
-        asteroid_future_pos = ((a.position[0] + future_check_timesteps*a.velocity[0]*DELTA_TIME) % game_state.map_size[0], (a.position[1] + future_check_timesteps*a.velocity[1]*DELTA_TIME) % game_state.map_size[1])
-        if check_collision(asteroid_future_pos[0], asteroid_future_pos[1], a.radius, mine_x, mine_y, MINE_BLAST_RADIUS - MINE_ASTEROID_COUNT_FUDGE_DISTANCE):
+        asteroid_future_pos_x = (a.position[0] + future_check_timesteps*a.velocity[0]*DELTA_TIME) % game_state.map_size[0]
+        asteroid_future_pos_y = (a.position[1] + future_check_timesteps*a.velocity[1]*DELTA_TIME) % game_state.map_size[1]
+        if check_collision(asteroid_future_pos_x, asteroid_future_pos_y, a.radius, mine_x, mine_y, MINE_BLAST_RADIUS - MINE_ASTEROID_COUNT_FUDGE_DISTANCE):
             count += 1
     return count
 
@@ -3417,15 +3418,15 @@ class Matrix():
                     t.interception_time_s + # Might be more correct to do t.interception_time_s + t.aiming_timesteps_required*DELTA_TIME - get_adversary_interception_time_lower_bound(t.asteroid, self.other_ships, self.game_state)
                     t.asteroid_dist_during_interception/400.0 +
                     frontrun_score_multiplier*min(0.5, max(0, t.interception_time_s - get_adversary_interception_time_lower_bound(t.asteroid, self.other_ships, self.game_state))) +
-                    ((2.0 if t.asteroid.size == 1 else -2.0) if t.asteroid_will_get_hit_by_my_mine else 0.0) +
-                    ((2.0 if t.asteroid.size != 1 else -2.0) if t.asteroid_will_get_hit_by_their_mine else 0.0)
+                    ((5.0 if t.asteroid.size == 1 else -5.0) if t.asteroid_will_get_hit_by_my_mine else 0.0) +
+                    ((3.0 if t.asteroid.size != 1 else -3.0) if t.asteroid_will_get_hit_by_their_mine else 0.0)
                 ))
             else:
                 sorted_imminent_targets.sort(key=lambda t: (
                     min(10, t.imminent_collision_time_s) +
                     ASTEROID_SIZE_SHOT_PRIORITY[t.asteroid.size]*0.25 +
                     t.asteroid_dist_during_interception/400.0 +
-                    ((2.0 if t.asteroid.size == 1 else -2.0) if t.asteroid_will_get_hit_by_my_mine else 0.0)
+                    ((5.0 if t.asteroid.size == 1 else -5.0) if t.asteroid_will_get_hit_by_my_mine else 0.0)
                 ))
             # The frontrun time is bounded by 0 and 0.5 seconds, since anything after half a second away is basically the same and there's no point differentiating between them
             # TODO: For each asteroid, give it a couple feasible times where we wait longer and longer. This way we can choose to wait a timestep to fire again if we'll get luckier with the bullet lining up
@@ -4082,6 +4083,7 @@ class Matrix():
                     timesteps_until_can_fire = max(0, FIRE_COOLDOWN_TS - (self.initial_timestep + self.future_timesteps - self.last_timestep_fired))
                     fire_this_timestep = False
                     ship_heading_rad = radians(self.ship_state.heading)
+                    avoid_targeting_this_asteroid: bool
                     if not self.halt_shooting or (self.respawn_maneuver_pass_number == 2 and self.initial_timestep + self.future_timesteps > self.last_timestep_colliding_with_asteroid):
                         if timesteps_until_can_fire == 0:
                             #print(f"\ntimesteps_until_can_fire == 0, looping through ALL ASTS!")
@@ -4098,6 +4100,7 @@ class Matrix():
                                 # Loop through ALL asteroids and make sure at least one asteroid is a valid target
                                 # Get the length of time the longest asteroid would take to hit, and that'll be the upper bound of the bullet sim's timesteps
                                 # Avoid shooting my size 1 asteroids that are about to get mined by my mine
+                                avoid_targeting_this_asteroid = False
                                 if asteroid.size == 1:
                                     for m in self.game_state.mines:
                                         if m.position in self.mine_positions_placed:
@@ -4105,7 +4108,10 @@ class Matrix():
                                             project_asteroid_by_timesteps_num = round(m.remaining_time*FPS)
                                             asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state)
                                             if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
-                                                continue
+                                                avoid_targeting_this_asteroid = True
+                                                break
+                                if avoid_targeting_this_asteroid:
+                                    continue
                                 if ast_idx < len_asteroids:
                                     #ast_angle = super_fast_atan2(asteroid.position[1] - self.ship_state.position[1], asteroid.position[0] - self.ship_state.position[0])
                                     #if abs(angle_difference_deg(degrees(ast_angle), self.ship_state.heading)) <= MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF:
@@ -4186,7 +4192,7 @@ class Matrix():
                                         # Added one to the timesteps to prevent off by one :P
                                         #print(f'WITHHOLDING SHOT BECAUSE SCENARIO IS ENDING, self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 = {self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1}, {self.game_state.time_limit=}, {FPS*self.game_state.time_limit=}')
                                         fire_this_timestep = False
-                            if not isinf(second_min_shot_heading_error_rad) and self.respawn_maneuver_pass_number == 0:
+                            if not fire_this_timestep and not isinf(second_min_shot_heading_error_rad) and self.respawn_maneuver_pass_number == 0:
                                 # Might as well start turning toward our next target!
                                 # The assumption is that the target that was hit wasn't the second smallest heading diff. THIS IS NOT TRUE IN GENERAL. This can be wrong! But whatever, it's not a big deal and probably not worth fixing/taking the extra compute to track this.
                                 min_shot_heading_error_deg = degrees(min_shot_heading_error_rad)
@@ -4198,7 +4204,7 @@ class Matrix():
                                 turn_rate = altered_turn_command
                                 if whole_move_sequence:
                                     whole_move_sequence[self.future_timesteps].turn_rate = altered_turn_command
-                        elif timesteps_until_can_fire <= 2 and self.respawn_maneuver_pass_number == 0:
+                        elif timesteps_until_can_fire <= 1 and self.respawn_maneuver_pass_number == 0:
                             # if timesteps_until_can_fire == 1, then we're able to fire on the next timestep. We can use this timestep to aim for an asteroid, and we have 6 degrees we're able to turn our ship to do that
                             # On the next timestep, hopefully we'd be aimed at the asteroid and then the above if case will kick in and we will shoot it!
                             # This makes the shot efficiency during maneuvering a lot better because we're not only dodging, but we're also targetting and firing at the same time!
@@ -4227,6 +4233,7 @@ class Matrix():
                             ship_predicted_pos_y = self.ship_state.position[1] + ship_speed_ts*sin(rad_heading)
                             for asteroid in chain(self.game_state.asteroids, self.forecasted_asteroid_splits):
                                 # Avoid shooting my size 1 asteroids that are about to get mined by my mine
+                                avoid_targeting_this_asteroid = False
                                 if asteroid.size == 1:
                                     for m in self.game_state.mines:
                                         if m.position in self.mine_positions_placed:
@@ -4234,7 +4241,10 @@ class Matrix():
                                             project_asteroid_by_timesteps_num = round(m.remaining_time*FPS)
                                             asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state)
                                             if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
-                                                continue
+                                                avoid_targeting_this_asteroid = True
+                                                break
+                                if avoid_targeting_this_asteroid:
+                                    continue
                                 if check_whether_this_is_a_new_asteroid_we_do_not_have_a_pending_shot_for(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, asteroid):
                                     for a in unwrap_asteroid(asteroid, self.game_state.map_size[0], self.game_state.map_size[1], UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON, True):
                                         if locked_in:
