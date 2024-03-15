@@ -1,17 +1,17 @@
 import numpy as np
 import json
-import shutil  # For copying the file
+import shutil
 from datetime import datetime
 import random
 import time
 import os
 
-from neo_controller import Neo
-from baby_neo_controller import NeoController
-import numpy as n
+from typing import Any
+from src.neo_controller_training import NeoController
+from src.baby_neo_controller import BabyNeoController
 import sys
-from r_controller import RController
-from null_controller import NullController
+#from r_controller import RController
+#from null_controller import NullController
 from scenarios import *
 from xfc_2023_replica_scenarios import *
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
@@ -20,9 +20,11 @@ from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
 GA_RESULTS_FILE = "ga_results.json"
-TRAINING_DIRECTORY = 'training_v1'
+TRAINING_DIRECTORY = 'training_v2'
+CHROMOSOME_TUPLE_SIZE = 9
+ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
 
-def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range):
+def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range) -> list:
     asteroids = []
     for _ in range(num_asteroids):
         position = (random.uniform(*position_range_x), random.uniform(*position_range_y))
@@ -32,7 +34,7 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-def backup_existing_results(filename=GA_RESULTS_FILE):
+def backup_existing_results(filename=GA_RESULTS_FILE) -> None:
     try:
         # Generate backup filename with timestamp
         backup_filename = f"{filename[:-5]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
@@ -42,7 +44,7 @@ def backup_existing_results(filename=GA_RESULTS_FILE):
     except FileNotFoundError:
         print("No existing file to backup.")
 
-def load_existing_results(filename=GA_RESULTS_FILE):
+def load_existing_results(filename=GA_RESULTS_FILE) -> Any | list:
     try:
         with open(filename, 'r', encoding='utf8') as f:
             return json.load(f)
@@ -50,11 +52,11 @@ def load_existing_results(filename=GA_RESULTS_FILE):
         print("No existing results file found. Starting fresh.")
         return []
 
-def save_results_incrementally(result, filename=GA_RESULTS_FILE):
+def save_results_incrementally(result, filename=GA_RESULTS_FILE) -> None:
     with open(filename, 'w', encoding='utf8') as f:
         json.dump(result, f, indent=4)
 
-def read_and_process_json_files(directory="."):
+def read_and_process_json_files(directory=".") -> list:
     all_data = []
     # Iterate through all files in the current directory
     for filename in os.listdir(directory):
@@ -71,7 +73,7 @@ def read_and_process_json_files(directory="."):
                     print(f"Error decoding JSON from file {filename}.")
     return all_data
 
-def get_top_chromosomes():
+def get_top_chromosomes() -> list:
     # Call the function to start processing
     all_data = read_and_process_json_files(TRAINING_DIRECTORY)
 
@@ -79,7 +81,7 @@ def get_top_chromosomes():
     top_scores = []
 
     for run in all_data:
-        current_score = run['team_1_hits']
+        current_score = run['team_1_total_hits']
         current_chromosome = run['chromosome']
         # Append the current run's score and chromosome to the list
         top_scores.append((current_score, current_chromosome))
@@ -104,6 +106,7 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
 
     game = KesslerGame(settings=game_settings)
     while True:
+        print('\n\n\nNew Training Run!')
         random.seed()
         iteration += 1
         scenarios_info = []
@@ -133,31 +136,39 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
             new_chromosome = random.choice([child_1, child_2])
             new_chromosome = mutate_chromosome(new_chromosome)
             print(f"Took parents {parent1} and {parent2} to get {new_chromosome}")
-        new_chromosome = normalize(new_chromosome, 7)
+        new_chromosome = normalize(new_chromosome, 1.0)
         print(f"\nNew run using chromosome: {new_chromosome}")
-        team_1_hits = 0
-        team_2_hits = 0
+        team_1_total_hits = 0
+        team_2_total_hits = 0
         team_1_deaths = 0
         team_2_deaths = 0
         team_1_wins = 0
         team_2_wins = 0
         total_eval_time_s = 0
-        for i in range(2):
+        neo_total_sim_ts = 0
+        total_sim_time_s = 0.0
+        for i in range(3):
+            # Run portfolio 3 times, to even out randomness
             for sc in training_portfolio:
-                random.seed(i)
-                controllers_used = [Neo(new_chromosome), NeoController()]
-                print(f"\nEvaluating scenario {sc.name} with rng seed {i}")
+                #random.seed(i)
+                randseed = random.randint(1, 1000000000)
+                random.seed(randseed)
+                controllers_used = [NeoController(tuple(new_chromosome)), BabyNeoController()]
+                assert controllers_used[0].get_total_sim_ts() == 0
+                print(f"\nEvaluating scenario {sc.name} with rng seed {randseed} on total pass number {i + 1}")
                 #print(f"RNG State: {random.getstate()}")
                 pre = time.perf_counter()
                 score, perf_data = game.run(scenario=sc, controllers=controllers_used)
                 post = time.perf_counter()
+                neo_sim_ts = controllers_used[0].get_total_sim_ts()
+                neo_total_sim_ts += neo_sim_ts
                 asts_hit = [team.asteroids_hit for team in score.teams]
                 total_eval_time_s += max(0, post - pre)
                 print('Scenario eval time: '+str(post - pre))
                 print(score.stop_reason)
                 print('Asteroids hit: ' + str(asts_hit))
-                team_1_hits += asts_hit[0]
-                team_2_hits += asts_hit[1]
+                team_1_total_hits += asts_hit[0]
+                team_2_total_hits += asts_hit[1]
                 if asts_hit[0] > asts_hit[1]:
                     team_1_wins += 1
                 elif asts_hit[0] < asts_hit[1]:
@@ -165,21 +176,30 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                 team_deaths = [team.deaths for team in score.teams]
                 team_1_deaths += team_deaths[0]
                 team_2_deaths += team_deaths[1]
+                total_sim_time_s += float(score.sim_time)
+                assert float(score.sim_time) >= 0.0
                 scenarios_info.append({'scenario_name': sc.name,
-                                    'randseed': i,
-                                    'eval_time': post - pre,
-                                    'team_1_hits': asts_hit[0],
-                                    'team_2_hits': asts_hit[1],
-                                    'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
-                                    'team_2_wins': 1 if asts_hit[0] < asts_hit[1] else 0,
-                                    'team_1_deaths': team_deaths[0],
-                                    'team_2_deaths': team_deaths[1]})
+                                       'timestamp': datetime.now().isoformat(),
+                                       'randseed': randseed,
+                                       'eval_time_s': max(0, post - pre),
+                                       'sim_time_s': score.sim_time,
+                                       'neo_sim_ts': neo_sim_ts,
+                                       'team_1_hits': asts_hit[0],
+                                       'team_2_hits': asts_hit[1],
+                                       'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
+                                       'team_2_wins': 1 if asts_hit[0] < asts_hit[1] else 0,
+                                       'team_1_deaths': team_deaths[0],
+                                       'team_2_deaths': team_deaths[1]})
         run_info = {
             'timestamp': datetime.now().isoformat(),
             'total_eval_time': total_eval_time_s,
+            'total_sim_time': total_sim_time_s,
             'chromosome': new_chromosome,
-            'team_1_hits': team_1_hits,
-            'team_2_hits': team_2_hits,
+            'neo_total_sim_ts': neo_total_sim_ts,
+            'team_1_name': controllers_used[0].name,
+            'team_2_name': controllers_used[1].name,
+            'team_1_total_hits': team_1_total_hits,
+            'team_2_total_hits': team_2_total_hits,
             'team_1_deaths': team_1_deaths,
             'team_2_deaths': team_2_deaths,
             'team_1_wins': team_1_wins,
@@ -190,20 +210,23 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         # Save incrementally
         save_results_incrementally(results, filename)
 
-def generate_random_numbers(length, lower_bound=0, upper_bound=1):
+def generate_random_numbers(length, lower_bound=0, upper_bound=1) -> list[float]:
     return [random.uniform(lower_bound, upper_bound) for _ in range(length)]
 
-def normalize(numbers, target_sum):
+def normalize(numbers, target_sum) -> list:
     sum_numbers = sum(numbers)
-    return [number / sum_numbers * target_sum for number in numbers]
+    scale_ratio = target_sum / sum_numbers
+    return [number*scale_ratio  for number in numbers]
 
-def generate_random_chromosome(chromosome_length=7, target_sum=7):
+def generate_random_chromosome(chromosome_length=CHROMOSOME_TUPLE_SIZE, target_sum=1.0) -> list:
     random.seed()
     random_numbers = generate_random_numbers(chromosome_length)
+    #print(random_numbers)
     normalized_chromosome = normalize(random_numbers, target_sum)
+    #print(normalized_chromosome)
     return normalized_chromosome
 
-def mutate_chromosome(chromosome, mutation_rate=0.2, mutation_strength=0.3):
+def mutate_chromosome(chromosome, mutation_rate=0.2, mutation_strength=0.3) -> Any:
     mutation_occurred = False
 
     while not mutation_occurred:
@@ -219,11 +242,13 @@ def mutate_chromosome(chromosome, mutation_rate=0.2, mutation_strength=0.3):
                     mutation_occurred = False
     return chromosome
 
-def crossover_chromosomes(parent1, parent2):
+def crossover_chromosomes(parent1, parent2) -> tuple:
     crossover_point = np.random.randint(1, len(parent1) - 1)  # Choose a crossover point
     child1 = parent1[:crossover_point] + parent2[crossover_point:]
     child2 = parent2[:crossover_point] + parent1[crossover_point:]
     return child1, child2
+
+training_portfolio = []
 
 xfc2023 = [
     ex_adv_four_corners_pt1,
@@ -247,29 +272,69 @@ xfc2023 = [
     adv_multi_ring_closing_both_inside_fast
 ]
 
-training_portfolio = xfc2023
+xfc_2021_show_portfolio = [
+    threat_test_1,
+    threat_test_2,
+    threat_test_3,
+    threat_test_4,
+    accuracy_test_5,
+    accuracy_test_6,
+    accuracy_test_7,
+    accuracy_test_8,
+    accuracy_test_9,
+    accuracy_test_10,
+    wall_left_easy,
+    wall_right_easy,
+    wall_top_easy,
+    wall_bottom_easy,
+    ring_closing,
+    ring_static_left,
+    ring_static_right,
+    ring_static_top,
+    ring_static_bottom,
+    wall_right_wrap_3,
+    wall_right_wrap_4,
+    wall_left_wrap_3,
+    wall_left_wrap_4,
+    wall_top_wrap_3,
+    wall_top_wrap_4,
+    wall_bottom_wrap_3,
+    wall_bottom_wrap_4,
+]
+
+training_portfolio.extend(xfc2023)
 
 width, height = (1000, 800)
-
-for ind, num_ast in enumerate([5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]):
+easyrand = []
+rand_scenarios = []
+for ind, num_ast in enumerate(range(1, 50)):
     random.seed(ind)
+    randomly_generated_asteroids = generate_asteroids(
+                            num_asteroids=num_ast,
+                            position_range_x=(0, width),
+                            position_range_y=(0, height),
+                            speed_range=(-300, 600, 0),
+                            angle_range=(-1, 361),
+                            size_range=(1, 4)
+                        )
+    total_asts = 0
+    for a in randomly_generated_asteroids:
+        total_asts += ASTEROID_COUNT_LOOKUP[a['size']]
+    #print(total_asts)
     rand_scenario = Scenario(name=f'Random Scenario {num_ast}',
-                                asteroid_states=generate_asteroids(
-                                        num_asteroids=num_ast,
-                                        position_range_x=(0, width),
-                                        position_range_y=(0, height),
-                                        speed_range=(-300, 600, 0),
-                                        angle_range=(-1, 361),
-                                        size_range=(1, 4)
-                                    ),
+                                asteroid_states=randomly_generated_asteroids,
                                 ship_states=[
-                                    {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                    {'position': (width*2//3, height//2), 'angle': 180, 'lives': 3, 'team': 2, "mines_remaining": 3},
+                                    {'position': (width/3, height/2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 5},
+                                    {'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
                                 ],
                                 map_size=(width, height),
-                                time_limit=600,
+                                time_limit=total_asts/10*0.8,
                                 ammo_limit_multiplier=0,
                                 stop_if_no_ammo=False)
-    training_portfolio.append(rand_scenario)
+    rand_scenarios.append(rand_scenario)
+    #if ind < 3:
+    #    easyrand.append(rand_scenario)
+#training_portfolio = easyrand
+training_portfolio.extend(rand_scenarios)
 
-run_training(training_portfolio, f"{TRAINING_DIRECTORY}\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training 1 Results.json")
+run_training(training_portfolio, f"{TRAINING_DIRECTORY}\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training Results.json")

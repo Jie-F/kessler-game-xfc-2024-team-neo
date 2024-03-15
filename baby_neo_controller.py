@@ -684,7 +684,7 @@ class BabyNeoController(KesslerController):
 
         # Find physically closest asteroid
         closest_asteroid = None
-        closest_gap_between_ship_and_closest_asteroid = 1000000000
+        closest_gap_between_ship_and_closest_asteroid = 1000000000.0
         for a in game_state["asteroids"]:
             dx = a["position"][0] - ship_x
             dy = a["position"][1] - ship_y
@@ -699,7 +699,7 @@ class BabyNeoController(KesslerController):
             avoidance_controller = ctrl.ControlSystemSimulation(self.avoidance_control, flush_after_run=1)
             avoidance_controller.input['theta_delta'] = shooting_theta
 
-            avoidance_controller.input['distance'] = min(closest_gap_between_ship_and_closest_asteroid, 499) # Dist to the closest asteroid, clipped to 500 max
+            avoidance_controller.input['distance'] = min(closest_gap_between_ship_and_closest_asteroid, 499.0) # Dist to the closest asteroid, clipped to 500 max
             #print(f'computing avoidance, thetadelta: {shooting_theta}, distance: {closest_gap_between_ship_and_closest_asteroid}')
             avoidance_controller.compute()
             thrust = avoidance_controller.output['ship_thrust']
