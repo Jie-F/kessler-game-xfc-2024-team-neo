@@ -1,7 +1,7 @@
 import time
 import random
 from smith_controller import Smith
-from baby_neo_controller import BabyNeoController
+from src.baby_neo_controller import BabyNeoController
 from benchmark_controller import BenchmarkController
 import numpy as np
 import cProfile
@@ -319,8 +319,8 @@ while True:
                                     #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
                                     #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                     ship_states=[
-                                        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 10},
-                                        #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 5, 'team': 2, "mines_remaining": 3},
+                                        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                        #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
                                     ],
                                     map_size=(width, height),
                                     time_limit=240.0,
@@ -370,6 +370,7 @@ while True:
             asts_hit = [team.asteroids_hit for team in score.teams]
             color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
             color_print(score.stop_reason, 'green')
+            color_print(f"Scenario in-game time: {score.sim_time:.02f} s", 'green')
             color_print('Asteroids hit: ' + str(asts_hit), 'green')
             team_1_hits += asts_hit[0]
             if len(asts_hit) > 1:
