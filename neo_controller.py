@@ -1891,8 +1891,8 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
 
 
 def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon_s: float = 10.0, use_cache: bool = True) -> list[Asteroid]:
-    start_time = time.perf_counter()
-    global unwrap_total_time
+    #start_time = time.perf_counter()
+    #global unwrap_total_time
     #time_horizon_s = UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON
     #use_cache = UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON == time_horizon_s
     #hash_tuple = (asteroid.position[0], asteroid.position[1], asteroid.velocity[0], asteroid.velocity[1], time_horizon_s)
@@ -1903,7 +1903,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
             #print("CACHE HIT")
             #global unwrap_cache_hits
             #unwrap_cache_hits += 1
-            unwrap_total_time += time.perf_counter() - start_time
+            #unwrap_total_time += time.perf_counter() - start_time
             return unwrap_cache[ast_hash]
     #print("CACHE MISS")
     #global unwrap_cache_misses
@@ -1913,7 +1913,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
         # An asteroid that is stationary will never move across borders
         if use_cache:
             unwrap_cache[ast_hash] = unwrapped_asteroids
-        unwrap_total_time += time.perf_counter() - start_time
+        #unwrap_total_time += time.perf_counter() - start_time
         return unwrapped_asteroids
 
     # The idea is to track which universes the asteroid visits from t=t_0 until t=t_0 + time_horizon_s.
@@ -1938,7 +1938,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
     # print(f"Returning unwrapped asteroids: {unwrapped_asteroids}")
     if use_cache:
         unwrap_cache[ast_hash] = unwrapped_asteroids
-    unwrap_total_time += time.perf_counter() - start_time
+    #unwrap_total_time += time.perf_counter() - start_time
     return unwrapped_asteroids
 
 
@@ -2615,8 +2615,8 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
 
 
 def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]], current_timestep: int, game_state: GameState, bullet_travel_timesteps: int, original_asteroid: Asteroid) -> None:
-    global asteroid_tracking_total_time
-    start_time = time.perf_counter()
+    #global asteroid_tracking_total_time
+    #start_time = time.perf_counter()
     # This modifies asteroids_pending_death in place instead of returning it
     # Make a copy of the asteroid so we don't mess up the original object
     asteroid = original_asteroid.copy()
@@ -2639,12 +2639,12 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]]
         if future_timesteps != bullet_travel_timesteps:
             # Skip this operation on the last for loop iteration
             asteroid.position = (asteroid.position[0] + asteroid.velocity[0]*DELTA_TIME, asteroid.position[1] + asteroid.velocity[1]*DELTA_TIME)
-    asteroid_tracking_total_time += time.perf_counter() - start_time
+    #asteroid_tracking_total_time += time.perf_counter() - start_time
 
 
 def check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot(asteroids_pending_death: dict[int, list[Asteroid]], current_timestep: int, game_state: GameState, asteroid: Asteroid) -> bool:
-    global asteroid_new_track_total_time
-    start_time = time.perf_counter()
+    # global asteroid_new_track_total_time
+    #start_time = time.perf_counter()
     # This assumes all asteroids are wrapped/within the game bounds!
     # print(f"Checking pending shots for timestep {current_timestep}")
     def verify_asteroid_does_not_appear_in_wrong_timestep(a: Asteroid) -> bool:  # REMOVE_FOR_COMPETITION
@@ -2666,14 +2666,14 @@ def check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
             if not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid):  # REMOVE_FOR_COMPETITION
                 return verify_asteroid_does_not_appear_in_wrong_timestep(asteroid)  # REMOVE_FOR_COMPETITION
-        return_value = not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
-        asteroid_new_track_total_time += time.perf_counter() - start_time
-        return return_value
+        # return_value = not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
+        #asteroid_new_track_total_time += time.perf_counter() - start_time
+        return not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
     else:
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
             # print(asteroids_pending_death)  # REMOVE_FOR_COMPETITION
             return verify_asteroid_does_not_appear_in_wrong_timestep(asteroid)  # REMOVE_FOR_COMPETITION
-        asteroid_new_track_total_time += time.perf_counter() - start_time
+        #asteroid_new_track_total_time += time.perf_counter() - start_time
         return True
 
 
@@ -3718,15 +3718,15 @@ class Matrix():
         #total_bullet_sim_iterations += 1
         asteroid_remove_idxs: set[int] = set()
         global total_sim_timesteps
-        global bullet_sim_time
-        start_time = time.perf_counter()
+        #global bullet_sim_time
+        #start_time = time.perf_counter()
         while True:
             #total_bullet_sim_timesteps += 1
             total_sim_timesteps += 1
             # Simplified update() simulation loop
             timesteps_until_bullet_hit_asteroid += 1
             if timesteps_until_bullet_hit_asteroid > timestep_limit:
-                bullet_sim_time += time.perf_counter() - start_time
+                #bullet_sim_time += time.perf_counter() - start_time
                 return None, None, ship_not_collided_with_asteroid
             if self.game_state_plotter is not None and (self.plot_this_sim or (GAMESTATE_PLOTTING and BULLET_SIM_PLOTTING and (START_GAMESTATE_PLOTTING_AT_SECOND is None or START_GAMESTATE_PLOTTING_AT_SECOND*FPS <= self.initial_timestep + timesteps_until_bullet_hit_asteroid + (-1 if not skip_half_of_first_cycle else 0)))):  # REMOVE_FOR_COMPETITION
                 flattened_asteroids_pending_death = [ast for ast_list in self.asteroids_pending_death.values() for ast in ast_list]  # REMOVE_FOR_COMPETITION
@@ -3752,7 +3752,7 @@ class Matrix():
                     if check_coordinate_bounds(self.game_state, my_new_bullet_pos[0], my_new_bullet_pos[1]):
                         my_bullet.position = my_new_bullet_pos
                     else:
-                        bullet_sim_time += time.perf_counter() - start_time
+                        #bullet_sim_time += time.perf_counter() - start_time
                         return None, None, ship_not_collided_with_asteroid  # The bullet got shot into the void without hitting anything :(
 
                 for m in mines:
@@ -3797,7 +3797,7 @@ class Matrix():
                 bullet_y = bullet_fired_from_ship_position[1] + SHIP_RADIUS*sin_heading
                 # Make sure the bullet isn't being fired out into the void
                 if not check_coordinate_bounds(self.game_state, bullet_x, bullet_y):
-                    bullet_sim_time += time.perf_counter() - start_time
+                    #bullet_sim_time += time.perf_counter() - start_time
                     return None, None, ship_not_collided_with_asteroid  # The bullet got shot into the void without hitting anything :(
                 vx = BULLET_SPEED*cos_heading
                 vy = BULLET_SPEED*sin_heading
@@ -3856,7 +3856,7 @@ class Matrix():
                     if asteroid_bullet_collision(b.position, b_tail, a.position, a.radius):
                         if b_idx == len_bullets:
                             # This bullet is my bullet!
-                            bullet_sim_time += time.perf_counter() - start_time
+                            #bullet_sim_time += time.perf_counter() - start_time
                             return a, timesteps_until_bullet_hit_asteroid, ship_not_collided_with_asteroid
                         else:
                             # Mark bullet for removal
@@ -3970,10 +3970,10 @@ class Matrix():
     def update(self, thrust: float = 0.0, turn_rate: float = 0.0, fire: Optional[bool] = None, whole_move_sequence: Optional[list[Action]] = None, wait_out_mines: bool = False) -> bool:
         global total_sim_timesteps
         total_sim_timesteps += 1
-        global sim_update_total_time, sim_cull_total_time
+        #global sim_update_total_time, sim_cull_total_time
         #if random.random() < 0.002:
         #    raise Exception("Bad luck exception!")
-        start_time = time.perf_counter()
+        #start_time = time.perf_counter()
         # This should exactly match what kessler_game.py does.
         # Being even one timestep off is the difference between life and death!!!
         return_value: Optional[bool] = None
@@ -4489,9 +4489,9 @@ class Matrix():
                         break
         # Cull asteroids marked for removal
         if asteroid_remove_idxs:
-            start_cull_time = time.perf_counter()
+            #start_cull_time = time.perf_counter()
             self.game_state.asteroids = [asteroid for idx, asteroid in enumerate(self.game_state.asteroids) if idx not in asteroid_remove_idxs]
-            sim_cull_total_time += time.perf_counter() - start_cull_time
+            #sim_cull_total_time += time.perf_counter() - start_cull_time
         
         if not wait_out_mines:
             # Checking collisions with the other ship isn't a great idea since this isn't 100% sure. This models the other ship as stationary, which probably won't be true, unless their controller is the null controller.
@@ -4512,7 +4512,7 @@ class Matrix():
             '''
             self.future_timesteps += 1
             self.game_state.sim_frame += 1
-        sim_update_total_time += time.perf_counter() - start_time
+        #sim_update_total_time += time.perf_counter() - start_time
         if return_value is None:
             return True
         else:
@@ -5035,13 +5035,13 @@ class NeoController(KesslerController):
         asteroids_pending_death = best_action_sim.get_asteroids_pending_death()
         # debug_print(f"Timesteps in asteroids pending death: {[timestep for timestep in asteroids_pending_death.keys()]}")
         #print(f"Size of asts pending death: {sys.getsizeof()}")
-        global asteroids_pending_death_total_cull_time
-        start_time = time.perf_counter()
+        #global asteroids_pending_death_total_cull_time
+        #start_time = time.perf_counter()
         #asteroids_pending_death = {timestep: asteroids for timestep, asteroids in asteroids_pending_death.items() if timestep >= best_action_sim_last_state.timestep}
         for timestep in range(self.current_timestep, best_action_sim_last_state.timestep):
             if timestep in asteroids_pending_death:
                 del asteroids_pending_death[timestep]
-        asteroids_pending_death_total_cull_time += time.perf_counter() - start_time
+        #asteroids_pending_death_total_cull_time += time.perf_counter() - start_time
         forecasted_asteroid_splits = best_action_sim.get_forecasted_asteroid_splits()
         next_base_game_state = best_action_sim.get_game_state()
         #print(f"Ast pending death keys: {asteroids_pending_death.keys()}")
