@@ -73,7 +73,7 @@ ENABLE_SANITY_CHECKS: Final[bool] = True  # Miscellaneous sanity checks througho
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
 VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
-VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
+VERIFY_AST_TRACKING: Final[bool] = True  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[int] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -4173,8 +4173,8 @@ class Matrix():
                                 '''
 
                                 culled_targets_for_simulation = [self.game_state.asteroids[ast_idx] for ast_idx in culled_target_idxs_for_simulation]
-                                if not culled_targets_for_simulation:
-                                    print("WARNING: culled_targets_for_simulation is empty, so I think this means we're purely shooting at forecasted asteroid splits. Doing the full sim with all the bullets without the culling.")
+                                #if not culled_targets_for_simulation:
+                                #    print("WARNING: culled_targets_for_simulation is empty, so I think this means we're purely shooting at forecasted asteroid splits. Doing the full sim with all the bullets without the culling.")
                                     #raise Exception()
                                 bullet_sim_timestep_limit = ceil(max_interception_time*FPS) + 1 # TODO: Might not need +1, but maybe it's safer to have it anyway at the cost of a tiny bit of performance
                                 actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit, culled_targets_for_simulation if (culled_targets_for_simulation and not self.game_state.mines) else None)
