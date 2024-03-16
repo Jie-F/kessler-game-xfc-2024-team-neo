@@ -20,9 +20,12 @@ from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
 GA_RESULTS_FILE = "ga_results.json"
-TRAINING_DIRECTORY = 'training_v2'
+TRAINING_DIRECTORY = 'training_v3'
 CHROMOSOME_TUPLE_SIZE = 9
 ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
+
+if not os.path.exists(TRAINING_DIRECTORY):
+    os.makedirs(TRAINING_DIRECTORY, exist_ok=True)
 
 def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range) -> list:
     asteroids = []
@@ -34,27 +37,27 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
         asteroids.append({'position': position, 'speed': speed, 'angle': angle, 'size': size})
     return asteroids
 
-def backup_existing_results(filename=GA_RESULTS_FILE) -> None:
-    try:
-        # Generate backup filename with timestamp
-        backup_filename = f"{filename[:-5]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
-        # Copy the existing JSON file to the backup file
-        shutil.copyfile(filename, backup_filename)
-        print(f"Backup created: {backup_filename}")
-    except FileNotFoundError:
-        print("No existing file to backup.")
+# def backup_existing_results(filename=GA_RESULTS_FILE) -> None:
+#     try:
+#         # Generate backup filename with timestamp
+#         backup_filename = f"{filename[:-5]}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+#         # Copy the existing JSON file to the backup file
+#         shutil.copyfile(filename, backup_filename)
+#         print(f"Backup created: {backup_filename}")
+#     except FileNotFoundError:
+#         print("No existing file to backup.")
 
-def load_existing_results(filename=GA_RESULTS_FILE) -> Any | list:
-    try:
-        with open(filename, 'r', encoding='utf8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        print("No existing results file found. Starting fresh.")
-        return []
+# def load_existing_results(filename=GA_RESULTS_FILE) -> Any | list:
+#     try:
+#         with open(filename, 'r', encoding='utf8') as f:
+#             return json.load(f)
+#     except FileNotFoundError:
+#         print("No existing results file found. Starting fresh.")
+#         return []
 
-def save_results_incrementally(result, filename=GA_RESULTS_FILE) -> None:
-    with open(filename, 'w', encoding='utf8') as f:
-        json.dump(result, f, indent=4)
+# def save_results_incrementally(result, filename=GA_RESULTS_FILE) -> None:
+#     with open(filename, 'w', encoding='utf8') as f:
+#         json.dump(result, f, indent=4)
 
 def read_and_process_json_files(directory=".") -> list:
     all_data = []
@@ -91,10 +94,10 @@ def get_top_chromosomes() -> list:
     top_chromosomes = [chromosome for _, chromosome in top_scores]
     return top_chromosomes
 
-def run_training(training_portfolio, filename=GA_RESULTS_FILE):
+def run_training(training_portfolio, directory=TRAINING_DIRECTORY):#filename=GA_RESULTS_FILE):
     # Backup and load existing results
-    backup_existing_results(filename)
-    results = load_existing_results(filename)
+    #backup_existing_results(filename)
+    #results = load_existing_results(filename)
     iteration = 0
     # Define Game Settings
     game_settings = {'perf_tracker': True,
@@ -105,6 +108,7 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                     'UI_settings': 'all'}
 
     game = KesslerGame(settings=game_settings)
+
     while True:
         print('\n\n\nNew Training Run!')
         random.seed()
@@ -147,6 +151,10 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
         total_eval_time_s = 0
         neo_total_sim_ts = 0
         total_sim_time_s = 0.0
+        team_1_total_bullets_hit = 0
+        team_2_total_bullets_hit = 0
+        team_1_total_shots_fired = 0
+        team_2_total_shots_fired = 0
         for i in range(3):
             # Run portfolio 3 times, to even out randomness
             for sc in training_portfolio:
@@ -155,27 +163,34 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                 random.seed(randseed)
                 controllers_used = [NeoController(tuple(new_chromosome)), BabyNeoController()]
                 assert controllers_used[0].get_total_sim_ts() == 0
-                print(f"\nEvaluating scenario {sc.name} with rng seed {randseed} on total pass number {i + 1}")
+                print(f"\nEvaluating scenario {sc.name} with rng seed {randseed} on total pass number {i + 1} using chromosome {new_chromosome}")
                 #print(f"RNG State: {random.getstate()}")
                 pre = time.perf_counter()
                 score, perf_data = game.run(scenario=sc, controllers=controllers_used)
                 post = time.perf_counter()
                 neo_sim_ts = controllers_used[0].get_total_sim_ts()
                 neo_total_sim_ts += neo_sim_ts
+                team_1 = score.teams[0]
+                team_2 = score.teams[1]
                 asts_hit = [team.asteroids_hit for team in score.teams]
                 total_eval_time_s += max(0, post - pre)
                 print('Scenario eval time: '+str(post - pre))
                 print(score.stop_reason)
                 print('Asteroids hit: ' + str(asts_hit))
-                team_1_total_hits += asts_hit[0]
-                team_2_total_hits += asts_hit[1]
-                if asts_hit[0] > asts_hit[1]:
+                team_1_total_hits += team_1.asteroids_hit
+                team_2_total_hits += team_2.asteroids_hit
+                if team_1.asteroids_hit > team_2.asteroids_hit:
                     team_1_wins += 1
-                elif asts_hit[0] < asts_hit[1]:
+                elif team_1.asteroids_hit < team_2.asteroids_hit:
                     team_2_wins += 1
-                team_deaths = [team.deaths for team in score.teams]
-                team_1_deaths += team_deaths[0]
-                team_2_deaths += team_deaths[1]
+
+                team_1_total_bullets_hit += team_1.bullets_hit
+                team_2_total_bullets_hit += team_2.bullets_hit
+                team_1_total_shots_fired += team_1.shots_fired
+                team_2_total_shots_fired += team_2.shots_fired
+
+                team_1_deaths += team_1.deaths
+                team_2_deaths += team_2.deaths
                 total_sim_time_s += float(score.sim_time)
                 assert float(score.sim_time) >= 0.0
                 scenarios_info.append({'scenario_name': sc.name,
@@ -184,12 +199,41 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
                                        'eval_time_s': max(0, post - pre),
                                        'sim_time_s': score.sim_time,
                                        'neo_sim_ts': neo_sim_ts,
-                                       'team_1_hits': asts_hit[0],
-                                       'team_2_hits': asts_hit[1],
-                                       'team_1_wins': 1 if asts_hit[0] > asts_hit[1] else 0,
-                                       'team_2_wins': 1 if asts_hit[0] < asts_hit[1] else 0,
-                                       'team_1_deaths': team_deaths[0],
-                                       'team_2_deaths': team_deaths[1]})
+                                       'team_1_total_bullets': team_1.total_bullets,
+                                       'team_2_total_bullets': team_2.total_bullets,
+                                       'team_1_total_asteroids': team_1.total_asteroids,
+                                       'team_2_total_asteroids': team_2.total_asteroids,
+                                       'team_1_asteroids_hit': team_1.asteroids_hit,
+                                       'team_2_asteroids_hit': team_2.asteroids_hit,
+                                       'team_1_bullets_hit': team_1.bullets_hit,
+                                       'team_2_bullets_hit': team_2.bullets_hit,
+                                       'team_1_shots_fired': team_1.shots_fired,
+                                       'team_2_shots_fired': team_2.shots_fired,
+                                       'team_1_bullets_remaining': team_1.bullets_remaining,
+                                       'team_2_bullets_remaining': team_2.bullets_remaining,
+                                       'team_1_deaths': team_1.deaths,
+                                       'team_2_deaths': team_2.deaths,
+                                       'team_1_lives_remaining': team_1.lives_remaining,
+                                       'team_2_lives_remaining': team_2.lives_remaining,
+                                       'team_1_accuracy': team_1.accuracy,
+                                       'team_2_accuracy': team_2.accuracy,
+                                       'team_1_fraction_total_asteroids_hit': team_1.fraction_total_asteroids_hit,
+                                       'team_2_fraction_total_asteroids_hit': team_2.fraction_total_asteroids_hit,
+                                       'team_1_fraction_bullets_used': team_1.fraction_bullets_used,
+                                       'team_2_fraction_bullets_used': team_2.fraction_bullets_used,
+                                       'team_1_ratio_bullets_needed': team_1.ratio_bullets_needed,
+                                       'team_2_ratio_bullets_needed': team_2.ratio_bullets_needed,
+                                       'team_1_mean_eval_time': team_1.mean_eval_time,
+                                       'team_2_mean_eval_time': team_2.mean_eval_time,
+                                       'team_1_median_eval_time': team_1.median_eval_time,
+                                       'team_2_median_eval_time': team_2.median_eval_time,
+                                       'team_1_min_eval_time': team_1.min_eval_time,
+                                       'team_2_min_eval_time': team_2.min_eval_time,
+                                       'team_1_max_eval_time': team_1.max_eval_time,
+                                       'team_2_max_eval_time': team_2.max_eval_time,
+                                       'team_1_win': 1 if team_1.asteroids_hit > team_2.asteroids_hit else 0,
+                                       'team_2_win': 1 if team_1.asteroids_hit < team_2.asteroids_hit else 0
+                                       })
         run_info = {
             'timestamp': datetime.now().isoformat(),
             'total_eval_time': total_eval_time_s,
@@ -198,17 +242,31 @@ def run_training(training_portfolio, filename=GA_RESULTS_FILE):
             'neo_total_sim_ts': neo_total_sim_ts,
             'team_1_name': controllers_used[0].name,
             'team_2_name': controllers_used[1].name,
-            'team_1_total_hits': team_1_total_hits,
-            'team_2_total_hits': team_2_total_hits,
+            'team_1_total_asteroids_hit': team_1_total_hits,
+            'team_2_total_asteroids_hit': team_2_total_hits,
+            'team_1_total_bullets_hit': team_1_total_bullets_hit,
+            'team_2_total_bullets_hit': team_2_total_bullets_hit,
+            'team_1_total_shots_fired': team_1_total_shots_fired,
+            'team_2_total_shots_fired': team_2_total_shots_fired,
+            'team_1_overall_accuracy': team_1_total_bullets_hit/team_1_total_shots_fired,
+            'team_2_overall_accuracy': team_2_total_bullets_hit/team_2_total_shots_fired,
             'team_1_deaths': team_1_deaths,
             'team_2_deaths': team_2_deaths,
             'team_1_wins': team_1_wins,
             'team_2_wins': team_2_wins,
             'scenarios_run': scenarios_info,
         }
-        results.append(run_info)
+        
+        # Generate a unique filename for this run
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        unique_filename = f"{directory}/{timestamp}_Training_Run.json"
+        # Save this run's results to a separate file
+        with open(unique_filename, 'w', encoding='utf8') as f:
+            json.dump(run_info, f, indent=4)
+
+        print(f"Results saved to {unique_filename}")
         # Save incrementally
-        save_results_incrementally(results, filename)
+        #save_results_incrementally(results, filename)
 
 def generate_random_numbers(length, lower_bound=0, upper_bound=1) -> list[float]:
     return [random.uniform(lower_bound, upper_bound) for _ in range(length)]
@@ -337,4 +395,4 @@ for ind, num_ast in enumerate(range(1, 50)):
 #training_portfolio = easyrand
 training_portfolio.extend(rand_scenarios)
 
-run_training(training_portfolio, f"{TRAINING_DIRECTORY}\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training Results.json")
+run_training(training_portfolio)#, f"{TRAINING_DIRECTORY}\\{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')} Training Results.json")
