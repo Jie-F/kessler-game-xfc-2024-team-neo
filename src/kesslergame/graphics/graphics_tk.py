@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 
 from .graphics_base import KesslerGraphics
 
-SCALE = 1.5
+SCALE = 2.0
 
 class GraphicsTK(KesslerGraphics):
     def __init__(self, UI_settings):
