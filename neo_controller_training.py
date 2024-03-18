@@ -1524,7 +1524,7 @@ def get_other_ships(game_state: GameState, self_ship_id: int) -> list[Ship]:
 
 
 def angle_difference_rad(angle1: float, angle2: float) -> float:
-    # Calculate the raw difference, and use modulo to wrap around the angle to between -180 to 180
+    # Calculate the raw difference, and use modulo to wrap around the angle to between -pi to pi
     return (angle1 - angle2 + pi) % TAU - pi
 
 
@@ -2658,7 +2658,10 @@ def check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot
         # print(f"Verifying asteroid {ast_to_string(a)}")  # REMOVE_FOR_COMPETITION
         for timestep, asts_list in asteroids_pending_death.items():  # REMOVE_FOR_COMPETITION
             if is_asteroid_in_list(asts_list, a, game_state):  # REMOVE_FOR_COMPETITION
-                raise Exception(f"Asteroid {a} from actual ts {current_timestep} appears in list on ts {timestep} with a delta of {timestep - current_timestep}!")  # REMOVE_FOR_COMPETITION
+                delta = timestep - current_timestep  # REMOVE_FOR_COMPETITION
+                # Check for periodic asteroid movement so we don't raise unnecessary false alarms  # REMOVE_FOR_COMPETITION
+                if not ((is_close_to_zero(a.velocity[0]) and is_close_to_zero(a.velocity[1])) or is_close(float(abs(delta))*DELTA_TIME*a.velocity[0], game_state.map_size[0]) or is_close(float(abs(delta))*DELTA_TIME*a.velocity[1], game_state.map_size[1])):  # REMOVE_FOR_COMPETITION
+                    raise Exception(f"Asteroid {a} from actual ts {current_timestep} appears in list on ts {timestep} with a delta of {delta}!")  # REMOVE_FOR_COMPETITION
                 return False  # REMOVE_FOR_COMPETITION
         return True  # REMOVE_FOR_COMPETITION
 
