@@ -305,6 +305,10 @@ team_1_deaths = 0
 team_2_deaths = 0
 team_1_wins = 0
 team_2_wins = 0
+team_1_shot_efficiency = 0
+team_2_shot_efficiency = 0
+team_1_shot_efficiency_including_mines = 0
+team_2_shot_efficiency_including_mines = 0
 
 selected_portfolio = [None]
 if args.portfolio is not None:
@@ -397,16 +401,19 @@ while True:
                 score, perf_data = game.run(scenario=scenario_to_run, controllers=controllers_used)
 
         # Print out some general info about the result
+        num_teams = len(score.teams)
         if score:
+            team1 = score.teams[0]
+            if num_teams > 1:
+                team2 = score.teams[1]
             asts_hit = [team.asteroids_hit for team in score.teams]
             color_print('Scenario eval time: '+str(time.perf_counter()-pre), 'green')
             color_print(score.stop_reason, 'green')
             color_print(f"Scenario in-game time: {score.sim_time:.02f} s", 'green')
             color_print('Asteroids hit: ' + str(asts_hit), 'green')
             team_1_hits += asts_hit[0]
-            if len(asts_hit) > 1:
+            if num_teams > 1:
                 team_2_hits += asts_hit[1]
-            if len(asts_hit) > 1:
                 if asts_hit[0] > asts_hit[1]:
                     team_1_wins += 1
                 elif asts_hit[0] < asts_hit[1]:
@@ -415,7 +422,7 @@ while True:
                 team_1_wins += 1
             team_deaths = [team.deaths for team in score.teams]
             team_1_deaths += team_deaths[0]
-            if len(team_deaths) > 1:
+            if num_teams > 1:
                 team_2_deaths += team_deaths[1]
             color_print('Deaths: ' + str(team_deaths), 'green')
             if team_deaths[0] >= 1:
@@ -429,9 +436,16 @@ while True:
                 missed = True
             else:
                 missed = False
+            team_1_shot_efficiency = (team1.bullets_hit/score.sim_time)/(1/(1/10))
+            team_1_shot_efficiency_including_mines = (team1.asteroids_hit/score.sim_time)/(1/(1/10))
+            if num_teams > 1:
+                team_2_shot_efficiency = (team2.bullets_hit/score.sim_time)/(1/(1/10))
+                team_2_shot_efficiency_including_mines = (team2.asteroids_hit/score.sim_time)/(1/(1/10))
         print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
         print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
+        print(f"Team 1, 2 shot efficiencies: ({team_1_shot_efficiency:.02%}, {team_2_shot_efficiency:.02%})")
+        print(f"Team 1, 2 shot efficiencies inc. mines/ship hits: ({team_1_shot_efficiency_including_mines:.02%}, {team_2_shot_efficiency_including_mines:.02%})")
     if missed and len(team_deaths) == 1:
         color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
         break
