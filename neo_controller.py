@@ -5016,7 +5016,7 @@ class NeoController(KesslerController):
                 abs_cruise_speeds = abs_cruise_speeds[-MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:]
             if len(cruise_timesteps) > MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:
                 cruise_timesteps = cruise_timesteps[-MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:]
-            print(f"{best_action_maneuver_tuple=}, and the avg best cruise speed is now {weighted_average(abs_cruise_speeds)} and avg cruise timesteps is {weighted_average(cruise_timesteps)}")
+            #print(f"{best_action_maneuver_tuple=}, and the avg best cruise speed is now {weighted_average(abs_cruise_speeds)} and avg cruise timesteps is {weighted_average(cruise_timesteps)}")
 
         if self.stationary_targetting_sim_index is not None:
             stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
@@ -5041,7 +5041,7 @@ class NeoController(KesslerController):
             if self.stationary_targetting_sim_index is not None:
                 stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['fitness_breakdown']
                 # debug_print('stationary fitneses', stationary_fitness_breakdown)
-                print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
+                #print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
                 if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
                     # No mines are threatening us whether we stay put or move
                     if best_action_fitness_breakdown[0] > stationary_fitness_breakdown[0]:
