@@ -99,7 +99,10 @@ MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD: Final[int] = 10
 AIMING_CONE_FITNESS_CONE_WIDTH_HALF: Final[float] = 18.0 # This has to do with how fast we turn vs how often we can shoot. This can be thought of as some percentage of DEGREES_BETWEEN_SHOTS defined later
 AIMING_CONE_FITNESS_CONE_WIDTH_HALF_COSINE: Final[float] = cos(math.radians(AIMING_CONE_FITNESS_CONE_WIDTH_HALF))
 MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT: Final[int] = 10
-
+ASTEROID_AIM_BUFFER_PIXELS: Final[float] = 1.0  # px
+COORDINATE_BOUND_CHECK_PADDING: Final[float] = 1.0  # px
+SHIP_AVOIDANCE_PADDING: Final = 25
+SHIP_AVOIDANCE_SPEED_PADDING_RATIO: Final[float] = 1/100
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final[int] = 10
 # The reason we need this, is because without it, I'm checking whether I have the budget to do another iteration, but let's say I'm already taking 0 time. Kessler will pause for DELTA_TIME, taking up all the time, and I'd think I have no time to do anything!
 # So this fudge allows us to "push things" a bit, and fill up any remaining time so that Kessler is no longer pausing, and that time is spent in this controller to do more computations.
@@ -169,8 +172,6 @@ SHIP_MAX_SPEED: Final[float] = 240.0  # px/s
 SHIP_RADIUS: Final[float] = 20.0  # px
 SHIP_MASS: Final[float] = 300.0  # kg
 TIMESTEPS_UNTIL_SHIP_ACHIEVES_MAX_SPEED: Final[int] = ceil(SHIP_MAX_SPEED/(SHIP_MAX_THRUST - SHIP_DRAG)*FPS)  # Should be 18 timesteps
-ASTEROID_AIM_BUFFER_PIXELS: Final[float] = 1.0  # px
-COORDINATE_BOUND_CHECK_PADDING: Final[float] = 1.0  # px
 MINE_BLAST_RADIUS: Final[float] = 150.0  # px
 MINE_RADIUS: Final[float] = 12.0  # px
 MINE_BLAST_PRESSURE: Final[float] = 2000.0
@@ -180,11 +181,10 @@ ASTEROID_RADII_LOOKUP: Final = tuple(8.0*size for size in range(5))  # asteroid.
 ASTEROID_AREA_LOOKUP: Final = tuple(pi*r*r for r in ASTEROID_RADII_LOOKUP)
 ASTEROID_MASS_LOOKUP: Final = tuple(0.25*pi*(8*size)**2 for size in range(5))  # asteroid.py
 RESPAWN_INVINCIBILITY_TIME_S: Final = 3  # s
-SHIP_AVOIDANCE_PADDING: Final = 25
-SHIP_AVOIDANCE_SPEED_PADDING_RATIO: Final[float] = 1/100
 ASTEROID_COUNT_LOOKUP: Final = (0, 1, 4, 13, 40)  # A size 2 asteroid is 4 asteroids, size 4 is 30, etc. Each asteroid splits into 3, and itself is counted as well. Explicit formula is count(n) = (3^n - 1)/2
 DEGREES_BETWEEN_SHOTS: Final[float] = FIRE_COOLDOWN_TS*SHIP_MAX_TURN_RATE*DELTA_TIME
-# FIS PARAMS
+
+# FIS Settings
 ASTEROIDS_HIT_VERY_GOOD: Final[int] = 65
 ASTEROIDS_HIT_OKAY_CENTER: Final = 20
 
