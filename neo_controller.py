@@ -69,11 +69,11 @@ EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final[float] = 6.0  # Repeated messages 
 # These can trade off to get better performance at the expense of safety
 STATE_CONSISTENCY_CHECK_AND_RECOVERY = True  # Enable this if we want to be able to recover from controller exceptions
 CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
-ENABLE_SANITY_CHECKS: Final[bool] = True  # Miscellaneous sanity checks throughout the code
+ENABLE_SANITY_CHECKS: Final[bool] = False  # Miscellaneous sanity checks throughout the code
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
-VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_SIMULATED_KEY_STATES: Final[bool] = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
-VERIFY_AST_TRACKING: Final[bool] = True  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
+VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[int] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -3890,7 +3890,11 @@ class Matrix():
                     for a_idx, asteroid in enumerate(asteroids):
                         if a_idx in asteroid_remove_idxs:
                             continue
-                        if check_collision(asteroid.position[0], asteroid.position[1], asteroid.radius, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                        #if check_collision(asteroid.position[0], asteroid.position[1], asteroid.radius, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                        delta_x = asteroid.position[0] - mine.position[0]
+                        delta_y = asteroid.position[1] - mine.position[1]
+                        separation = asteroid.radius + MINE_BLAST_RADIUS
+                        if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                             if asteroid.size != 1:
                                 new_asteroids.extend(forecast_asteroid_mine_instantaneous_splits(asteroid, mine, self.game_state))
                             asteroid_remove_idxs.add(a_idx)
@@ -3910,7 +3914,11 @@ class Matrix():
                 for a_idx, asteroid in enumerate(asteroids):
                     if a_idx in asteroid_remove_idxs:
                         continue
-                    if check_collision(ship_position[0], ship_position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    #if check_collision(ship_position[0], ship_position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    delta_x = ship_position[0] - asteroid.position[0]
+                    delta_y = ship_position[1] - asteroid.position[1]
+                    separation = SHIP_RADIUS + asteroid.radius
+                    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                         # Note that we assume the ship is stationary. In reality, we don't know how the ship will move during the bullet sim. Therefore, these forecasted asteroids may not be accurate if the ship moves.
                         if asteroid.size != 1:
                             asteroids.extend(forecast_asteroid_ship_splits(asteroid, 0, (0.0, 0.0), self.game_state))
@@ -4119,7 +4127,11 @@ class Matrix():
                                             # This mine is mine
                                             project_asteroid_by_timesteps_num = round(m.remaining_time*FPS)
                                             asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state)
-                                            if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
+                                            #if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
+                                            delta_x = asteroid_when_mine_explodes.position[0] - m.position[0]
+                                            delta_y = asteroid_when_mine_explodes.position[1] - m.position[1]
+                                            separation = asteroid_when_mine_explodes.radius + MINE_BLAST_RADIUS
+                                            if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                                                 avoid_targeting_this_asteroid = True
                                                 break
                                 if avoid_targeting_this_asteroid:
@@ -4273,7 +4285,11 @@ class Matrix():
                                             # This mine is mine
                                             project_asteroid_by_timesteps_num = round(m.remaining_time*FPS)
                                             asteroid_when_mine_explodes = time_travel_asteroid(asteroid, project_asteroid_by_timesteps_num, self.game_state)
-                                            if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
+                                            #if check_collision(asteroid_when_mine_explodes.position[0], asteroid_when_mine_explodes.position[1], asteroid_when_mine_explodes.radius, m.position[0], m.position[1], MINE_BLAST_RADIUS):
+                                            delta_x = asteroid_when_mine_explodes.position[0] - m.position[0]
+                                            delta_y = asteroid_when_mine_explodes.position[1] - m.position[1]
+                                            separation = asteroid_when_mine_explodes.radius + MINE_BLAST_RADIUS
+                                            if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                                                 avoid_targeting_this_asteroid = True
                                                 break
                                 if avoid_targeting_this_asteroid:
@@ -4470,12 +4486,20 @@ class Matrix():
                 for a_idx, asteroid in enumerate(self.game_state.asteroids):
                     if a_idx in asteroid_remove_idxs:
                         continue
-                    if check_collision(asteroid.position[0], asteroid.position[1], asteroid.radius, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                    #if check_collision(asteroid.position[0], asteroid.position[1], asteroid.radius, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                    delta_x = asteroid.position[0] - mine.position[0]
+                    delta_y = asteroid.position[1] - mine.position[1]
+                    separation = asteroid.radius + MINE_BLAST_RADIUS
+                    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                         if asteroid.size != 1:
                             new_asteroids.extend(forecast_asteroid_mine_instantaneous_splits(asteroid, mine, self.game_state))
                         asteroid_remove_idxs.add(a_idx)
                 if not self.ship_state.is_respawning and not wait_out_mines:
-                    if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                    #if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, mine.position[0], mine.position[1], MINE_BLAST_RADIUS):
+                    delta_x = self.ship_state.position[0] - mine.position[0]
+                    delta_y = self.ship_state.position[1] - mine.position[1]
+                    separation = SHIP_RADIUS + MINE_BLAST_RADIUS
+                    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                         # Ship got hit by mine, RIP
                         #print(f"Ship got hit by mine in sim, RIP and the ship respawn state is {self.ship_state.is_respawning} with the respawn timer at {self.respawn_timer}")
                         return_value = False
@@ -4500,7 +4524,11 @@ class Matrix():
                 for a_idx, asteroid in enumerate(self.game_state.asteroids):
                     if a_idx in asteroid_remove_idxs:
                         continue
-                    if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    #if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    delta_x = self.ship_state.position[0] - asteroid.position[0]
+                    delta_y = self.ship_state.position[1] - asteroid.position[1]
+                    separation = SHIP_RADIUS + asteroid.radius
+                    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                         if asteroid.size != 1:
                             self.game_state.asteroids.extend(forecast_asteroid_ship_splits(asteroid, 0, self.ship_state.velocity, self.game_state))
                         asteroid_remove_idxs.add(a_idx)
@@ -4518,7 +4546,11 @@ class Matrix():
                 for a_idx, asteroid in enumerate(self.game_state.asteroids):
                     if a_idx in asteroid_remove_idxs:
                         continue
-                    if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    #if check_collision(self.ship_state.position[0], self.ship_state.position[1], SHIP_RADIUS, asteroid.position[0], asteroid.position[1], asteroid.radius):
+                    delta_x = self.ship_state.position[0] - asteroid.position[0]
+                    delta_y = self.ship_state.position[1] - asteroid.position[1]
+                    separation = SHIP_RADIUS + asteroid.radius
+                    if delta_x*delta_x + delta_y*delta_y <= separation*separation:
                         # The ship and asteroid are overlapping, while the ship is doing a respawn maneuver.
                         # We want to track this, so that we can begin to shoot asteroids right after we're no longer overlapping with any, before we finish the respawn maneuver and get a couple more hits in
                         self.last_timestep_colliding_with_asteroid = self.initial_timestep + self.future_timesteps
