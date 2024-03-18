@@ -289,7 +289,7 @@ for ind, num_ast in enumerate(range(1, 50)):
                                 asteroid_states=randomly_generated_asteroids,
                                 ship_states=[
                                     {'position': (width/3, height/2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 5},
-                                    {'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
+                                    #{'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
                                 ],
                                 map_size=(width, height),
                                 time_limit=total_asts/10*0.8,
