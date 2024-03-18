@@ -331,7 +331,7 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        controllers_used = [NeoController(tuple([0.14185165923815546, 0.056089870621569775, 0.01610445001490271, 0.23992140788828645, 0.03611321352158731, 0.15664256304123078, 0.10145349451081843, 0.1880015924673791, 0.06382174869607007])), BabyNeoController()]
+        controllers_used = [NeoController(), BabyNeoController()]
 
         # asteroids_random = generate_asteroids(
         #                                 num_asteroids=random.randint(5, 50),
