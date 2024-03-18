@@ -17,6 +17,8 @@ import argparse
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
+ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
+
 from xfc_2023_replica_scenarios import *
 from custom_scenarios import *
 
@@ -41,6 +43,7 @@ if args.interp:
     from neo_controller import NeoController
 else:
     from src.neo_controller import NeoController
+    #from src.neo_controller_training import NeoController
 
 
 global color_text
@@ -267,6 +270,32 @@ custom_scenarios = [
     minefield_maze_scenario
 ]
 
+rand_scenarios = []
+for ind, num_ast in enumerate(range(1, 50)):
+    random.seed(ind)
+    randomly_generated_asteroids = generate_asteroids(
+                            num_asteroids=num_ast,
+                            position_range_x=(0, width),
+                            position_range_y=(0, height),
+                            speed_range=(-300, 600, 0),
+                            angle_range=(-1, 361),
+                            size_range=(1, 4)
+                        )
+    total_asts = 0
+    for a in randomly_generated_asteroids:
+        total_asts += ASTEROID_COUNT_LOOKUP[a['size']]
+    #print(total_asts)
+    rand_scenario = Scenario(name=f'Random Scenario {num_ast}',
+                                asteroid_states=randomly_generated_asteroids,
+                                ship_states=[
+                                    {'position': (width/3, height/2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 5},
+                                    {'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
+                                ],
+                                map_size=(width, height),
+                                time_limit=total_asts/10*0.8,
+                                ammo_limit_multiplier=0,
+                                stop_if_no_ammo=False)
+    rand_scenarios.append(rand_scenario)
 
 score = None
 died = False
@@ -288,8 +317,9 @@ if args.portfolio is not None:
             selected_portfolio = alternate_scenarios
         case 'custom':
             selected_portfolio = custom_scenarios
+        case 'rand_scenarios':
+            selected_portfolio = rand_scenarios
 
-controllers_used = [NeoController(), BabyNeoController()]
 
 while True:
     for scenario in selected_portfolio[0 if not args.index else args.index:]:
@@ -301,40 +331,41 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
+        controllers_used = [NeoController(tuple([0.14185165923815546, 0.056089870621569775, 0.01610445001490271, 0.23992140788828645, 0.03611321352158731, 0.15664256304123078, 0.10145349451081843, 0.1880015924673791, 0.06382174869607007])), BabyNeoController()]
 
-        asteroids_random = generate_asteroids(
-                                        num_asteroids=random.randint(5, 50),
-                                        position_range_x=(0, width),
-                                        position_range_y=(0, height),
-                                        speed_range=(-300, 300, 0),
-                                        angle_range=(-1, 361),
-                                        size_range=(1, 4)
-                                    )*random.choice([1])
+        # asteroids_random = generate_asteroids(
+        #                                 num_asteroids=random.randint(5, 50),
+        #                                 position_range_x=(0, width),
+        #                                 position_range_y=(0, height),
+        #                                 speed_range=(-300, 300, 0),
+        #                                 angle_range=(-1, 361),
+        #                                 size_range=(1, 4)
+        #                             )*random.choice([1])
 
-        # Define game scenario
-        rand_scenario = Scenario(name='Random Scenario',
-                                    #num_asteroids=200,
-                                    asteroid_states=asteroids_random,
-                                    #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
-                                    #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
-                                    #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
-                                    ship_states=[
-                                        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                        #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
-                                    ],
-                                    map_size=(width, height),
-                                    time_limit=240.0,
-                                    ammo_limit_multiplier=random.choice([0]),
-                                    stop_if_no_ammo=False)
+        # # Define game scenario
+        # rand_scenario = Scenario(name='Random Scenario',
+        #                             #num_asteroids=200,
+        #                             asteroid_states=asteroids_random,
+        #                             #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
+        #                             #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+        #                             #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
+        #                             ship_states=[
+        #                                 {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
+        #                                 #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
+        #                             ],
+        #                             map_size=(width, height),
+        #                             time_limit=240.0,
+        #                             ammo_limit_multiplier=random.choice([0]),
+        #                             stop_if_no_ammo=False)
         
-        benchmark_scenario = Scenario(name="Benchmark Scenario",
-                                        num_asteroids=100,
-                                        ship_states=[
-                                            {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
-                                        ],
-                                        map_size=(width, height),
-                                        seed=0,
-                                        time_limit=120)
+        # benchmark_scenario = Scenario(name="Benchmark Scenario",
+        #                                 num_asteroids=100,
+        #                                 ship_states=[
+        #                                     {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
+        #                                 ],
+        #                                 map_size=(width, height),
+        #                                 seed=0,
+        #                                 time_limit=120)
 
         pre = time.perf_counter()
         if scenario is not None:

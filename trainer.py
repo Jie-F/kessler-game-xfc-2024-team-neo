@@ -68,10 +68,10 @@ def read_and_process_json_files(directory=".") -> list:
             with open(filepath, 'r', encoding='utf8') as file:
                 try:
                     data = json.load(file)
-                    if isinstance(data, list):  # Ensure the JSON content is a list
-                        all_data.extend(data)
+                    if isinstance(data, dict):  # Ensure the JSON content is a dict
+                        all_data.append(data)
                     else:
-                        print(f"File {filename} does not contain a list.")
+                        print(f"File {filename} does not contain a dict.")
                 except json.JSONDecodeError:
                     print(f"Error decoding JSON from file {filename}.")
     return all_data
@@ -79,12 +79,12 @@ def read_and_process_json_files(directory=".") -> list:
 def get_top_chromosomes() -> list:
     # Call the function to start processing
     all_data = read_and_process_json_files(TRAINING_DIRECTORY)
-
+    print(f"Getting top chromosomes from {len(all_data)} training runs!")
     # Initialize an empty list to keep track of top 3 scores
     top_scores = []
-
+    
     for run in all_data:
-        current_score = run['team_1_total_hits']
+        current_score = run['team_1_total_asteroids_hit']
         current_chromosome = run['chromosome']
         # Append the current run's score and chromosome to the list
         top_scores.append((current_score, current_chromosome))
@@ -258,7 +258,7 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY):#filename=GA_
         }
         
         # Generate a unique filename for this run
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')[:-3]
         unique_filename = f"{directory}/{timestamp}_Training_Run.json"
         # Save this run's results to a separate file
         with open(unique_filename, 'w', encoding='utf8') as f:

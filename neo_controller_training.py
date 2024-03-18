@@ -73,7 +73,7 @@ ENABLE_SANITY_CHECKS: Final[bool] = True  # Miscellaneous sanity checks througho
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
 VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
-VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
+VERIFY_AST_TRACKING: Final[bool] = True  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[int] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -751,6 +751,13 @@ def fast_atan2(y: float, x: float) -> float:
 
 def heading_diff_within_threshold(a_vec_theta_rad: float, b_vec_x: float, b_vec_y: float, cos_threshold: float) -> bool:
     '''a and b are direction vectors. This checks whether the absolute heading difference between them are within a threshold angle.'''
+    # This function would work the same way as if we took the ship's heading, and found the absolute wrapped difference between that and the direction vector of the asteroid, and then compared against the threshold
+    # But this method is faster as it avoids the atan2 calculation, and instead does a sin and cos and does the threshold comparison with the cos value of the angle, instead of the angle itself
+    # The old method is shown below for reference:
+    # theta = degrees(atan2(b_vec_y, b_vec_x))
+    # threshold_angle = acos(cos_threshold)
+    # return abs(angle_difference_deg(theta, degrees(a_vec_theta_rad))) <= degrees(threshold_angle)
+    
     #a_vec_norm = 1.0
     a_vec_x = cos(a_vec_theta_rad)
     a_vec_y = sin(a_vec_theta_rad)
@@ -1531,8 +1538,8 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     move_sequence: list[Action] = []
     ship_speed = ship_starting_speed
     # assert isclose(ship_starting_speed, 0.0), f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver! In which case, you can safely ignore this assertion."
-    if not is_close(ship_starting_speed, 0.0):
-        print(f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver!")
+    #if not is_close(ship_starting_speed, 0.0):
+    #    print(f"The ship maneuver should start with 0 speed! It's actually {ship_starting_speed}. Unless... we just were saved by the other ship, so we're starting a maneuver while in the middle of another maneuver!")
     def rotate_heading(heading_difference_deg: float) -> None:
         nonlocal move_sequence
         if abs(heading_difference_deg) < GRAIN:
@@ -1596,8 +1603,8 @@ def get_ship_maneuver_move_sequence(ship_heading_angle: float, ship_cruise_speed
     accelerate(ship_cruise_speed, ship_accel_turn_rate)
     cruise(ship_cruise_timesteps, ship_cruise_turn_rate)
     accelerate(0.0, 0.0)  # TODO: If we remove this, we get some interesting results and emergent behavior. Neo would spazz around the map, going from one maneuver directly into another. I might even be able to tweak it to work. Maybe in the stationary targeting, apply a thrust to slow down the ship, so the targeting works a bit better. That could fix the issue, and it might be worth exploring if I have time! But for now, let’s just eat the slight time loss and regain the control of node based movement without drifting around like driftwood.
-    if not is_close(ship_starting_speed, 0.0):
-        print(f"Interesting move sequence! The ship didn't start stationary. It had speed {ship_starting_speed}, and we used sequence {move_sequence} to return the ship to speed {ship_speed}")
+    #if not is_close(ship_starting_speed, 0.0):
+    #    print(f"Interesting move sequence! The ship didn't start stationary. It had speed {ship_starting_speed}, and we used sequence {move_sequence} to return the ship to speed {ship_speed}")
     if not move_sequence:
         # We still need a null sequence here, so that we don't end up with a 0 frame maneuver!
         move_sequence.append(Action(thrust=0.0, turn_rate=0.0, fire=False))
@@ -2155,10 +2162,11 @@ def maintain_forecasted_asteroids(forecasted_asteroid_splits: list[Asteroid], ga
     ]
     return updated_asteroids
 
-def is_asteroid_in_list(list_of_asteroids: list[Asteroid], a: Asteroid) -> bool:
+def is_asteroid_in_list(list_of_asteroids: list[Asteroid], asteroid: Asteroid, game_state: GameState) -> bool:
     # Since floating point comparison isn't a good idea, break apart the asteroid dict and compare each element manually in a fuzzy way
-    for asteroid in list_of_asteroids:
-        if is_close(a.position[0], asteroid.position[0]) and is_close(a.position[1], asteroid.position[1]) and is_close(a.velocity[0], asteroid.velocity[0]) and is_close(a.velocity[1], asteroid.velocity[1]) and a.size == asteroid.size:
+    for a in list_of_asteroids:
+        # The reason we do the seemingly redundant checks for position, is that we need to account for wrap. If the game field was 1000 pixels wide, and one asteroid is at 0.0000000001 and the other is at 999.9999999999, they're basically the same asteroid, so we need to realize that.
+        if (is_close(a.position[0], asteroid.position[0]) or is_close_to_zero(game_state.map_size[0] - abs(a.position[0] - asteroid.position[0]))) and (is_close(a.position[1], asteroid.position[1]) or is_close_to_zero(game_state.map_size[1] - abs(a.position[1] - asteroid.position[1]))) and is_close(a.velocity[0], asteroid.velocity[0]) and is_close(a.velocity[1], asteroid.velocity[1]) and a.size == asteroid.size:
             #assert is_close(a.position[0], asteroid.position[0]) and is_close(a.position[1], asteroid.position[1]) and a.velocity[0] == asteroid.velocity[0] and a.velocity[1] == asteroid.velocity[1] and a.size == asteroid.size
             return True
     return False
@@ -2617,25 +2625,27 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[int, list[Asteroid]]
     # This modifies asteroids_pending_death in place instead of returning it
     # Make a copy of the asteroid so we don't mess up the original object
     asteroid = original_asteroid.copy()
+    # Wrap asteroid position
+    asteroid.position = (asteroid.position[0] % game_state.map_size[0], asteroid.position[1] % game_state.map_size[1])
     # Project the asteroid into the future, to where it would be on the timestep of its death
 
     for future_timesteps in range(0, bullet_travel_timesteps + 1):
-        # Wrap asteroid position to get the canonical asteroid
-        asteroid.position = (asteroid.position[0] % game_state.map_size[0], asteroid.position[1] % game_state.map_size[1])
         timestep = current_timestep + future_timesteps
         if timestep not in asteroids_pending_death:
             asteroids_pending_death[timestep] = [asteroid.copy()]
         else:
             if ENABLE_SANITY_CHECKS:  # REMOVE_FOR_COMPETITION
-                if is_asteroid_in_list(asteroids_pending_death[timestep], asteroid):  # REMOVE_FOR_COMPETITION
-                    print(f'ABOUT TO FAIL ASSERTION, we are in the future by {future_timesteps} timesteps, this asteroid is {asteroid} and LIST FOR THIS TS IS:')  # REMOVE_FOR_COMPETITION
+                if is_asteroid_in_list(asteroids_pending_death[timestep], asteroid, game_state):  # REMOVE_FOR_COMPETITION
+                    print(f'ABOUT TO FAIL ASSERTION, we are in the future by {future_timesteps} timesteps from the current ts {current_timestep}, this asteroid is {asteroid} and LIST FOR THIS TS IS:')  # REMOVE_FOR_COMPETITION
                     print(asteroids_pending_death[timestep])  # REMOVE_FOR_COMPETITION
-                assert not is_asteroid_in_list(asteroids_pending_death[timestep], asteroid), f"The asteroid {asteroid} appeared in the list of pending death when it wasn't supposed to!"  # REMOVE_FOR_COMPETITION
+                    culled_asteroids_pending_death = {k: [a for a in v if is_close(a.velocity[0], -10.0)] for k, v in asteroids_pending_death.items()}
+                    print(culled_asteroids_pending_death)
+                assert not is_asteroid_in_list(asteroids_pending_death[timestep], asteroid, game_state), f"The asteroid {asteroid} appeared in the list of pending death when it wasn't supposed to! I'm on future ts {future_timesteps} when tracking."  # REMOVE_FOR_COMPETITION
             asteroids_pending_death[timestep].append(asteroid.copy())
         # Advance the asteroid to the next position
         if future_timesteps != bullet_travel_timesteps:
             # Skip this operation on the last for loop iteration
-            asteroid.position = (asteroid.position[0] + asteroid.velocity[0]*DELTA_TIME, asteroid.position[1] + asteroid.velocity[1]*DELTA_TIME)
+            asteroid.position = ((asteroid.position[0] + asteroid.velocity[0]*DELTA_TIME) % game_state.map_size[0], (asteroid.position[1] + asteroid.velocity[1]*DELTA_TIME) % game_state.map_size[1])
     #asteroid_tracking_total_time += time.perf_counter() - start_time
 
 
@@ -2647,7 +2657,7 @@ def check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot
     def verify_asteroid_does_not_appear_in_wrong_timestep(a: Asteroid) -> bool:  # REMOVE_FOR_COMPETITION
         # print(f"Verifying asteroid {ast_to_string(a)}")  # REMOVE_FOR_COMPETITION
         for timestep, asts_list in asteroids_pending_death.items():  # REMOVE_FOR_COMPETITION
-            if is_asteroid_in_list(asts_list, a):  # REMOVE_FOR_COMPETITION
+            if is_asteroid_in_list(asts_list, a, game_state):  # REMOVE_FOR_COMPETITION
                 raise Exception(f"Asteroid {a} from actual ts {current_timestep} appears in list on ts {timestep} with a delta of {timestep - current_timestep}!")  # REMOVE_FOR_COMPETITION
                 return False  # REMOVE_FOR_COMPETITION
         return True  # REMOVE_FOR_COMPETITION
@@ -2661,11 +2671,11 @@ def check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot
             print("WARNING, the scenario started with the asteroids out of bounds!")  # REMOVE_FOR_COMPETITION
     if current_timestep in asteroids_pending_death:
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
-            if not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid):  # REMOVE_FOR_COMPETITION
+            if not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid, game_state):  # REMOVE_FOR_COMPETITION
                 return verify_asteroid_does_not_appear_in_wrong_timestep(asteroid)  # REMOVE_FOR_COMPETITION
-        # return_value = not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
+        # return_value = not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid, game_state)
         #asteroid_new_track_total_time += time.perf_counter() - start_time
-        return not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid)
+        return not is_asteroid_in_list(asteroids_pending_death[current_timestep], asteroid, game_state)
     else:
         if VERIFY_AST_TRACKING:  # REMOVE_FOR_COMPETITION
             # print(asteroids_pending_death)  # REMOVE_FOR_COMPETITION
@@ -3667,8 +3677,8 @@ class Matrix():
                 self.asteroids_shot += 1
                 self.fire_next_timestep_flag = True
                 assert future_ts_backup + len(aiming_move_sequence) == self.future_timesteps  # REMOVE_FOR_COMPETITION
-                # if isclose(-153.4230311544602, actual_asteroid_hit_when_firing.velocity[0]):
-                #    print(f"\nBOOYAHAHOAOH on timestep {self.initial_timestep=} {self.future_timesteps=}")
+                #if is_close(-10.0, actual_asteroid_hit_when_firing.velocity[0]):
+                #    print(f"\nSHOT AT THE ASTEROID IN TARGET SELECTION on timestep {self.initial_timestep=} {self.future_timesteps=}")
                 track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps, self.game_state, timesteps_until_bullet_hit_asteroid - len(aiming_move_sequence), actual_asteroid_hit_when_firing)
                 # print(f"self.asteroids_pending_death updated to {self.asteroids_pending_death[100]}")
                 # print(self.asteroids_pending_death)
@@ -4064,7 +4074,7 @@ class Matrix():
                         # if len(self.other_ships) == 0:
                         #    assert actual_asteroid_hit is not None
                         if actual_asteroid_hit is None:
-                            # print(f"SURPRISINGLY WE DON'T HIT ANYTHING LIKE WE THOUGHT WE WOULD!")
+                            print(f"SURPRISINGLY WE DON'T HIT ANYTHING LIKE WE THOUGHT WE WOULD!")
                             fire_this_timestep = False
                             self.cancel_firing_first_timestep = True
                         else:
@@ -4173,8 +4183,8 @@ class Matrix():
                                 '''
 
                                 culled_targets_for_simulation = [self.game_state.asteroids[ast_idx] for ast_idx in culled_target_idxs_for_simulation]
-                                if not culled_targets_for_simulation:
-                                    print("WARNING: culled_targets_for_simulation is empty, so I think this means we're purely shooting at forecasted asteroid splits. Doing the full sim with all the bullets without the culling.")
+                                #if not culled_targets_for_simulation:
+                                #    print("WARNING: culled_targets_for_simulation is empty, so I think this means we're purely shooting at forecasted asteroid splits. Doing the full sim with all the bullets without the culling.")
                                     #raise Exception()
                                 bullet_sim_timestep_limit = ceil(max_interception_time*FPS) + 1 # TODO: Might not need +1, but maybe it's safer to have it anyway at the cost of a tiny bit of performance
                                 actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence, bullet_sim_timestep_limit, culled_targets_for_simulation if (culled_targets_for_simulation and not self.game_state.mines) else None)
@@ -4183,6 +4193,8 @@ class Matrix():
                                     assert timesteps_until_bullet_hit_asteroid is not None
                                     actual_asteroid_hit_at_fire_time = time_travel_asteroid(actual_asteroid_hit, -timesteps_until_bullet_hit_asteroid, self.game_state)
                                     if check_whether_this_is_a_new_asteroid_for_which_we_do_not_have_a_pending_shot(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, actual_asteroid_hit_at_fire_time):
+                                        #if self.sim_id == 13939:
+                                        #    print(f"Checked on ts {self.initial_timestep + self.future_timesteps + 1} that the asteroid {actual_asteroid_hit_at_fire_time} isn't tracked, so we can shoot it!")
                                         fire_this_timestep = True
                                         self.asteroids_shot += 1
                                         self.explanation_messages.append("During the maneuver, I conveniently shot asteroids.")
@@ -4191,6 +4203,8 @@ class Matrix():
                                             self.forecasted_asteroid_splits.extend(forecast_asteroid_bullet_splits_from_heading(actual_asteroid_hit_at_fire_time, timesteps_until_bullet_hit_asteroid, self.ship_state.heading, self.game_state))
                                         # The reason we add one to the timestep we track on, is that once we updated the asteroids' position in the update loop, it's technically the asteroid positions in the game state of the next timestep that gets passed to the controllers!
                                         # So the asteroid positions at a certain timestep is before their positions get updated. After updating, it's the next timestep.
+                                        #if is_close(-10.0, actual_asteroid_hit_at_fire_time.velocity[0]):
+                                        #    print(f"\nSHOT AT THE ASTEROID IN UPDATE in sim {self.sim_id} on timestep {self.initial_timestep + self.future_timesteps + 1}, {self.initial_timestep=} {self.future_timesteps=} and this shot will take this many ts: {timesteps_until_bullet_hit_asteroid}")
                                         track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
                                     if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > ceil(FPS*self.game_state.time_limit):
                                         # Added one to the timesteps to prevent off by one :P
@@ -5019,8 +5033,8 @@ class NeoController(KesslerController):
             print_explanation("Doing a respawn maneuver to get to a safe spot using my respawn invincibility", self.current_timestep)
         if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type'] in ['random_maneuver', 'heuristic_maneuver']:
             # [asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness]
-            if self.stationary_targetting_sim_index is None:
-                print(f"WARNING: There are no stationary targetting sims!")
+            #if self.stationary_targetting_sim_index is None:
+                #print(f"WARNING: There are no stationary targetting sims!")
             if self.stationary_targetting_sim_index is not None:
                 stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['fitness_breakdown']
                 # debug_print('stationary fitneses', stationary_fitness_breakdown)
@@ -5034,7 +5048,7 @@ class NeoController(KesslerController):
                 if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
                     print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
         best_move_sequence = best_action_sim.get_move_sequence()
-        #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} and length {len(best_move_sequence)}, move seq: {best_move_sequence}")
+        #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
         # debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
         # debug_print(f"The action we're taking is from timestep {best_action_sim_state_sequence[0]['timestep']} to {best_action_sim_state_sequence[-1]['timestep']}")
@@ -5656,6 +5670,8 @@ class NeoController(KesslerController):
                     self.lives_remaining_that_we_did_respawn_maneuver_for.remove(ship_state.lives_remaining)
             unexpected_survival = False
             # If we're alive at the end of a maneuver but we're expecting to be dead at the end of the maneuver and we've planned a respawn maneuver
+            #if self.game_state_to_base_planning is not None:
+            #    print(f"Checking for unexpected survival: {ship_state.is_respawning=} {self.game_state_to_base_planning['ship_state'].is_respawning=} {self.game_state_to_base_planning['respawning']=}")
             if not self.action_queue and self.game_state_to_base_planning is not None and not ship_state.is_respawning and self.game_state_to_base_planning['ship_state'].is_respawning and self.game_state_to_base_planning['respawning']:
                 # We thought this maneuver would end in us dying, with the next move being a respawn maneuver. However this is not the case. We're alive at the end of the maneuver! This must be because the other ship saved us by shooting an asteroid that was going to hit us, or something.
                 # This assertion isn't true because we could be doing a respawn maneuver, dying, and doing another respawn maneuver!
@@ -5675,7 +5691,7 @@ class NeoController(KesslerController):
                 iterations_boost = True
                 unexpected_survival = True
                 # Yoink this life remaining from the respawn maneuvers, since we no longer are doing one
-                if ship_state.lives_remaining in self.lives_remaining_that_we_did_respawn_maneuver_for:
+                if (ship_state.lives_remaining - 1) in self.lives_remaining_that_we_did_respawn_maneuver_for:
                     # We need to subtract one from the lives remaining, because when we added it, it was from a simulated ship that had one fewer life. In reality we never lost that life, so we subtract one from our actual lives.
                     self.lives_remaining_that_we_did_respawn_maneuver_for.remove(ship_state.lives_remaining - 1)
             # set up the actions planning
