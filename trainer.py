@@ -34,7 +34,7 @@ parser.add_argument('--chromosome', type=str, help='A custom chromosome to test,
 args = parser.parse_args()
 
 # Convert the custom chromosome string to a list of floats if provided
-custom_chromosome = [float(x.strip()) for x in args.chromosome.strip('(){}').split(',')] if args.chromosome else None
+custom_chromosome = [float(x.strip()) for x in args.chromosome.strip('()[]').split(',')] if args.chromosome else None
 if custom_chromosome is not None:
     assert len(custom_chromosome) == 9, "Custom chromosome not the required length of 9!"
 
