@@ -5,6 +5,7 @@ from datetime import datetime
 import random
 import time
 import os
+import argparse
 
 from typing import Any
 from src.neo_controller_training import NeoController
@@ -26,6 +27,16 @@ ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
 
 if not os.path.exists(TRAINING_DIRECTORY):
     os.makedirs(TRAINING_DIRECTORY, exist_ok=True)
+
+# Command line argument parsing
+parser = argparse.ArgumentParser(description='Run genetic algorithm training with an optional custom chromosome.')
+parser.add_argument('--chromosome', type=str, help='A custom chromosome to test, formatted as a comma-separated list of values (e.g., "0.1,0.2,0.3,...").', default='')
+args = parser.parse_args()
+
+# Convert the custom chromosome string to a list of floats if provided
+custom_chromosome = [float(x.strip()) for x in args.chromosome.strip('(){}').split(',')] if args.chromosome else None
+if custom_chromosome is not None:
+    assert len(custom_chromosome) == 9, "Custom chromosome not the required length of 9!"
 
 def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_range, angle_range, size_range) -> list:
     asteroids = []
@@ -94,7 +105,7 @@ def get_top_chromosomes() -> list:
     top_chromosomes = [chromosome for _, chromosome in top_scores]
     return top_chromosomes
 
-def run_training(training_portfolio, directory=TRAINING_DIRECTORY):#filename=GA_RESULTS_FILE):
+def run_training(training_portfolio, directory=TRAINING_DIRECTORY) -> None:#filename=GA_RESULTS_FILE):
     # Backup and load existing results
     #backup_existing_results(filename)
     #results = load_existing_results(filename)
@@ -114,32 +125,36 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY):#filename=GA_
         random.seed()
         iteration += 1
         scenarios_info = []
-        top_chromosomes = get_top_chromosomes()
-        rand_decision = random.random()
-        if rand_decision < 0.35 or len(top_chromosomes) < 5:
-            print('Completely random chromosome')
-            # Generate a completely random chromosome
-            new_chromosome = generate_random_chromosome()
-        elif rand_decision < 0.7:
-            print('Mutating top chromosome')
-            # Take the top chromosome and apply a mutation
-            new_chromosome = mutate_chromosome(top_chromosomes[0], 0.2, 0.1)
-            print(f"Mutated {top_chromosomes[0]} into {new_chromosome}")
-        elif rand_decision < 0.85:
-            print('Crossovering chromosomes')
-            # Take some top chromosomes and crossover them
-            child_1, child_2 = crossover_chromosomes(top_chromosomes[0], top_chromosomes[1])
-            new_chromosome = random.choice([child_1, child_2])
-            new_chromosome = mutate_chromosome(new_chromosome, 0.2, 0.05)
-            print(f"Took parents {top_chromosomes[0]} and {top_chromosomes[1]} to get {new_chromosome}")
+        if custom_chromosome is not None:
+            print('Using custom chromosome')
+            new_chromosome = custom_chromosome
         else:
-            print('Crossovering rand chromosomes')
-            print(top_chromosomes)
-            parent1, parent2 = random.sample(top_chromosomes, 2)
-            child_1, child_2 = crossover_chromosomes(parent1, parent2)
-            new_chromosome = random.choice([child_1, child_2])
-            new_chromosome = mutate_chromosome(new_chromosome, 0.2, 0.05)
-            print(f"Took parents {parent1} and {parent2} to get {new_chromosome}")
+            top_chromosomes = get_top_chromosomes()
+            rand_decision = random.random()
+            if rand_decision < 0.35 or len(top_chromosomes) < 5:
+                print('Completely random chromosome')
+                # Generate a completely random chromosome
+                new_chromosome = generate_random_chromosome()
+            elif rand_decision < 0.7:
+                print('Mutating top chromosome')
+                # Take the top chromosome and apply a mutation
+                new_chromosome = mutate_chromosome(top_chromosomes[0], 0.2, 0.1)
+                print(f"Mutated {top_chromosomes[0]} into {new_chromosome}")
+            elif rand_decision < 0.85:
+                print('Crossovering chromosomes')
+                # Take some top chromosomes and crossover them
+                child_1, child_2 = crossover_chromosomes(top_chromosomes[0], top_chromosomes[1])
+                new_chromosome = random.choice([child_1, child_2])
+                new_chromosome = mutate_chromosome(new_chromosome, 0.2, 0.05)
+                print(f"Took parents {top_chromosomes[0]} and {top_chromosomes[1]} to get {new_chromosome}")
+            else:
+                print('Crossovering rand chromosomes')
+                print(top_chromosomes)
+                parent1, parent2 = random.sample(top_chromosomes, 2)
+                child_1, child_2 = crossover_chromosomes(parent1, parent2)
+                new_chromosome = random.choice([child_1, child_2])
+                new_chromosome = mutate_chromosome(new_chromosome, 0.2, 0.05)
+                print(f"Took parents {parent1} and {parent2} to get {new_chromosome}")
         new_chromosome = normalize(new_chromosome, 1.0)
         print(f"\nNew run using chromosome: {new_chromosome}")
         team_1_total_hits = 0
@@ -267,6 +282,10 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY):#filename=GA_
         print(f"Results saved to {unique_filename}")
         # Save incrementally
         #save_results_incrementally(results, filename)
+
+        if custom_chromosome:
+            print('Finished training with custom chromosome. Exiting.')
+            break
 
 def generate_random_numbers(length, lower_bound=0, upper_bound=1) -> list[float]:
     return [random.uniform(lower_bound, upper_bound) for _ in range(length)]
