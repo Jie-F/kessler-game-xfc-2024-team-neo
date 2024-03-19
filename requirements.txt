@@ -2,5 +2,5 @@ numpy
 pillow
 inputs
 matplotlib
-skfuzzy
-scipy
+scikit-fuzzy
+mypy-extensions
