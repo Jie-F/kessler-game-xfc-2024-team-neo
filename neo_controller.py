@@ -1773,20 +1773,24 @@ def collision_prediction(Oax: float, Oay: float, Dax: float, Day: float, ra: flo
     # Given two circles moving at constant velocities, will they collide, and when? This can be solved in constant time with a calculation
     # https://stackoverflow.com/questions/11369616/circle-circle-collision-prediction/
     separation = ra + rb
+    delta_x = Oax - Obx
+    delta_y = Oay - Oby
     if is_close_to_zero(Dax) and is_close_to_zero(Day) and is_close_to_zero(Dbx) and is_close_to_zero(Dby):
         # If both objects are stationary, then we only have to check the collision right now and not do any fancy math
         # This should speed up scenarios where most asteroids are stationary
         #if check_collision(Oax, Oay, ra, Obx, Oby, rb):
-        delta_x = Oax - Obx
-        delta_y = Oay - Oby
         if abs(delta_x) <= separation and abs(delta_y) <= separation and delta_x*delta_x + delta_y*delta_y <= separation*separation:
             return -inf, inf
         else:
             return nan, nan
-    a = Dax*Dax + Dbx*Dbx + Day*Day + Dby*Dby - 2.0*(Dax*Dbx + Day*Dby)
-    b = 2.0*(Oax*Dax - Oax*Dbx - Obx*Dax + Obx*Dbx + Oay*Day - Oay*Dby - Oby*Day + Oby*Dby)
-    c = Oax*Oax + Obx*Obx + Oay*Oay + Oby*Oby - 2.0*(Oax*Obx + Oay*Oby) - separation*separation
-    return solve_quadratic(a, b, c)
+    else:
+        # Compared to the stack overflow, the following has been factored to reduce intermediate computations and save some clock cycles
+        vel_delta_x = Dax - Dbx
+        vel_delta_y = Day - Dby
+        a = vel_delta_x*vel_delta_x + vel_delta_y*vel_delta_y
+        b = 2.0*(delta_x*vel_delta_x + delta_y*vel_delta_y)
+        c = delta_x*delta_x + delta_y*delta_y - separation*separation
+        return solve_quadratic(a, b, c)
 
 
 def predict_next_imminent_collision_time_with_asteroid(ship_pos_x: float, ship_pos_y: float, ship_vel_x: float, ship_vel_y: float, ship_r: float, ast_pos_x: float, ast_pos_y: float, ast_vel_x: float, ast_vel_y: float, ast_radius: float, starting_time_to_check: float = 0.0) -> float:
