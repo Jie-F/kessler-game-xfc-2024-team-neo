@@ -45,8 +45,7 @@ import time
 from collections import deque
 from functools import lru_cache
 from itertools import chain
-from math import (acos, asin, atan2, ceil, cos, exp, floor, inf, isinf, isnan,
-                  nan, pi, sin, sqrt)
+from math import acos, asin, atan2, ceil, cos, exp, floor, inf, isinf, isnan, nan, pi, sin, sqrt
 from typing import Any, Final, Iterable, Optional, Sequence, TypedDict, cast
 
 import matplotlib.patches as patches  # type: ignore[import-untyped]
