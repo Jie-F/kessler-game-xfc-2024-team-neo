@@ -37,27 +37,29 @@
 # TODO: Use math to see how the bullet lines up with the asteroid, to predict whether it's gonna hit before doing the bullet sim
 
 
-import random
-from math import sin, cos, sqrt, floor, ceil, atan2, asin, acos, pi, isnan, exp, isinf, inf, nan
-import math
-import time
 import bisect
-from functools import lru_cache
-from typing import Any, Optional, TypedDict, cast, Final, Sequence, Iterable
-from collections import deque
 import gc
+import math
+import random
+import time
+from collections import deque
+from functools import lru_cache
 from itertools import chain
+from math import (acos, asin, atan2, ceil, cos, exp, floor, inf, isinf, isnan,
+                  nan, pi, sin, sqrt)
+from typing import Any, Final, Iterable, Optional, Sequence, TypedDict, cast
+
+import matplotlib.patches as patches  # type: ignore[import-untyped]
+import matplotlib.pyplot as plt  # type: ignore[import-untyped]
+import numpy as np
+from mypy_extensions import i64
+from skfuzzy import control, trimf  # type: ignore[import-untyped]
+
+from src.kesslergame import KesslerController  # type: ignore[import-untyped]
+
 #gc.set_debug(gc.DEBUG_STATS)
 gc.set_threshold(50000)
 #gc.disable()
-
-import numpy as np
-import matplotlib.pyplot as plt  # type: ignore[import-untyped]
-import matplotlib.patches as patches  # type: ignore[import-untyped]
-from skfuzzy import control, trimf  # type: ignore[import-untyped]
-from mypy_extensions import i64
-
-from src.kesslergame import KesslerController  # type: ignore[import-untyped]
 
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
