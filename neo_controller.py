@@ -73,7 +73,7 @@ STATE_CONSISTENCY_CHECK_AND_RECOVERY = True  # Enable this if we want to be able
 CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
 ENABLE_SANITY_CHECKS: Final[bool] = False  # Miscellaneous sanity checks throughout the code
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
-VALIDATE_SIMULATED_KEY_STATES: Final[bool] = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
 VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
@@ -81,7 +81,7 @@ VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to 
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[i64] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
 # TODO: Actually wait, doesn't the rotation timestep fudge just need to be 5, because each stationary targetting is just 5 timesteps long? So using 20 may be overkill!
 UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON: Final[float] = 8.0
-UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON: Final[float] = 2.0 # The upper bound would be sqrt(1000.0**2 + 800.0**2)/800.0 + 1.0 = 2.600781059358212 s, which is 1 second to turn and the rest for bullet travel time. But this is the worst case scenario. In most cases, we don't need this much.
+UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON: Final[float] = 2.3 # The upper bound would be sqrt(1000.0**2 + 800.0**2)/800.0 + 1.0 = 2.600781059358212 s, which is 1 second to turn and the rest for bullet travel time. But this is the worst case scenario. In most cases, we don't need this much.
 ASTEROID_SIZE_SHOT_PRIORITY: Final = (nan, 1, 2, 3, 4)  # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None
 MINE_DROP_COOLDOWN_FUDGE_TS: Final[i64] = 60  # We can drop a mine every 30 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
@@ -182,7 +182,7 @@ MINE_MASS: Final[float] = 25.0  # kg
 ASTEROID_RADII_LOOKUP: Final = tuple(8.0*size for size in range(5))  # asteroid.py
 ASTEROID_AREA_LOOKUP: Final = tuple(pi*r*r for r in ASTEROID_RADII_LOOKUP)
 ASTEROID_MASS_LOOKUP: Final = tuple(0.25*pi*(8*size)**2 for size in range(5))  # asteroid.py
-RESPAWN_INVINCIBILITY_TIME_S: Final = 3  # s
+RESPAWN_INVINCIBILITY_TIME_S: Final[float] = 3.0  # s
 ASTEROID_COUNT_LOOKUP: Final = (0, 1, 4, 13, 40)  # A size 2 asteroid is 4 asteroids, size 4 is 30, etc. Each asteroid splits into 3, and itself is counted as well. Explicit formula is count(n) = (3^n - 1)/2
 DEGREES_BETWEEN_SHOTS: Final[float] = float(FIRE_COOLDOWN_TS)*SHIP_MAX_TURN_RATE*DELTA_TIME
 
@@ -208,15 +208,15 @@ total_sim_timesteps: i64 = 0
 #update_ts_zero_count = 0
 #update_ts_multiple_count = 0
 unwrap_cache: dict[i64, list['Asteroid']] = {} #tuple[float, float, float, float, float]
-unwrap_cache_hits: i64 = 0
-unwrap_cache_misses: i64 = 0
-bullet_sim_time: float = 0.0
-sim_update_total_time: float = 0.0
-sim_cull_total_time: float = 0.0
-unwrap_total_time: float = 0.0
-asteroids_pending_death_total_cull_time: float = 0.0
-asteroid_tracking_total_time: float = 0.0
-asteroid_new_track_total_time: float = 0.0
+#unwrap_cache_hits: i64 = 0
+#unwrap_cache_misses: i64 = 0
+#bullet_sim_time: float = 0.0
+#sim_update_total_time: float = 0.0
+#sim_cull_total_time: float = 0.0
+#unwrap_total_time: float = 0.0
+#asteroids_pending_death_total_cull_time: float = 0.0
+#asteroid_tracking_total_time: float = 0.0
+#asteroid_new_track_total_time: float = 0.0
 
 
 class Asteroid:
@@ -241,7 +241,10 @@ class Asteroid:
             return NotImplemented
         return (self.position == other.position and
                 self.velocity == other.velocity and
-                self.size == other.size)
+                self.size == other.size and
+                self.mass == other.mass and
+                self.radius == other.radius and
+                self.timesteps_until_appearance == other.timesteps_until_appearance)
 
     def __hash__(self) -> i64:
         # Combine position, velocity, and size into a single float
@@ -254,6 +257,7 @@ class Asteroid:
         return hash_val
 
     def float_hash(self) -> float:
+        # The magic numbers used here were just randomly chosen, to reduce the chance of collisions
         return self.position[0] + 0.4266548291679171*self.position[1] + 0.8164926348982552*self.velocity[0] + 0.8397584399461026*self.velocity[1]
 
     def int_hash(self) -> i64:
@@ -325,6 +329,30 @@ class Ship:
             drag=self.drag
         )
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Ship):
+            return NotImplemented
+        return (self.is_respawning == other.is_respawning and
+                self.position == other.position and
+                self.velocity == other.velocity and
+                self.speed == other.speed and
+                self.heading == other.heading and
+                self.mass == other.mass and
+                self.radius == other.radius and
+                self.id == other.id and
+                self.team == other.team and
+                self.lives_remaining == other.lives_remaining and
+                self.bullets_remaining == other.bullets_remaining and
+                self.mines_remaining == other.mines_remaining and
+                #self.can_fire == other.can_fire and
+                self.fire_rate == other.fire_rate and
+                #self.can_deploy_mine == other.can_deploy_mine and
+                self.mine_deploy_rate == other.mine_deploy_rate and
+                self.thrust_range == other.thrust_range and
+                self.turn_rate_range == other.turn_rate_range and
+                self.max_speed == other.max_speed and
+                self.drag == other.drag)
+
 
 class Mine:
     __slots__ = ('position', 'mass', 'fuse_time', 'remaining_time')
@@ -348,6 +376,14 @@ class Mine:
             fuse_time=self.fuse_time,
             remaining_time=self.remaining_time
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Mine):
+            return NotImplemented
+        return (self.position == other.position and
+                self.mass == other.mass and
+                self.fuse_time == other.fuse_time and
+                self.remaining_time == other.remaining_time)
 
 
 class Bullet:
@@ -377,6 +413,15 @@ class Bullet:
             mass=self.mass,
             tail_delta=self.tail_delta
         )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Bullet):
+            return NotImplemented
+        return (self.position == other.position and
+                self.velocity == other.velocity and
+                self.heading == other.heading and
+                self.mass == other.mass and
+                self.tail_delta == other.tail_delta)
 
 
 class GameState:
@@ -411,6 +456,49 @@ class GameState:
             sim_frame=self.sim_frame,
             time_limit=self.time_limit
         )
+    
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, GameState):
+            return NotImplemented
+        
+        # Compare asteroids
+        if len(self.asteroids) != len(other.asteroids):
+            print("Asteroids lists are different lengths!")
+            return False
+        for i, (ast_a, ast_b) in enumerate(zip(self.asteroids, other.asteroids)):
+            if ast_a != ast_b:
+                print(f"Asteroids don't match at index {i}: {ast_a} vs {ast_b}")
+                return False
+        
+        # Compare bullets
+        if len(self.bullets) != len(other.bullets):
+            print("Bullet lists are different lengths!")
+            return False
+        for i, (bul_a, bul_b) in enumerate(zip(self.bullets, other.bullets)):
+            if bul_a != bul_b:
+                print(f"Bullets don't match at index {i}: {bul_a} vs {bul_b}")
+                return False
+        
+        # Compare mines
+        if len(self.mines) != len(other.mines):
+            print("Mine lists are different lengths!")
+            return False
+        for i, (mine_a, mine_b) in enumerate(zip(self.mines, other.mines)):
+            if mine_a != mine_b:
+                print(f"Mines don't match at index {i}: {mine_a} vs {mine_b}")
+                return False
+        '''
+        # Compare ships
+        if len(self.ships) != len(other.ships):
+            print("Ships lists are different lengths!")
+            return False
+        for i, (ship_a, ship_b) in enumerate(zip(self.ships, other.ships)):
+            if ship_a != ship_b:
+                print(f"Ships don't match at index {i}: {ship_a} vs {ship_b}")
+                return False
+        '''
+        # Trivial properties like timesteps are not compared, assuming they don't affect game state equality
+        return True
 
 
 class Target:
@@ -731,8 +819,8 @@ def fast_atan2(y: float, x: float) -> float:
         atan_input = y/x
     
     # Calculate the atan approximation
-    x_sq = atan_input * atan_input
-    atan_result = atan_input * (0.99997726 - x_sq*(0.33262347 - x_sq*(0.19354346 - x_sq*(0.11643287 - x_sq*(0.05265332 - x_sq*0.01172120)))))
+    x_sq = atan_input*atan_input
+    atan_result = atan_input*(0.99997726 - x_sq*(0.33262347 - x_sq*(0.19354346 - x_sq*(0.11643287 - x_sq*(0.05265332 - x_sq*0.01172120)))))
     
     # Adjust the result based on the original input quadrant
     if swap:
@@ -3620,7 +3708,7 @@ class Matrix():
         if actual_asteroid_hit is not None:
             assert timesteps_until_bullet_hit_asteroid is not None
             actual_asteroid_hit_when_firing = time_travel_asteroid(actual_asteroid_hit, len(aiming_move_sequence) - timesteps_until_bullet_hit_asteroid, self.game_state)
-            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > ceil(FPS*self.game_state.time_limit):
+            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > floor(FPS*self.game_state.time_limit):
                 # Added one to the timesteps to prevent off by one :P
                 #print('WITHHOLDING SHOT IN TARGET SELECTION BECAUSE SCENARIO IS ENDING')
                 self.fire_next_timestep_flag = False
@@ -4245,7 +4333,7 @@ class Matrix():
                                         #if is_close(-10.0, actual_asteroid_hit_at_fire_time.velocity[0]):
                                         #    print(f"\nSHOT AT THE ASTEROID IN UPDATE in sim {self.sim_id} on timestep {self.initial_timestep + self.future_timesteps + 1}, {self.initial_timestep=} {self.future_timesteps=} and this shot will take this many ts: {timesteps_until_bullet_hit_asteroid}")
                                         track_asteroid_we_shot_at(self.asteroids_pending_death, self.initial_timestep + self.future_timesteps + 1, self.game_state, timesteps_until_bullet_hit_asteroid, actual_asteroid_hit_at_fire_time)
-                                    if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > ceil(FPS*self.game_state.time_limit):
+                                    if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid > floor(FPS*self.game_state.time_limit):
                                         # Added one to the timesteps to prevent off by one :P
                                         #print(f'WITHHOLDING SHOT BECAUSE SCENARIO IS ENDING, self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 = {self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1}, {self.game_state.time_limit=}, {FPS*self.game_state.time_limit=}')
                                         fire_this_timestep = False
@@ -5884,9 +5972,7 @@ class NeoController(KesslerController):
         if self.action_queue and self.action_queue[0][0] == self.current_timestep:
             _, thrust, turn_rate, fire, drop_mine = self.action_queue.popleft()
         else:
-            print(f"Sequence error on ts {self.current_timestep}!")
-            print(self.action_queue)
-            raise Exception()
+            raise Exception(f"Sequence error on timestep {self.current_timestep}!")
             thrust, turn_rate, fire, drop_mine = 0.0, 0.0, False, False
 
         # The next action in the queue is for a future timestep. All actions for this timestep are processed.
@@ -5925,33 +6011,30 @@ class NeoController(KesslerController):
         if VALIDATE_ALL_SIMULATED_STATES and not PRUNE_SIM_STATE_SEQUENCE and not self.other_ships_exist:  # REMOVE_FOR_COMPETITION
             # debug_print(f"Validating game state for timestep {self.current_timestep}")  # REMOVE_FOR_COMPETITION
             if self.current_timestep in self.simulated_gamestate_history:  # REMOVE_FOR_COMPETITION
-                ship_states_match = compare_shipstates(ship_state, self.simulated_gamestate_history[self.current_timestep].ship_state)  # REMOVE_FOR_COMPETITION
-                if not ship_states_match:  # REMOVE_FOR_COMPETITION
+                if ship_state != self.simulated_gamestate_history[self.current_timestep].ship_state:  # REMOVE_FOR_COMPETITION
                     print("\nActual ship state:", ship_state)  # REMOVE_FOR_COMPETITION
                     print("\nSimulated ship state:", self.simulated_gamestate_history[self.current_timestep].ship_state)  # REMOVE_FOR_COMPETITION
-                assert ship_states_match  # REMOVE_FOR_COMPETITION
+                    raise Exception("Ship states don't match!")  # REMOVE_FOR_COMPETITION
                 if not ship_state.is_respawning:  # REMOVE_FOR_COMPETITION
                     # If respawning, the asteroid states won't match due to an optimization, so skip the check  # REMOVE_FOR_COMPETITION
-                    game_states_match = compare_gamestates(game_state, cast(GameState, self.simulated_gamestate_history[self.current_timestep].game_state))  # REMOVE_FOR_COMPETITION
-                    if not game_states_match:  # REMOVE_FOR_COMPETITION
+                    simulated_gamestate = cast(GameState, self.simulated_gamestate_history[self.current_timestep].game_state)  # REMOVE_FOR_COMPETITION
+                    if game_state != simulated_gamestate:  # REMOVE_FOR_COMPETITION
                         print("\nActual game state:", game_state)  # REMOVE_FOR_COMPETITION
                         print("\nSimulated game state:", self.simulated_gamestate_history[self.current_timestep].game_state)  # REMOVE_FOR_COMPETITION
                         print(f"\nAnd the simmed ship state is actually {self.simulated_gamestate_history[self.current_timestep].ship_state}")  # REMOVE_FOR_COMPETITION
-                    assert game_states_match  # REMOVE_FOR_COMPETITION
+                        raise Exception("Game states don't match!")  # REMOVE_FOR_COMPETITION
             else:  # REMOVE_FOR_COMPETITION
                 print(f"Timestep not in list of states!!!")  # REMOVE_FOR_COMPETITION
         if (not VALIDATE_ALL_SIMULATED_STATES or PRUNE_SIM_STATE_SEQUENCE) and VALIDATE_SIMULATED_KEY_STATES and self.current_timestep in self.set_of_base_gamestate_timesteps and not self.other_ships_exist:  # REMOVE_FOR_COMPETITION
             # debug_print(f"Validating KEY game state for timestep {self.current_timestep}")  # REMOVE_FOR_COMPETITION
-            game_states_match = compare_gamestates(game_state, self.base_gamestates[self.current_timestep]['game_state'])  # REMOVE_FOR_COMPETITION
-            if not game_states_match:  # REMOVE_FOR_COMPETITION
+            if game_state != self.base_gamestates[self.current_timestep]['game_state']:  # REMOVE_FOR_COMPETITION
                 print("Actual game state:", game_state)  # REMOVE_FOR_COMPETITION
                 print("\nSimulated game state:", self.base_gamestates[self.current_timestep]['game_state'])  # REMOVE_FOR_COMPETITION
-            assert game_states_match  # REMOVE_FOR_COMPETITION
-            ship_states_match = compare_shipstates(ship_state, self.base_gamestates[self.current_timestep]['ship_state'])  # REMOVE_FOR_COMPETITION
-            if not ship_states_match:  # REMOVE_FOR_COMPETITION
+                raise Exception("Game states don't match!")  # REMOVE_FOR_COMPETITION
+            if ship_state != self.base_gamestates[self.current_timestep]['ship_state']:  # REMOVE_FOR_COMPETITION
                 print("Actual ship state:", ship_state)  # REMOVE_FOR_COMPETITION
                 print("\nSimulated ship state:", self.base_gamestates[self.current_timestep]['ship_state'])  # REMOVE_FOR_COMPETITION
-            assert ship_states_match  # REMOVE_FOR_COMPETITION
+                raise Exception("Ship states don't match!")  # REMOVE_FOR_COMPETITION
         #self.reality_move_sequence.append({'thrust': thrust, 'turn_rate': turn_rate, 'fire': fire, 'drop_mine': drop_mine})  # REMOVE_FOR_COMPETITION
         #print(f"TS: {self.current_timestep}, Thrust: {thrust}, Turn Rate: {turn_rate}, Fire: {fire}, Drop Mine: {drop_mine}")  # REMOVE_FOR_COMPETITION
         self.performance_controller_exit()
