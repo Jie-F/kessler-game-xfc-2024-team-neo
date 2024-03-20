@@ -100,8 +100,8 @@ def get_top_chromosomes() -> list:
         # Append the current run's score and chromosome to the list
         top_scores.append((current_score, current_chromosome))
 
-    # Sort the list by score in descending order and keep only the top 5
-    top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:5]
+    # Sort the list by score in descending order and keep only the top 10
+    top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:10]
     top_chromosomes = [chromosome for _, chromosome in top_scores]
     return top_chromosomes
 
@@ -131,22 +131,15 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY) -> None:#file
         else:
             top_chromosomes = get_top_chromosomes()
             rand_decision = random.random()
-            if rand_decision < 0.35 or len(top_chromosomes) < 5:
+            if rand_decision < 0.35 or len(top_chromosomes) < 10:
                 print('Completely random chromosome')
                 # Generate a completely random chromosome
                 new_chromosome = generate_random_chromosome()
             elif rand_decision < 0.7:
-                print('Mutating top chromosome')
+                print('Mutating one of the top chromosomes')
                 # Take the top chromosome and apply a mutation
-                new_chromosome = mutate_chromosome(top_chromosomes[0], 0.2, 0.1)
+                new_chromosome = mutate_chromosome(random.sample(top_chromosomes, 1)[0], 0.2, 0.1)
                 print(f"Mutated {top_chromosomes[0]} into {new_chromosome}")
-            elif rand_decision < 0.85:
-                print('Crossovering chromosomes')
-                # Take some top chromosomes and crossover them
-                child_1, child_2 = crossover_chromosomes(top_chromosomes[0], top_chromosomes[1])
-                new_chromosome = random.choice([child_1, child_2])
-                new_chromosome = mutate_chromosome(new_chromosome, 0.2, 0.05)
-                print(f"Took parents {top_chromosomes[0]} and {top_chromosomes[1]} to get {new_chromosome}")
             else:
                 print('Crossovering rand chromosomes')
                 print(top_chromosomes)
