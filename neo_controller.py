@@ -50,11 +50,12 @@ from typing import Any, Final, Iterable, Optional, Sequence, TypedDict, cast
 
 import matplotlib.patches as patches  # type: ignore[import-untyped]
 import matplotlib.pyplot as plt  # type: ignore[import-untyped]
-import numpy as np
+from numpy import arange, fmax, linspace, vectorize
 from mypy_extensions import i64
 from skfuzzy import control, trimf  # type: ignore[import-untyped]
 
-from src.kesslergame import KesslerController  # type: ignore[import-untyped]
+#from src.kesslergame import KesslerController  # type: ignore[import-untyped]
+#from kesslergame import KesslerController  # type: ignore[import-untyped]
 
 #gc.set_debug(gc.DEBUG_STATS)
 gc.set_threshold(50000)
@@ -73,7 +74,7 @@ STATE_CONSISTENCY_CHECK_AND_RECOVERY = True  # Enable this if we want to be able
 CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only instantiated once and run through multiple scenarios, this must be on!
 ENABLE_SANITY_CHECKS: Final[bool] = False  # Miscellaneous sanity checks throughout the code
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
-VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_SIMULATED_KEY_STATES: Final[bool] = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
 VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
@@ -116,7 +117,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final[i64] = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 5
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
@@ -863,10 +864,10 @@ def heading_diff_within_threshold(a_vec_theta_rad: float, b_vec_x: float, b_vec_
 @lru_cache()
 def set_up_mine_fis() -> control.ControlSystemSimulation:
     # set up mine FIS
-    mines_left = control.Antecedent(np.arange(0, 4, 1), 'mines_left')
-    lives_left = control.Antecedent(np.arange(1, 4, 1), 'lives_left')
-    asteroids_hit = control.Antecedent(np.arange(0, 51, 1), 'asteroids_hit')
-    drop_mine = control.Consequent(np.arange(0, 11, 1), 'drop_mine')
+    mines_left = control.Antecedent(arange(0, 4, 1), 'mines_left')
+    lives_left = control.Antecedent(arange(1, 4, 1), 'lives_left')
+    asteroids_hit = control.Antecedent(arange(0, 51, 1), 'asteroids_hit')
+    drop_mine = control.Consequent(arange(0, 11, 1), 'drop_mine')
 
     # Defining the membership functions
     mines_left['few'] = trimf(mines_left.universe, [1, 1, 3])
@@ -980,18 +981,18 @@ def check_mine_opportunity(ship_state: Ship, game_state: GameState, other_ships:
 def setup_heuristic_maneuver_fis() -> control.ControlSystemSimulation:
     K = 0.8*FPS
     # Antecedents (Inputs)
-    imminent_asteroid_speed = control.Antecedent(np.arange(0, 301, 1), 'imminent_asteroid_speed')
-    imminent_asteroid_relative_heading = control.Antecedent(np.arange(0, 361, 1), 'imminent_asteroid_relative_heading')
-    largest_gap_relative_heading = control.Antecedent(np.arange(0, 361, 1), 'largest_gap_relative_heading')
-    nearby_asteroid_average_speed = control.Antecedent(np.arange(0, 301, 1), 'nearby_asteroid_average_speed')
-    nearby_asteroid_count = control.Antecedent(np.arange(0, 16, 1), 'nearby_asteroid_count')
+    imminent_asteroid_speed = control.Antecedent(arange(0, 301, 1), 'imminent_asteroid_speed')
+    imminent_asteroid_relative_heading = control.Antecedent(arange(0, 361, 1), 'imminent_asteroid_relative_heading')
+    largest_gap_relative_heading = control.Antecedent(arange(0, 361, 1), 'largest_gap_relative_heading')
+    nearby_asteroid_average_speed = control.Antecedent(arange(0, 301, 1), 'nearby_asteroid_average_speed')
+    nearby_asteroid_count = control.Antecedent(arange(0, 16, 1), 'nearby_asteroid_count')
 
     # Consequents (Outputs)
-    ship_accel_turn_rate = control.Consequent(np.arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_accel_turn_rate')
-    ship_cruise_speed = control.Consequent(np.arange(-SHIP_MAX_SPEED, SHIP_MAX_SPEED + 1, 1), 'ship_cruise_speed')
-    ship_cruise_turn_rate = control.Consequent(np.arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_cruise_turn_rate')
-    ship_cruise_timesteps = control.Consequent(np.arange(0, K + 1, 1), 'ship_cruise_timesteps')
-    ship_thrust_direction = control.Consequent(np.arange(-1, 2, 1), 'ship_thrust_direction')
+    ship_accel_turn_rate = control.Consequent(arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_accel_turn_rate')
+    ship_cruise_speed = control.Consequent(arange(-SHIP_MAX_SPEED, SHIP_MAX_SPEED + 1, 1), 'ship_cruise_speed')
+    ship_cruise_turn_rate = control.Consequent(arange(-SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE + 1, 1), 'ship_cruise_turn_rate')
+    ship_cruise_timesteps = control.Consequent(arange(0, K + 1, 1), 'ship_cruise_timesteps')
+    ship_thrust_direction = control.Consequent(arange(-1, 2, 1), 'ship_thrust_direction')
 
     # Membership Functions for Antecedents
     imminent_asteroid_speed.automf(names=['slow', 'medium', 'fast'])
@@ -1002,7 +1003,7 @@ def setup_heuristic_maneuver_fis() -> control.ControlSystemSimulation:
 
     # Define manual membership functions with 90 degrees width, dominant in 45 degrees
     # Forward (F) - Bimodal covering 0 to 45 and 315 to 360
-    imminent_asteroid_relative_heading['F'] = np.fmax(
+    imminent_asteroid_relative_heading['F'] = fmax(
         trimf(imminent_asteroid_relative_heading.universe, [0, 0, 45]),  # Extends to 0 to 45
         trimf(imminent_asteroid_relative_heading.universe, [315, 360, 360])  # Wraps from 315 to 360
     )
@@ -1030,7 +1031,7 @@ def setup_heuristic_maneuver_fis() -> control.ControlSystemSimulation:
 
     # Define manual membership functions with 90 degrees width, dominant in 45 degrees
     # Forward (F) - Bimodal covering 0 to 45 and 315 to 360
-    largest_gap_relative_heading['F'] = np.fmax(
+    largest_gap_relative_heading['F'] = fmax(
         trimf(largest_gap_relative_heading.universe, [0, 0, 45]),  # Extends to 0 to 45
         trimf(largest_gap_relative_heading.universe, [315, 360, 360])  # Wraps from 315 to 360
     )
@@ -2521,7 +2522,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         cos_theta = cos(theta)
         sin_theta = sin(theta)
         sinusoidal_component = -k1*cos_theta + k2*sin_theta
-        wacky_component = -vb*sign(theta - theta_0)/pi*(2.0*avx*cos_theta + 2.0*avy*sin_theta - (theta - theta_0)*(avx*sin_theta - avy*cos_theta))
+        wacky_component = -vb*sign(theta - theta_0)/pi*(2.0*(avx*cos_theta + avy*sin_theta) - (theta - theta_0)*(avx*sin_theta - avy*cos_theta))
         return sinusoidal_component + wacky_component
 
     # I inlined the functions, but you could add them back to the function call.
@@ -2584,6 +2585,7 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         return t_bul
 
     def bullet_travel_time_for_plot(theta: float) -> float:
+        # USED FOR DEBUGGING
         # Convert heading error to absolute heading
         theta += theta_0
         cos_theta = cos(theta)
@@ -2600,16 +2602,16 @@ def solve_interception(asteroid: Asteroid, ship_state: Ship, game_state: GameSta
         # USED FOR DEBUGGING
         naive_theta_ans_list = [naive_desired_heading_calc(timesteps_until_can_fire)]  # Assuming this function returns a list of angles
         theta_0 = radians(ship_state.heading)
-        # theta_range = np.linspace(theta_0 - pi, theta_0 + pi, 400)
-        theta_delta_range = np.linspace(-pi, pi, 400)
+        # theta_range = linspace(theta_0 - pi, theta_0 + pi, 400)
+        theta_delta_range = linspace(-pi, pi, 400)
 
         # Vectorize the functions for numpy compatibility
-        vectorized_function = np.vectorize(root_function)
-        vectorized_derivative = np.vectorize(root_function_derivative)
-        vectorized_second_derivative = np.vectorize(root_function_second_derivative)
-        vectorized_bullet_time = np.vectorize(bullet_travel_time_for_plot)
-        vectorized_naive_function = np.vectorize(naive_root_function)
-        vectorized_naive_time = np.vectorize(naive_time_function_for_plotting)
+        vectorized_function = vectorize(root_function)
+        vectorized_derivative = vectorize(root_function_derivative)
+        vectorized_second_derivative = vectorize(root_function_second_derivative)
+        vectorized_bullet_time = vectorize(bullet_travel_time_for_plot)
+        vectorized_naive_function = vectorize(naive_root_function)
+        vectorized_naive_time = vectorize(naive_time_function_for_plotting)
 
         # Calculate function values
         function_values = vectorized_function(theta_delta_range)
@@ -4808,6 +4810,35 @@ class Matrix():
         return float(self.ship_state.heading)
 
 
+class KesslerController:
+    """
+     A ship controller class for Kessler. This can be inherited to create custom controllers that can be passed to the
+    game to operate within scenarios. A valid controller contains an actions method that takes in a ship object and ass
+    game_state dictionary. This action method then sets the thrust, turn_rate, and fire commands on the ship object.
+    """
+
+    def actions(self, ship_state: dict[str, Any], game_state: dict[str, Any]) -> tuple[float, float, bool, bool]:
+        """
+        Method processed each time step by this controller.
+        """
+
+        raise NotImplementedError('Your derived KesslerController must include an actions method for control input.')
+
+
+    # Property to store the ID for the ship this controller is attached to during a scenario
+    @property
+    def ship_id(self) -> int:
+        return self._ship_id if self._ship_id else 0
+
+    @ship_id.setter
+    def ship_id(self, value: int) -> None:
+        self._ship_id = value
+
+    @property
+    def name(self) -> str:
+        raise NotImplementedError(f"This controller {self.__class__} needs to have a name() property specified.")
+
+
 class NeoController(KesslerController):
     @property
     def name(self) -> str:
@@ -4818,9 +4849,12 @@ class NeoController(KesslerController):
 
     def __init__(self, chromosome: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None) -> None:
         self.reset(chromosome)
+        #self.ship_id: int = -1 # Dangerous!
+        #self._ship_id: int = -1
 
     def reset(self, chromosome: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None) -> None:
         self.init_done = False
+        #self.ship_id = None
         # DO NOT OVERWRITE self.ship_id. That will cause the controller to break, since Kessler manages that itself. If we want to track our ship id, use a different variable name.
         self.ship_id_internal: i64 = -1
         self.current_timestep: i64 = -1
@@ -4881,11 +4915,11 @@ class NeoController(KesslerController):
         else:
             self.other_ships_exist = False
             print_explanation("I'm alone. I can see into the future perfectly!", self.current_timestep)
-        # asteroid_density = control.Antecedent(np.arange(0, 11, 1), 'asteroid_density')
-        # asteroids_entropy = control.Antecedent(np.arange(0, 11, 1), 'asteroids_entropy')
-        # other_ship_lives = control.Antecedent(np.arange(0, 4, 1), 'other_ship_lives')
+        # asteroid_density = control.Antecedent(arange(0, 11, 1), 'asteroid_density')
+        # asteroids_entropy = control.Antecedent(arange(0, 11, 1), 'asteroids_entropy')
+        # other_ship_lives = control.Antecedent(arange(0, 4, 1), 'other_ship_lives')
 
-        # aggression = control.Consequent(np.arange(0, 1, 1), 'asteroid_growth_factor')
+        # aggression = control.Consequent(arange(0, 1, 1), 'asteroid_growth_factor')
 
     def enqueue_action(self, timestep: i64, thrust: float = 0.0, turn_rate: float = 0.0, fire: bool = False, drop_mine: bool = False) -> None:
         self.action_queue.append((timestep, thrust, turn_rate, fire, drop_mine))
