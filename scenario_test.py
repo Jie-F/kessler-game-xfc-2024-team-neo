@@ -22,8 +22,8 @@ ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
 from xfc_2023_replica_scenarios import *
 from custom_scenarios import *
 
-from src.kesslergame import Scenario, KesslerGame, GraphicsType
-from src.kesslergame.controller_gamepad import GamepadController
+from kesslergame import Scenario, KesslerGame, GraphicsType
+from kesslergame.controller_gamepad import GamepadController
 #from examples.test_controller import TestController
 
 parser = argparse.ArgumentParser(description='Run Kessler Game with optional CLI flags.')
@@ -289,7 +289,7 @@ for ind, num_ast in enumerate(range(1, 50)):
                                 asteroid_states=randomly_generated_asteroids,
                                 ship_states=[
                                     {'position': (width/3, height/2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 5},
-                                    #{'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
+                                    {'position': (width*2/3, height/2), 'angle': 180, 'lives': 6, 'team': 2, "mines_remaining": 5},
                                 ],
                                 map_size=(width, height),
                                 time_limit=total_asts/10*0.8,
@@ -337,30 +337,30 @@ while True:
         random.seed(randseed)
         controllers_used = [NeoController(), BabyNeoController()]
 
-        # asteroids_random = generate_asteroids(
-        #                                 num_asteroids=random.randint(5, 50),
-        #                                 position_range_x=(0, width),
-        #                                 position_range_y=(0, height),
-        #                                 speed_range=(-300, 300, 0),
-        #                                 angle_range=(-1, 361),
-        #                                 size_range=(1, 4)
-        #                             )*random.choice([1])
+        asteroids_random = generate_asteroids(
+                                        num_asteroids=random.randint(5, 10),
+                                        position_range_x=(0, width),
+                                        position_range_y=(0, height),
+                                        speed_range=(-300, 300, 0),
+                                        angle_range=(-1, 361),
+                                        size_range=(1, 4)
+                                    )*random.choice([1])
 
-        # # Define game scenario
-        # rand_scenario = Scenario(name='Random Scenario',
-        #                             #num_asteroids=200,
-        #                             asteroid_states=asteroids_random,
-        #                             #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
-        #                             #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
-        #                             #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
-        #                             ship_states=[
-        #                                 {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
-        #                                 #{'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
-        #                             ],
-        #                             map_size=(width, height),
-        #                             time_limit=240.0,
-        #                             ammo_limit_multiplier=random.choice([0]),
-        #                             stop_if_no_ammo=False)
+        # Define game scenario
+        rand_scenario = Scenario(name='Random Scenario',
+                                    #num_asteroids=200,
+                                    asteroid_states=asteroids_random,
+                                    #asteroid_states=[{'position': (width//2+10000, height*40//100), 'speed': 100, 'angle': -89, 'size': 4}],
+                                    #                {'position': (width*2//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4},
+                                    #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
+                                    ship_states=[
+                                        {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
+                                        {'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
+                                    ],
+                                    map_size=(width, height),
+                                    time_limit=240.0,
+                                    ammo_limit_multiplier=random.choice([0]),
+                                    stop_if_no_ammo=False)
         
         # benchmark_scenario = Scenario(name="Benchmark Scenario",
         #                                 num_asteroids=100,
