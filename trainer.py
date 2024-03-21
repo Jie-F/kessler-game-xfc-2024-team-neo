@@ -15,7 +15,7 @@ import sys
 #from null_controller import NullController
 from scenarios import *
 from xfc_2023_replica_scenarios import *
-from src.kesslergame import Scenario, KesslerGame, GraphicsType
+from kesslergame import Scenario, KesslerGame, GraphicsType
 
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
