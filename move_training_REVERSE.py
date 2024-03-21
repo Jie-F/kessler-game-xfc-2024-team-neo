@@ -8,8 +8,8 @@ import json
 import hashlib
 
 # Paths to your directories
-source_dir = r"C:\Users\Jie Fan\Documents\GitHub\kessler-game-xfc-2024-team-neo\training_v3"
-target_dir = r"A:\Programming\XFC 2024\Neo Training\training_v3"
+target_dir = r"C:\Users\Jie Fan\Documents\GitHub\kessler-game-xfc-2024-team-neo\training_v3"
+source_dir = r"A:\Programming\XFC 2024\Neo Training\training_v3"
 
 # Threshold for your numeric field in the JSON file
 threshold_value = 50300
@@ -28,7 +28,7 @@ def file_meets_condition(filepath) -> bool:
         with open(filepath, 'r') as file:
             data = json.load(file)
             # Replace 'your_numeric_field' with the actual field name
-            return data.get('team_1_total_asteroids_hit', float('inf')) < threshold_value
+            return data.get('team_1_total_asteroids_hit', float('inf')) >= threshold_value
     except json.JSONDecodeError:
         print(f"Error decoding JSON from file: {filepath}")
         return False  # or handle appropriately
@@ -53,7 +53,9 @@ def move_files(src, dst) -> None:
                 print(f"Skipped {filename}: file has been recently modified.")
                 continue
 
-            score_is_good = file_meets_condition(source_path)
+            if not file_meets_condition(source_path):
+                print(f"Skipped {filename}: the score's really good so we're keeping this one.")
+                continue
 
             # If destination file exists, compare hashes
             if os.path.exists(destination_path):
@@ -61,18 +63,14 @@ def move_files(src, dst) -> None:
                 destination_hash = hash_file(destination_path)
                 if source_hash == destination_hash:
                     print(f"Destination for {filename} already exists, and it matches the source file. Deleting the source file.")
-                    if not score_is_good:
-                        os.unlink(source_path)
+                    os.unlink(source_path)
                 else:
                     print(f"Error: File hashes do not match for {filename}. File not moved.")
                 continue
 
             # Attempt to move the file
             try:
-                if score_is_good:
-                    shutil.copy(source_path, destination_path)
-                else:
-                    shutil.move(source_path, destination_path)
+                shutil.move(source_path, destination_path)
                 print(f"Moved: {filename}")
             except Exception as e:
                 print(f"Error moving {filename}: {e}")
