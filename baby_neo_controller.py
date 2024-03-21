@@ -1,4 +1,4 @@
-from src.kesslergame import KesslerController # In Eclipse, the name of the library is kesslergame, not src.kesslergame
+#from src.kesslergame import KesslerController # In Eclipse, the name of the library is kesslergame, not src.kesslergame
 from typing import Dict, Tuple, Any
 import skfuzzy as fuzz  # type: ignore[import-untyped]
 from skfuzzy import control as ctrl  # type: ignore[import-untyped]
@@ -7,6 +7,34 @@ import numpy as np
 
 time_delta = 1/30
 turn_rate_range = 180.0
+
+class KesslerController:
+    """
+     A ship controller class for Kessler. This can be inherited to create custom controllers that can be passed to the
+    game to operate within scenarios. A valid controller contains an actions method that takes in a ship object and ass
+    game_state dictionary. This action method then sets the thrust, turn_rate, and fire commands on the ship object.
+    """
+
+    def actions(self, ship_state: dict[str, Any], game_state: dict[str, Any]) -> tuple[float, float, bool, bool]:
+        """
+        Method processed each time step by this controller.
+        """
+
+        raise NotImplementedError('Your derived KesslerController must include an actions method for control input.')
+
+
+    # Property to store the ID for the ship this controller is attached to during a scenario
+    @property
+    def ship_id(self) -> int:
+        return self._ship_id if self._ship_id else 0
+
+    @ship_id.setter
+    def ship_id(self, value: int) -> None:
+        self._ship_id = value
+
+    @property
+    def name(self) -> str:
+        raise NotImplementedError(f"This controller {self.__class__} needs to have a name() property specified.")
 
 # Function to duplicate asteroid positions for wraparound
 def duplicate_asteroids_for_wraparound(asteroid, max_x, max_y, pattern='surround') -> list:

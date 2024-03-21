@@ -26,6 +26,8 @@ top_scores = []
 
 total_asteroids_hit = 0
 total_timesteps_simulated = 0
+total_seconds_played = 0.0
+total_seconds_cpu_time = 0.0
 
 for run in all_data:
     current_score = run['team_1_total_asteroids_hit']
@@ -35,6 +37,8 @@ for run in all_data:
 
     total_asteroids_hit += run["team_1_total_asteroids_hit"]
     total_timesteps_simulated += run['neo_total_sim_ts']
+    total_seconds_played += run['total_sim_time']
+    total_seconds_cpu_time += run['total_eval_time']
 
 # Sort the list by score in descending order and keep only the top 3
 top_scores = sorted(top_scores, key=lambda x: x[0], reverse=True)[:15]
@@ -45,3 +49,5 @@ for i, (score, chromosome) in enumerate(top_scores, start=1):
 
 print(f"Total asteroids hit: {total_asteroids_hit}")
 print(f"Total years simulated: {total_timesteps_simulated/30/3600/24/365:.03f}")
+print(f"Total years actually played: {total_seconds_played/3600/24/365:.03f}")
+print(f"Total years of cpu time: {total_seconds_cpu_time/3600/24/365:.03f}")
