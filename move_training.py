@@ -23,12 +23,12 @@ def hash_file(filepath) -> str:
     return hash_sha256.hexdigest()
 
 def file_meets_condition(filepath) -> bool:
-    """Check if the file's JSON content has a numeric field below the threshold."""
+    """Check if the file's JSON content has a numeric field above the threshold."""
     try:
         with open(filepath, 'r') as file:
             data = json.load(file)
             # Replace 'your_numeric_field' with the actual field name
-            return data.get('team_1_total_asteroids_hit', float('inf')) < threshold_value
+            return data.get('team_1_total_asteroids_hit', float('inf')) >= threshold_value
     except json.JSONDecodeError:
         print(f"Error decoding JSON from file: {filepath}")
         return False  # or handle appropriately
@@ -60,9 +60,12 @@ def move_files(src, dst) -> None:
                 source_hash = hash_file(source_path)
                 destination_hash = hash_file(destination_path)
                 if source_hash == destination_hash:
-                    print(f"Destination for {filename} already exists, and it matches the source file. Deleting the source file.")
                     if not score_is_good:
+                        print(f"Destination for {filename} already exists, and it matches the source file. Deleting the source file.")
                         os.unlink(source_path)
+                    else:
+                        # This is a good score, so we expect it to exist in the destination, and we still keep it in the source
+                        pass
                 else:
                     print(f"Error: File hashes do not match for {filename}. File not moved.")
                 continue
@@ -71,9 +74,10 @@ def move_files(src, dst) -> None:
             try:
                 if score_is_good:
                     shutil.copy(source_path, destination_path)
+                    print(f"Copied: {filename}")
                 else:
                     shutil.move(source_path, destination_path)
-                print(f"Moved: {filename}")
+                    print(f"Moved: {filename}")
             except Exception as e:
                 print(f"Error moving {filename}: {e}")
     except Exception as e:
