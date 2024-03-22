@@ -22,8 +22,8 @@ ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
 from xfc_2023_replica_scenarios import *
 from custom_scenarios import *
 
-from kesslergame import Scenario, KesslerGame, GraphicsType
-from kesslergame.controller_gamepad import GamepadController
+from src.kesslergame import Scenario, KesslerGame, GraphicsType
+from src.kesslergame.controller_gamepad import GamepadController
 #from examples.test_controller import TestController
 
 parser = argparse.ArgumentParser(description='Run Kessler Game with optional CLI flags.')
@@ -324,6 +324,7 @@ if args.portfolio is not None:
         case 'rand_scenarios':
             selected_portfolio = rand_scenarios
 
+random.seed()
 
 while True:
     for scenario in selected_portfolio[0 if not args.index else args.index:]:
@@ -335,10 +336,10 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        controllers_used = [NeoController(), BabyNeoController()]
+        controllers_used = [NeoController(), NeoController()]
 
         asteroids_random = generate_asteroids(
-                                        num_asteroids=random.randint(5, 10),
+                                        num_asteroids=random.randint(5, 60),
                                         position_range_x=(0, width),
                                         position_range_y=(0, height),
                                         speed_range=(-300, 300, 0),
