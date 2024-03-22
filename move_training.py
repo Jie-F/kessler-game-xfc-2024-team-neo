@@ -6,9 +6,12 @@ import shutil
 import time
 import json
 import hashlib
+from datetime import datetime
 
 # Paths to your directories
-source_dir = r"C:\Users\Jie Fan\Documents\GitHub\kessler-game-xfc-2024-team-neo\training_v3"
+script_dir = os.path.dirname(os.path.abspath(__file__))
+source_dir = os.path.join(script_dir, "training_v3")
+#source_dir = r"C:\Users\Jie Fan\Documents\GitHub\kessler-game-xfc-2024-team-neo\training_v3"
 target_dir = r"A:\Programming\XFC 2024\Neo Training\training_v3"
 
 # Threshold for your numeric field in the JSON file
@@ -83,8 +86,11 @@ def move_files(src, dst) -> None:
     except Exception as e:
         print(f"Error accessing source directory: {e}")
 
-# Example of a continuous loop that checks every 60 seconds
 while True:
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{current_time}] Checking for files to move...")
     move_files(source_dir, target_dir)
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{current_time}] Done checking. Waiting for the next round.")
     # Wait for a specified time before checking again
-    time.sleep(60.0)  # Adjust the sleep time as needed
+    time.sleep(300.0)  # Adjust the sleep time as needed
