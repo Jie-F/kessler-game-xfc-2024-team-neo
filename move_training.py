@@ -45,44 +45,45 @@ def is_file_stable(filepath) -> bool:
     current_time = time.time()
     return (current_time - last_mod_time) > 60.0
 
-def move_files(src, dst) -> None:
+def move_files(src: str, dst: str) -> None:
     """Move files based on the JSON condition and file hash comparison."""
     try:
         for filename in os.listdir(src):
-            source_path = os.path.join(src, filename)
-            destination_path = os.path.join(dst, filename)
+            if filename.endswith(".json"):
+                source_path = os.path.join(src, filename)
+                destination_path = os.path.join(dst, filename)
 
-            if not is_file_stable(source_path):
-                print(f"Skipped {filename}: file has been recently modified.")
-                continue
+                if not is_file_stable(source_path):
+                    print(f"Skipped {filename}: file has been recently modified.")
+                    continue
 
-            score_is_good = file_meets_condition(source_path)
+                score_is_good = file_meets_condition(source_path)
 
-            # If destination file exists, compare hashes
-            if os.path.exists(destination_path):
-                source_hash = hash_file(source_path)
-                destination_hash = hash_file(destination_path)
-                if source_hash == destination_hash:
-                    if not score_is_good:
-                        print(f"Destination for {filename} already exists, and it matches the source file. Deleting the source file.")
-                        os.unlink(source_path)
+                # If destination file exists, compare hashes
+                if os.path.exists(destination_path):
+                    source_hash = hash_file(source_path)
+                    destination_hash = hash_file(destination_path)
+                    if source_hash == destination_hash:
+                        if not score_is_good:
+                            print(f"Destination for {filename} already exists, and it matches the source file. Deleting the source file.")
+                            os.unlink(source_path)
+                        else:
+                            # This is a good score, so we expect it to exist in the destination, and we still keep it in the source
+                            pass
                     else:
-                        # This is a good score, so we expect it to exist in the destination, and we still keep it in the source
-                        pass
-                else:
-                    print(f"Error: File hashes do not match for {filename}. File not moved.")
-                continue
+                        print(f"Error: File hashes do not match for {filename}. File not moved.")
+                    continue
 
-            # Attempt to move the file
-            try:
-                if score_is_good:
-                    shutil.copy(source_path, destination_path)
-                    print(f"Copied: {filename}")
-                else:
-                    shutil.move(source_path, destination_path)
-                    print(f"Moved: {filename}")
-            except Exception as e:
-                print(f"Error moving {filename}: {e}")
+                # Attempt to move the file
+                try:
+                    if score_is_good:
+                        shutil.copy(source_path, destination_path)
+                        print(f"Copied: {filename}")
+                    else:
+                        shutil.move(source_path, destination_path)
+                        print(f"Moved: {filename}")
+                except Exception as e:
+                    print(f"Error moving {filename}: {e}")
     except Exception as e:
         print(f"Error accessing source directory: {e}")
 

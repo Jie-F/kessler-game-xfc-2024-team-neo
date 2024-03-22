@@ -70,22 +70,42 @@ def generate_asteroids(num_asteroids, position_range_x, position_range_y, speed_
 #     with open(filename, 'w', encoding='utf8') as f:
 #         json.dump(result, f, indent=4)
 
-def read_and_process_json_files(directory=".") -> list:
+def read_and_process_json_files(directory=".", max_retries=5, retry_delay=1) -> list:
     all_data = []
-    # Iterate through all files in the current directory
-    for filename in os.listdir(directory):
-        if filename.endswith(".json"):  # Check if the file is a JSON file
-            filepath = os.path.join(directory, filename)
-            with open(filepath, 'r', encoding='utf8') as file:
-                try:
-                    data = json.load(file)
-                    if isinstance(data, dict):  # Ensure the JSON content is a dict
-                        all_data.append(data)
-                    else:
-                        print(f"File {filename} does not contain a dict.")
-                except json.JSONDecodeError:
-                    print(f"Error decoding JSON from file {filename}.")
+    retries = 0
+    while retries < max_retries:
+        try:
+            for filename in os.listdir(directory):
+                # Iterate through all json files in this directory
+                if filename.endswith(".json"):
+                    filepath = os.path.join(directory, filename)
+                    with open(filepath, 'r', encoding='utf8') as file:
+                        data = json.load(file)
+                        if isinstance(data, dict):
+                            all_data.append(data)
+                        else:
+                            print(f"File {filename} does not contain a dict.")
+            return all_data  # Successful read, break from the loop
+        except Exception as e:
+            print(f"Failed to process JSON files: {e}. Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retries += 1
+    print("Maximum retries reached. Failed to process JSON files.")
     return all_data
+
+def save_json_with_retries(data, filename, max_retries=5, retry_delay=1) -> None:
+    retries = 0
+    while retries < max_retries:
+        try:
+            with open(filename, 'w', encoding='utf8') as f:
+                json.dump(data, f, indent=4)
+            print(f"Results saved to {filename}")
+            return  # Successful write, break from the loop
+        except Exception as e:
+            print(f"Failed to save results: {e}. Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retries += 1
+    print("Maximum retries reached. Failed to save results.")
 
 def get_top_chromosomes() -> list:
     # Call the function to start processing
@@ -269,8 +289,9 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY) -> None:#file
         timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S-%f')[:-3]
         unique_filename = f"{directory}/{timestamp}_Training_Run.json"
         # Save this run's results to a separate file
-        with open(unique_filename, 'w', encoding='utf8') as f:
-            json.dump(run_info, f, indent=4)
+        #with open(unique_filename, 'w', encoding='utf8') as f:
+        #    json.dump(run_info, f, indent=4)
+        save_json_with_retries(run_info, unique_filename)
 
         print(f"Results saved to {unique_filename}")
         # Save incrementally
