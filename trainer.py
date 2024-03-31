@@ -300,6 +300,7 @@ def run_training(training_portfolio, directory=TRAINING_DIRECTORY) -> None:#file
         if custom_chromosome:
             print('Finished training with custom chromosome. Exiting.')
             break
+        break
 
 def generate_random_numbers(length, lower_bound=0, upper_bound=1) -> list[float]:
     return [random.uniform(lower_bound, upper_bound) for _ in range(length)]
