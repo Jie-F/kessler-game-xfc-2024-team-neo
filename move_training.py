@@ -15,7 +15,7 @@ source_dir = os.path.join(script_dir, "training_v3")
 target_dir = r"A:\Programming\XFC 2024\Neo Training\training_v3"
 
 # Threshold for your numeric field in the JSON file
-threshold_value = 50300
+threshold_value = 52200
 
 def hash_file(filepath) -> str:
     """Generate SHA-256 hash of a file."""
