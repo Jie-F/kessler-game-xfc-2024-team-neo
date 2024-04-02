@@ -3,7 +3,7 @@
 
 # Define the source file path and the destination file path
 source_file_path = 'neo_controller.py'
-destination_file_path = 'neo_controller_processed.py'
+destination_file_path = r'COMPETITION SUBMISSIONS\neo_controller.py'
 
 # Define the pattern to search for lines to remove
 pattern_to_remove = 'REMOVE_FOR_COMPETITION'

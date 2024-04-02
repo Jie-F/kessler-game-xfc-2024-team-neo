@@ -92,13 +92,14 @@ MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
 MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
-DEFAULT_FITNESS_WEIGHTS: Final = (0.08789534845873578, 0.13125316671406206, 0.11859495134688185, 0.0, 0.01435313063903789, 0.22103552136828564, 0.1439970408160089, 0.12730297501276894, 0.15556786564421904) # Hand picked: (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
+DEFAULT_FITNESS_WEIGHTS: Final = (0.0, 0.12522228730851412, 0.15550196392058346, 0.0, 0.013734028404994915, 0.24604614326339902, 0.16593186495503653, 0.06818149764794686, 0.22538221449952509) # Hand picked: (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final[float] = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE: Final[float] = cos(math.radians(MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF))
 MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF: Final[float] = 60.0
 MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF_COSINE: Final[float] = cos(math.radians(MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF))
 MAX_CRUISE_TIMESTEPS: Final[float] = 30.0
 MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD: Final[i64] = 10
+OVERALL_FITNESS_ROLLING_AVERAGE_PERIOD: Final[i64] = 5
 AIMING_CONE_FITNESS_CONE_WIDTH_HALF: Final[float] = 18.0 # This has to do with how fast we turn vs how often we can shoot. This can be thought of as some percentage of DEGREES_BETWEEN_SHOTS defined later
 AIMING_CONE_FITNESS_CONE_WIDTH_HALF_COSINE: Final[float] = cos(math.radians(AIMING_CONE_FITNESS_CONE_WIDTH_HALF))
 MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT: Final[i64] = 10
@@ -121,13 +122,60 @@ ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller 
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
 # Index 0 in the tuples is not used, but to be safe I put a sane number there
-MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[tuple[i64, i64, i64, i64]] = (1000, 12, 8, 5)
+
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
-MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS: Final[tuple[i64, i64, i64, i64]] = (1000, 700, 600, 350)
-MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[tuple[i64, i64, i64, i64]] = (10, 6, 4, 3)
 MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
-MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS: Final[tuple[i64, i64, i64, i64]] = (100, 25, 15, 10)
-MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE: Final[tuple[i64, i64, i64, i64]] = (1000, 600, 500, 300) # If we plan to die, we might as well search a bunch more iterations to try and avoid the death. Because if we die, we need to do an expensive respawn maneuver search anyway, so it's more optimal to try and avoid that.
+# For each row of the lookup table, the index in the row corresponds to the number of lives left, minus one
+MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((21, 17, 14), # Fitness from 0.0 to 0.1
+                                                         (20, 16, 13), # Fitness from 0.1 to 0.2
+                                                         (19, 15, 12), # Fitness from 0.2 to 0.3
+                                                         (18, 14, 11), # Fitness from 0.3 to 0.4
+                                                         (17, 13, 10), # Fitness from 0.4 to 0.5
+                                                         (16, 12, 9), # Fitness from 0.5 to 0.6
+                                                         (15, 11, 8), # Fitness from 0.6 to 0.7
+                                                         (14, 10, 7), # Fitness from 0.7 to 0.8
+                                                         (13, 9, 6), # Fitness from 0.8 to 0.9
+                                                         (12, 8, 5)) # Fitness from 0.9 to 1.0
+MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS_LUT: Final = ((960, 780, 440), # Fitness from 0.0 to 0.1
+                                                       (930, 760, 430), # Fitness from 0.1 to 0.2
+                                                       (900, 740, 420), # Fitness from 0.2 to 0.3
+                                                       (870, 720, 410), # Fitness from 0.3 to 0.4
+                                                       (840, 700, 400), # Fitness from 0.4 to 0.5
+                                                       (810, 680, 390), # Fitness from 0.5 to 0.6
+                                                       (790, 660, 380), # Fitness from 0.6 to 0.7
+                                                       (760, 640, 370), # Fitness from 0.7 to 0.8
+                                                       (730, 620, 360), # Fitness from 0.8 to 0.9
+                                                       (700, 600, 350)) # Fitness from 0.9 to 1.0
+MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((13, 12, 11), # Fitness from 0.0 to 0.1
+                                                          (12, 11, 10), # Fitness from 0.1 to 0.2
+                                                          (11, 10, 9), # Fitness from 0.2 to 0.3
+                                                          (10, 9, 8), # Fitness from 0.3 to 0.4
+                                                          (9, 8, 7), # Fitness from 0.4 to 0.5
+                                                          (8, 7, 6), # Fitness from 0.5 to 0.6
+                                                          (7, 6, 5), # Fitness from 0.6 to 0.7
+                                                          (6, 5, 4), # Fitness from 0.7 to 0.8
+                                                          (4, 3, 3), # Fitness from 0.8 to 0.9
+                                                          (3, 3, 2)) # Fitness from 0.9 to 1.0
+MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((39, 36, 33), # Fitness from 0.0 to 0.1
+                                                 (36, 33, 30), # Fitness from 0.1 to 0.2
+                                                 (33, 30, 27), # Fitness from 0.2 to 0.3
+                                                 (30, 27, 24), # Fitness from 0.3 to 0.4
+                                                 (27, 24, 21), # Fitness from 0.4 to 0.5
+                                                 (24, 21, 18), # Fitness from 0.5 to 0.6
+                                                 (21, 18, 15), # Fitness from 0.6 to 0.7
+                                                 (18, 15, 12), # Fitness from 0.7 to 0.8
+                                                 (12, 9, 9), # Fitness from 0.8 to 0.9
+                                                 (9, 9, 6)) # Fitness from 0.9 to 1.0
+MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE_LUT = ((860, 680, 340), # Fitness from 0.0 to 0.1
+                                                             (830, 660, 330), # Fitness from 0.1 to 0.2
+                                                             (800, 640, 320), # Fitness from 0.2 to 0.3
+                                                             (770, 620, 310), # Fitness from 0.3 to 0.4
+                                                             (740, 600, 300), # Fitness from 0.4 to 0.5
+                                                             (710, 580, 290), # Fitness from 0.5 to 0.6
+                                                             (690, 560, 280), # Fitness from 0.6 to 0.7
+                                                             (660, 540, 270), # Fitness from 0.7 to 0.8
+                                                             (630, 520, 260), # Fitness from 0.8 to 0.9
+                                                             (600, 500, 250)) # Fitness from 0.9 to 1.0
 
 # State dumping for debug
 REALITY_STATE_DUMP: Final[bool] = False  # Dump each game state to json
@@ -199,6 +247,7 @@ explanation_messages_with_timestamps: dict[str, i64] = {}  # Make sure to clear 
 #total_maneuvers_to_learn_from: i64 = 1
 abs_cruise_speeds: list[float] = [SHIP_MAX_SPEED/2]
 cruise_timesteps: list[i64] = [round(MAX_CRUISE_TIMESTEPS/2)]
+overall_fitness_record: list[float] = []
 #heuristic_fis_iterations = 0
 #heuristic_fis_total_fitness = 0.0
 #random_search_iterations = 0
@@ -859,6 +908,48 @@ def heading_diff_within_threshold(a_vec_theta_rad: float, b_vec_x: float, b_vec_
         return cos_theta >= cos_threshold
     else:
         return True
+
+
+@lru_cache
+def get_min_respawn_per_timestep_search_iterations(lives: i64, average_fitness: float) -> i64:
+    assert 0.0 <= average_fitness < 1.0
+    lives_lookup_index = min(3, lives)
+    fitness_lookup_index = floor(average_fitness*10.0) # Integer from 0 to 9
+    return MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT[fitness_lookup_index][lives_lookup_index - 1]
+
+
+@lru_cache
+def get_min_respawn_per_period_search_iterations(lives: i64, average_fitness: float) -> i64:
+    assert 0.0 <= average_fitness < 1.0
+    lives_lookup_index = min(3, lives)
+    fitness_lookup_index = floor(average_fitness*10.0) # Integer from 0 to 9
+    return MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS_LUT[fitness_lookup_index][lives_lookup_index - 1]
+
+
+@lru_cache
+def get_min_maneuver_per_timestep_search_iterations(lives: i64, average_fitness: float) -> i64:
+    assert 0.0 <= average_fitness < 1.0
+    lives_lookup_index = min(3, lives)
+    fitness_lookup_index = floor(average_fitness*10.0) # Integer from 0 to 9
+    return MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT[fitness_lookup_index][lives_lookup_index - 1]
+
+
+@lru_cache
+def get_min_maneuver_per_period_search_iterations(lives: i64, average_fitness: float) -> i64:
+    assert 0.0 <= average_fitness < 1.0
+    lives_lookup_index = min(3, lives)
+    fitness_lookup_index = floor(average_fitness*10.0) # Integer from 0 to 9
+    return MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT[fitness_lookup_index][lives_lookup_index - 1]
+
+
+@lru_cache
+def get_min_maneuver_per_period_search_iterations_if_will_die(lives: i64, average_fitness: float) -> i64:
+    # If we plan to die, we might as well search a bunch more iterations to try and avoid the death.
+    # Because if we die, we need to do an expensive respawn maneuver search anyway, so it's more optimal to try and avoid that.
+    assert 0.0 <= average_fitness < 1.0
+    lives_lookup_index = min(3, lives)
+    fitness_lookup_index = floor(average_fitness*10.0) # Integer from 0 to 9
+    return MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE_LUT[fitness_lookup_index][lives_lookup_index - 1]
 
 
 @lru_cache()
@@ -2745,8 +2836,8 @@ def track_asteroid_we_shot_at(asteroids_pending_death: dict[i64, list[Asteroid]]
                 if is_asteroid_in_list(asteroids_pending_death[timestep], asteroid, game_state):  # REMOVE_FOR_COMPETITION
                     print(f'ABOUT TO FAIL ASSERTION, we are in the future by {future_timesteps} timesteps from the current ts {current_timestep}, this asteroid is {asteroid} and LIST FOR THIS TS IS:')  # REMOVE_FOR_COMPETITION
                     print(asteroids_pending_death[timestep])  # REMOVE_FOR_COMPETITION
-                    culled_asteroids_pending_death = {k: [a for a in v if is_close(a.velocity[0], -10.0)] for k, v in asteroids_pending_death.items()}
-                    print(culled_asteroids_pending_death)
+                    culled_asteroids_pending_death = {k: [a for a in v if is_close(a.velocity[0], -10.0)] for k, v in asteroids_pending_death.items()}  # REMOVE_FOR_COMPETITION
+                    print(culled_asteroids_pending_death)  # REMOVE_FOR_COMPETITION
                 assert not is_asteroid_in_list(asteroids_pending_death[timestep], asteroid, game_state), f"The asteroid {asteroid} appeared in the list of pending death when it wasn't supposed to! I'm on future ts {future_timesteps} when tracking."  # REMOVE_FOR_COMPETITION
             asteroids_pending_death[timestep].append(asteroid.copy())
         # Advance the asteroid to the next position
@@ -3700,7 +3791,7 @@ class Matrix():
                 else:
                     self.explanation_messages.append("Asteroids no longer exist. We're all done!")
                     #self.explanation_messages.append(f"In this scenario, I have simulated {total_sim_timesteps*DELTA_TIME/60:0.0f} minutes of gameplay! Bullet sim took {bullet_sim_time} s and the sim update took {sim_update_total_time} s with the sim culling taking {sim_cull_total_time} s, unwrapping taking {unwrap_total_time} s, and culling asteroids_pending_death is {asteroids_pending_death_total_cull_time} s, {asteroid_tracking_total_time=}, {asteroid_new_track_total_time=}")
-                    self.explanation_messages.append(f"In this scenario, I have simulated {float(total_sim_timesteps)*DELTA_TIME/60:0.0f} minutes of gameplay!")
+                    #self.explanation_messages.append(f"In this scenario, I have simulated {float(total_sim_timesteps)*DELTA_TIME/60:0.0f} minutes of gameplay!")
                     #self.explanation_messages.append(f"We simulated {total_bullet_sim_timesteps} bullet sim timesteps and {total_bullet_sim_iterations} iterations, and {total_sim_timesteps} timesteps, and {update_ts_multiple_count=} {update_ts_zero_count=}")
                     turn_direction = 0
                     idle_thrust = 0.0
@@ -4923,9 +5014,10 @@ class NeoController(KesslerController):
         #total_cruise_timesteps = round(MAX_CRUISE_TIMESTEPS/2)
         #global total_maneuvers_to_learn_from
         #total_maneuvers_to_learn_from = 1
-        global abs_cruise_speeds, cruise_timesteps, unwrap_cache, total_sim_timesteps
+        global abs_cruise_speeds, cruise_timesteps, unwrap_cache, total_sim_timesteps, overall_fitness_record
         abs_cruise_speeds = [SHIP_MAX_SPEED/2]
         cruise_timesteps = [round(MAX_CRUISE_TIMESTEPS/2)]
+        overall_fitness_record.clear()
         unwrap_cache.clear()
         total_sim_timesteps = 0
 
@@ -5022,7 +5114,7 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
+        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         # print([x['fitness'] for x in self.sims_this_planning_period])
         
         # all_ship_pos = []
@@ -5222,7 +5314,13 @@ class NeoController(KesslerController):
             if len(cruise_timesteps) > MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:
                 cruise_timesteps = cruise_timesteps[-MANEUVER_TUPLE_LEARNING_ROLLING_AVERAGE_PERIOD:]
             #print(f"{best_action_maneuver_tuple=}, and the avg best cruise speed is now {weighted_average(abs_cruise_speeds)} and avg cruise timesteps is {weighted_average(cruise_timesteps)}")
-
+        # Maintain a rolling average of the overall fitnesses, so we know how well we're doing
+        global overall_fitness_record
+        overall_fitness_record.append(best_action_fitness)
+        if len(overall_fitness_record) > OVERALL_FITNESS_ROLLING_AVERAGE_PERIOD:
+            overall_fitness_record = overall_fitness_record[-OVERALL_FITNESS_ROLLING_AVERAGE_PERIOD:]
+        
+        # Print out the explanation messages that were stored within the sim
         if self.stationary_targetting_sim_index is not None:
             stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
             for message in stationary_safety_messages:
@@ -5256,7 +5354,8 @@ class NeoController(KesslerController):
                 if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
                     print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
         best_move_sequence = best_action_sim.get_move_sequence()
-        print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
+        #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
+        #print(f"Current average overall fitness is {weighted_average(overall_fitness_record)}")
         # debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
         # debug_print(f"The action we're taking is from timestep {best_action_sim_state_sequence[0]['timestep']} to {best_action_sim_state_sequence[-1]['timestep']}")
@@ -5388,7 +5487,7 @@ class NeoController(KesslerController):
         # Our number one priority is to stay alive. Second priority is to shoot as much as possible. And if we can, lay mines without putting ourselves in danger.
         assert self.game_state_to_base_planning is not None
         state_type = 'exact' if base_state_is_exact else 'predicted'
-        index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
+        #index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
         if self.game_state_to_base_planning['respawning']:
             #print("Planning respawn maneuver")
             # Simulate and look for a good move
@@ -5406,7 +5505,7 @@ class NeoController(KesslerController):
 
             # while search_iterations_count < min_search_iterations or (not safe_maneuver_found and search_iterations_count < max_search_iterations):
             # for _ in range(search_iterations):
-            while (search_iterations_count < MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS[index_according_to_lives_remaining] or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS:
+            while (search_iterations_count < get_min_respawn_per_timestep_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS:
                 self.performance_controller_start_iteration()
                 search_iterations_count += 1
                 if search_iterations_count % 1 == 0:
@@ -5676,7 +5775,7 @@ class NeoController(KesslerController):
             '''
             # print(f"Nearby asteroids count is {nearby_asteroid_count}, average speed of asts is {nearby_asteroid_average_speed}, avg directional speed is {average_directional_speed}, so therefore I'm picking ship cruise timesteps mode to be {ship_cruise_timesteps_mode} and ship speed mode of {ship_cruise_speed_mode}")
             search_iterations_count = 0
-            while (search_iterations_count < MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS[index_according_to_lives_remaining] or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS:
+            while (search_iterations_count < get_min_maneuver_per_timestep_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) or self.performance_controller_check_whether_i_can_do_another_iteration()) and not search_iterations_count >= MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS:
                 self.performance_controller_start_iteration()
                 search_iterations_count += 1
                 if heuristic_maneuver:
@@ -5979,8 +6078,8 @@ class NeoController(KesslerController):
                 #    debug_print(game_state)
                 self.plan_action(self.other_ships_exist, True, iterations_boost, True)
                 assert self.best_fitness_this_planning_period_index is not None
-                index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
-                while len(self.sims_this_planning_period) < (MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE[index_according_to_lives_remaining] if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown'][5] == 0.0 else (MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS[index_according_to_lives_remaining] if self.game_state_to_base_planning['respawning'] else MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS[index_according_to_lives_remaining])):
+                #index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
+                while len(self.sims_this_planning_period) < (get_min_maneuver_per_period_search_iterations_if_will_die(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown'][5] == 0.0 else (get_min_respawn_per_period_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) if self.game_state_to_base_planning['respawning'] else get_min_maneuver_per_period_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)))):
                     # Planning extra iterations to reach minimum threshold!
                     # print(f"Planning extra iterations to reach minimum threshold! {len(self.sims_this_planning_period)}")
                     self.plan_action(self.other_ships_exist, True, False, False)
@@ -6024,8 +6123,8 @@ class NeoController(KesslerController):
                 self.plan_action(self.other_ships_exist, True, iterations_boost, False)
             if not self.action_queue:
                 assert self.best_fitness_this_planning_period_index is not None
-                index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
-                while len(self.sims_this_planning_period) < (MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE[index_according_to_lives_remaining] if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown'][5] == 0.0 else (MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS[index_according_to_lives_remaining] if self.game_state_to_base_planning['respawning'] else MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS[index_according_to_lives_remaining])):
+                #index_according_to_lives_remaining = min(3, self.game_state_to_base_planning['ship_state'].lives_remaining)
+                while len(self.sims_this_planning_period) < (get_min_maneuver_per_period_search_iterations_if_will_die(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown'][5] == 0.0 else (get_min_respawn_per_period_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)) if self.game_state_to_base_planning['respawning'] else get_min_maneuver_per_period_search_iterations(self.game_state_to_base_planning['ship_state'].lives_remaining, weighted_average(overall_fitness_record)))):
                     # Planning extra iterations to reach minimum threshold!
                     # print("Planning extra iterations to reach minimum threshold!")
                     self.plan_action(self.other_ships_exist, True, False, False)

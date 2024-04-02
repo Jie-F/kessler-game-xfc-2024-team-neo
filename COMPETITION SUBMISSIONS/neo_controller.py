@@ -3716,7 +3716,7 @@ class Matrix():
                 else:
                     self.explanation_messages.append("Asteroids no longer exist. We're all done!")
                     #self.explanation_messages.append(f"In this scenario, I have simulated {total_sim_timesteps*DELTA_TIME/60:0.0f} minutes of gameplay! Bullet sim took {bullet_sim_time} s and the sim update took {sim_update_total_time} s with the sim culling taking {sim_cull_total_time} s, unwrapping taking {unwrap_total_time} s, and culling asteroids_pending_death is {asteroids_pending_death_total_cull_time} s, {asteroid_tracking_total_time=}, {asteroid_new_track_total_time=}")
-                    self.explanation_messages.append(f"In this scenario, I have simulated {float(total_sim_timesteps)*DELTA_TIME/60:0.0f} minutes of gameplay!")
+                    #self.explanation_messages.append(f"In this scenario, I have simulated {float(total_sim_timesteps)*DELTA_TIME/60:0.0f} minutes of gameplay!")
                     #self.explanation_messages.append(f"We simulated {total_bullet_sim_timesteps} bullet sim timesteps and {total_bullet_sim_iterations} iterations, and {total_sim_timesteps} timesteps, and {update_ts_multiple_count=} {update_ts_zero_count=}")
                     turn_direction = 0
                     idle_thrust = 0.0
@@ -4957,7 +4957,7 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
+        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         # print([x['fitness'] for x in self.sims_this_planning_period])
         
         # all_ship_pos = []
@@ -5183,8 +5183,8 @@ class NeoController(KesslerController):
                 if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
                     print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
         best_move_sequence = best_action_sim.get_move_sequence()
-        print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
-        print(f"Current average overall fitness is {weighted_average(overall_fitness_record)}")
+        #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
+        #print(f"Current average overall fitness is {weighted_average(overall_fitness_record)}")
         # debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
         # debug_print(f"The action we're taking is from timestep {best_action_sim_state_sequence[0]['timestep']} to {best_action_sim_state_sequence[-1]['timestep']}")
