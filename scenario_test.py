@@ -336,7 +336,7 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        controllers_used = [NeoController(), NeoController()]
+        controllers_used = [NeoController(), BabyNeoController()]
 
         asteroids_random = generate_asteroids(
                                         num_asteroids=random.randint(5, 60),
@@ -356,7 +356,7 @@ while True:
                                     #                 {'position': (width*1//3, height*40//100), 'speed': 100, 'angle': -91, 'size': 4}],
                                     ship_states=[
                                         {'position': (width//3, height//2), 'angle': 0, 'lives': 3, 'team': 1, "mines_remaining": 3},
-                                        {'position': (width*2//3, height//2), 'angle': 90, 'lives': 6, 'team': 2, "mines_remaining": 3},
+                                        {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                                     ],
                                     map_size=(width, height),
                                     time_limit=240.0,

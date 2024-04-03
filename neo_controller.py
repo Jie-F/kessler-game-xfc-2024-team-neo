@@ -35,6 +35,7 @@
 # TODO: Revisit the aimbot and improve things more
 # TODO: If we're gonna die and we're the only ship left, don't shoot a bullet if it doesn't land before I die, because it'll count as a miss
 # TODO: Use math to see how the bullet lines up with the asteroid, to predict whether it's gonna hit before doing the bullet sim
+# TODO: get_next_extrapolated_asteroid_collision_time doesn't handle the edges properly! Collisions can't go through the edge but this can predict that. Do the checks!
 
 
 import bisect
