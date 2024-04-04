@@ -46,7 +46,7 @@ import time
 from collections import deque
 from functools import lru_cache
 from itertools import chain
-from math import acos, asin, atan2, ceil, cos, exp, floor, inf, isinf, isnan, nan, pi, sin, sqrt
+from math import acos, asin, atan2, ceil, cos, exp, floor, inf, isinf, isnan, nan, pi, sin, sqrt, copysign
 from typing import Any, Final, Iterable, Optional, Sequence, TypedDict, cast
 
 import matplotlib.patches as patches  # type: ignore[import-untyped]
@@ -77,7 +77,7 @@ ENABLE_SANITY_CHECKS: Final[bool] = True  # Miscellaneous sanity checks througho
 PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
 VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
-VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
+VERIFY_AST_TRACKING: Final[bool] = True  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[i64] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -119,7 +119,7 @@ PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final[i64] = 10
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
 MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5
-ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
 # Index 0 in the tuples is not used, but to be safe I put a sane number there
@@ -235,6 +235,7 @@ ASTEROID_MASS_LOOKUP: Final = tuple(0.25*pi*(8*size)**2 for size in range(5))  #
 RESPAWN_INVINCIBILITY_TIME_S: Final[float] = 3.0  # s
 ASTEROID_COUNT_LOOKUP: Final = (0, 1, 4, 13, 40)  # A size 2 asteroid is 4 asteroids, size 4 is 30, etc. Each asteroid splits into 3, and itself is counted as well. Explicit formula is count(n) = (3^n - 1)/2
 DEGREES_BETWEEN_SHOTS: Final[float] = float(FIRE_COOLDOWN_TS)*SHIP_MAX_TURN_RATE*DELTA_TIME
+SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS: Final[float] = SHIP_RADIUS + ASTEROID_RADII_LOOKUP[4]
 
 # FIS Settings
 ASTEROIDS_HIT_VERY_GOOD: Final[i64] = 65
@@ -1902,7 +1903,7 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
     nearby_asteroids = []
     for asteroid in asteroids:
         for a in unwrap_asteroid(asteroid, game_state.map_size[0], game_state.map_size[1], UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON, False):
-            imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius)
+            imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, game_state)
             delta_x = a.position[0] - ship_pos_x
             delta_y = a.position[1] - ship_pos_y
             asteroid_speed = None
@@ -1976,33 +1977,97 @@ def collision_prediction(Oax: float, Oay: float, Dax: float, Day: float, ra: flo
         return solve_quadratic(a, b, c)
 
 
-def predict_next_imminent_collision_time_with_asteroid(ship_pos_x: float, ship_pos_y: float, ship_vel_x: float, ship_vel_y: float, ship_r: float, ast_pos_x: float, ast_pos_y: float, ast_vel_x: float, ast_vel_y: float, ast_radius: float) -> float:
+def predict_next_imminent_collision_time_with_asteroid(ship_pos_x: float, ship_pos_y: float, ship_vel_x: float, ship_vel_y: float, ship_r: float, ast_pos_x: float, ast_pos_y: float, ast_vel_x: float, ast_vel_y: float, ast_radius: float, game_state: GameState) -> float:
     # print("ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius")
     # print(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
-    t1, t2 = collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
+    assert is_close_to_zero(ship_vel_x) and is_close_to_zero(ship_vel_y)  # REMOVE_FOR_COMPETITION
+    assert check_coordinate_bounds(game_state, ship_pos_x, ship_pos_y)  # REMOVE_FOR_COMPETITION
+    start_collision_time, end_collision_time = collision_prediction(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, ship_r, ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, ast_radius)
     # If we're already colliding with something, then return 0 as the next imminent collision time
-    if isnan(t1) or isnan(t2):
-        next_imminent_collision_time = inf
+    if isnan(start_collision_time) or isnan(end_collision_time):
+        return inf
     else:
-        if t1 <= t2:
-            start_collision_time = t1
-            end_collision_time = t2
-        else:
-            start_collision_time = t2
-            end_collision_time = t1
+        assert start_collision_time <= end_collision_time  # REMOVE_FOR_COMPETITION
+        if not (SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS < ship_pos_x < game_state.map_size[0] - SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS and SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS < ship_pos_y < game_state.map_size[1] - SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS):
+            # There's the possibility that this isn't a true collision, because the asteroid could have been on the other side of the border, so it never actually hit the ship.
+            # We need to find the time interval in which the asteroid is in the main game area, and see whether the collision time intersects with this time interval.
+            t1, t2 = find_time_interval_in_which_unwrapped_asteroid_is_within_main_wrap(ast_pos_x, ast_pos_y, ast_vel_x, ast_vel_y, game_state)
+            # Find the intersection in the collision period and where the collision is within the main wrap
+            if end_collision_time < t1 or start_collision_time > t2:
+                # There is no intersection! The collision never occurs.
+                return inf
+            else:
+                start_collision_time = max(start_collision_time, t1)
+                end_collision_time = min(end_collision_time, t2)
+        # Now we're essentially finding the intersection between the intervals [start_collision_time, end_collision_time] and [0, infinity], and returning the start of that intersection interval
         if end_collision_time < 0.0:
-            next_imminent_collision_time = inf
+            # No overlap
+            return inf
         elif start_collision_time <= 0.0:
             # start_collision_time <= 0.0 <= end_collision_time
-            next_imminent_collision_time = 0.0
+            return 0.0
         else:
             # start_collision_time > 0.0 and 0.0 <= end_collision_time
-            next_imminent_collision_time = start_collision_time
-    return next_imminent_collision_time
+            return start_collision_time
 
 
-# It helps a bit to LRU cache this, but I turned this into a generator function so we can't do that anymore, RIP
-def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: float, H: float, c: float) -> list[tuple[i64, i64]]:
+def find_time_interval_in_which_unwrapped_asteroid_is_within_main_wrap(ast_pos_x: float, ast_pos_y: float, ast_vel_x: float, ast_vel_y: float, game_state: GameState) -> tuple[float, float]:
+    #if is_close_to_zero(ast_vel_x) and is_close_to_zero(ast_vel_y) and check_coordinate_bounds(game_state, ast_pos_x, ast_pos_y):
+    #    return -inf, inf
+    # Do the x and y components separately
+    if is_close_to_zero(ast_vel_x):
+        if check_coordinate_bounds(game_state, ast_pos_x, 0.0):
+            # x coordinates are inbounds, so the asteroid will always be within the main wrap
+            x_interval = -inf, inf
+        else:
+            # x coordinates are out of bounds, so the asteroid never gets to be within the main wrap
+            return nan, nan
+    else:
+        # x(t) = x_0 + t*vx
+        # 0 = x_0 + t*vx, t = -x_0/vx
+        # width = x_0 + t*vx, t = (width - x_0)/vx
+        if ast_vel_x > 0.0:
+            # Moving left to right
+            x_interval = -ast_pos_x/ast_vel_x, (game_state.map_size[0] - ast_pos_x)/ast_vel_x
+        else:
+            x_interval = (game_state.map_size[0] - ast_pos_x)/ast_vel_x, -ast_pos_x/ast_vel_x
+
+    if is_close_to_zero(ast_vel_y):
+        if check_coordinate_bounds(game_state, 0.0, ast_pos_y):
+            # y coordinates are inbounds, so the asteroid will always be within the main wrap
+            y_interval = -inf, inf
+        else:
+            # y coordinates are out of bounds, so the asteroid never gets to be within the main wrap
+            return nan, nan
+    else:
+        # y(t) = y_0 + t*vy
+        # 0 = y_0 + t*vy, t = -y_0/vy
+        # height = y_0 + t*vy, t = (height - y_0)/vy
+        if ast_vel_y > 0.0:
+            # Moving up
+            y_interval = -ast_pos_y/ast_vel_y, (game_state.map_size[1] - ast_pos_y)/ast_vel_y
+        else:
+            y_interval = (game_state.map_size[1] - ast_pos_y)/ast_vel_y, -ast_pos_y/ast_vel_y
+    
+    assert x_interval[0] <= x_interval[1]
+    assert y_interval[0] <= y_interval[1]
+
+    # Now that we have the x and y intervals, combine them into a unified interval of time
+    # Take the intersection of two intervals:
+    if x_interval[1] < y_interval[0] or y_interval[1] < x_interval[0]:
+        # One interval ends before the next one starts, so there's no overlap
+        return nan, nan
+    else:
+        # The intervals overlap!
+        # The start of the intersection is the maximum of the two start times
+        start = max(x_interval[0], y_interval[0])
+        # The end of the intersection is the minimum of the two end times
+        end = min(x_interval[1], y_interval[1])
+        return start, end
+
+
+# It helps a bit to LRU cache this... but we're doing a global asteroids cache already so it's fine
+def calculate_border_crossings(pos_x: float, pos_y: float, vel_x: float, vel_y: float, width: float, height: float, time_horizon: float) -> list[tuple[i64, i64]]:
     # Initialize lists to hold crossing times
     x_crossings_times = []
     y_crossings_times = []
@@ -2010,30 +2075,30 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
     y_crossings = 0
 
     # Calculate crossing times for x (if vx is not zero to avoid division by zero)
-    abs_vx = abs(vx)
+    abs_vx = abs(vel_x)
     if abs_vx > EPS:
         # Calculate time to first x-boundary crossing based on direction of vx
-        x_crossing_interval = W/abs_vx
+        x_crossing_interval = width/abs_vx
         # print(f"x_crossing_interval: {x_crossing_interval}")
-        time_to_first_x_crossing = ((W - x0)/vx if vx > 0.0 else -x0/vx)
+        time_to_first_x_crossing = ((width - pos_x)/vel_x if vel_x > 0.0 else -pos_x/vel_x)
         x_crossings_times.append(time_to_first_x_crossing)
         x_crossings += 1
         # Add additional crossings until time c is reached
-        while (next_time := x_crossings_times[-1] + x_crossing_interval) <= c:
+        while (next_time := x_crossings_times[-1] + x_crossing_interval) <= time_horizon:
             x_crossings_times.append(next_time)
             x_crossings += 1
     # print(f"x crossing times: {x_crossings_times}")
     # Calculate crossing times for y (if vy is not zero)
-    abs_vy = abs(vy)
+    abs_vy = abs(vel_y)
     if abs_vy > EPS:
         # Calculate time to first y-boundary crossing based on direction of vy
-        y_crossing_interval = H/abs_vy
+        y_crossing_interval = height/abs_vy
         # print(f"y_crossing_interval: {y_crossing_interval}")
-        time_to_first_y_crossing = ((H - y0)/vy if vy > 0.0 else -y0/vy)
+        time_to_first_y_crossing = ((height - pos_y)/vel_y if vel_y > 0.0 else -pos_y/vel_y)
         y_crossings_times.append(time_to_first_y_crossing)
         y_crossings += 1
         # Add additional crossings until time c is reached
-        while (next_time := y_crossings_times[-1] + y_crossing_interval) <= c:
+        while (next_time := y_crossings_times[-1] + y_crossing_interval) <= time_horizon:
             y_crossings_times.append(next_time)
             y_crossings += 1
     # print(f"y crossing times: {y_crossings_times}")
@@ -2069,8 +2134,8 @@ def calculate_border_crossings(x0: float, y0: float, vx: float, vy: float, W: fl
     # Initialize current universe coordinates and list of visited universes
     current_universe_x: i64 = 0
     current_universe_y: i64 = 0
-    universe_increment_direction_x: i64 = 1 if vx > 0.0 else -1
-    universe_increment_direction_y: i64 = 1 if vy > 0.0 else -1
+    universe_increment_direction_x: i64 = 1 if vel_x > 0.0 else -1
+    universe_increment_direction_y: i64 = 1 if vel_y > 0.0 else -1
 
     # Iterate through merged crossing times and sequence
     #universes = [(current_universe_x, current_universe_y)]
@@ -2137,7 +2202,7 @@ def unwrap_asteroid(asteroid: Asteroid, max_x: float, max_y: float, time_horizon
 
 
 def check_coordinate_bounds(game_state: GameState, x: float, y: float) -> bool:
-    if 0 <= x <= game_state.map_size[0] and 0 <= y <= game_state.map_size[1]:
+    if 0.0 <= x <= game_state.map_size[0] and 0.0 <= y <= game_state.map_size[1]:
         return True
     else:
         return False
@@ -2156,37 +2221,83 @@ def check_coordinate_bounds_exact(game_state: GameState, x: float, y: float) -> 
 def solve_quadratic(a: float, b: float, c: float) -> tuple[float, float]:
     # This solves a*x*x + b*x + c = 0 for x
     # This handles the case where a, b, or c are 0.
+    # This DOES NOT handle float overflow!
+    if a == 0.0:
+        # Linear case: bx + c = 0
+        if b == 0.0:
+            if c == 0.0:
+                return 0.0, 0.0
+            else:
+                return nan, nan
+        else:
+            # One solution for the linear equation
+            x1 = -c/b
+            return x1, x1
+
+    discriminant = b*b - 4.0*a*c
+    if discriminant < 0.0:
+        # No real solutions
+        return nan, nan
+    
+    q = -0.5*(b + copysign(sqrt(discriminant), b))
+    if c == 0.0:
+        x1 = -b/a
+        if x1 < 0.0:
+            return x1, 0.0
+        else:
+            return 0.0, x1
+    # q cannot be 0 here
+    x1 = q/a
+    x2 = c/q
+    if x1 <= x2:
+        return x1, x2
+    else:
+        return x2, x1
+
+
+def solve_quadratic_OLD(a: float, b: float, c: float) -> tuple[float, float]:
+    # This solves a*x*x + b*x + c = 0 for x
+    # This handles the case where a, b, or c are 0.
     d = b*b - 4.0*a*c
     if d < 0.0:
         # No real solutions.
-        r1 = nan
-        r2 = nan
+        return nan, nan
     elif a == 0.0:
         # This is a linear equation. Handle this case separately.
+        # a, b, c = 0, ?, ?
         if b != 0.0:
-            r1 = -c/b
-            r2 = nan
+            # a, b, c = 0, !0, ?
+            r = -c/b
+            return r, r
         else:
             # I doubt this case will ever get hit, but include anyway
+            # a, b, c = 0, 0, ?
             if c == 0.0:
-                r1 = 0.0
-                r2 = nan
+                # a, b, c = 0, 0, 0
+                return 0.0, 0.0
             else:
-                r1 = nan
-                r2 = nan
+                # a, b, c = 0, 0, !0
+                return nan, nan
     else:
+        # a, b, c = !0, ?, ?
+        # b*b >= 4*a*c
         # This handles the case where b or c are 0
+        if c == 0.0:
+            # a, b, c = !0, ?, 0
+            r1 = -b/a
+            if r1 < 0.0:
+                return r1, 0.0
+            else:
+                return 0.0, r1
+        # u is guaranteed to not be 0, because a and c are known to be nonzero, and only b could possibly be 0. The determinant needs to be 0 for u to be 0, and the determinant cannot be 0 since both a and c are nonzero.
         # If d is 0, technically there's only one solution but this will give two duplicated solutions. It's not worth checking each time for this since it's so rare
-        if b > 0.0:
+        if b >= 0.0:
+            # a, b, c = !0, ?, !0
             u = -b - sqrt(d)
         else:
+            # a, b, c = !0, !0, !0
             u = -b + sqrt(d)
-        r1 = u/(2.0*a)
-        if u != 0.0:
-            r2 = 2.0*c/u
-        else:
-            r2 = nan
-    return r1, r2
+        return u/(2.0*a), 2.0*c/u
 
 
 def calculate_interception(ship_pos_x: float, ship_pos_y: float, asteroid_pos_x: float, asteroid_pos_y: float, asteroid_vel_x: float, asteroid_vel_y: float, asteroid_r: float, ship_heading_deg: float, game_state: GameState, future_shooting_timesteps: i64 = 0) -> tuple[bool, float, float, float, float, float, float]:
@@ -3076,7 +3187,7 @@ class Matrix():
                 # if self.future_timesteps >= self.timesteps_to_not_check_collision_for:
                 assert is_close_to_zero(self.ship_state.velocity[0]) and is_close_to_zero(self.ship_state.velocity[1]), f"{self.ship_state.velocity=}, {self.ship_state.speed=}"  # REMOVE_FOR_COMPETITION
 
-                predicted_collision_time_from_future = predict_next_imminent_collision_time_with_asteroid(self.ship_state.position[0], self.ship_state.position[1], self.ship_state.velocity[0], self.ship_state.velocity[1], SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius)
+                predicted_collision_time_from_future = predict_next_imminent_collision_time_with_asteroid(self.ship_state.position[0], self.ship_state.position[1], self.ship_state.velocity[0], self.ship_state.velocity[1], SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.game_state)
                 predicted_collision_time = predicted_collision_time_from_future + (DELTA_TIME*float(additional_timesteps_to_blow_up_mines) if asteroid_is_born else 0.0)
                 
                 if isinf(predicted_collision_time):
@@ -3603,7 +3714,7 @@ class Matrix():
                     imminent_collision_time_s = inf
                     assert is_close_to_zero(self.ship_state.velocity[0]) and is_close_to_zero(self.ship_state.velocity[1])  # REMOVE_FOR_COMPETITION
                     for a in unwrapped_asteroids:
-                        imminent_collision_time_s = min(imminent_collision_time_s, predict_next_imminent_collision_time_with_asteroid(self.ship_state.position[0], self.ship_state.position[1], self.ship_state.velocity[0], self.ship_state.velocity[1], SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius))
+                        imminent_collision_time_s = min(imminent_collision_time_s, predict_next_imminent_collision_time_with_asteroid(self.ship_state.position[0], self.ship_state.position[1], self.ship_state.velocity[0], self.ship_state.velocity[1], SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.game_state))
                     target_asteroids_list.append(Target(
                         asteroid=asteroid.copy(),  # Record the canonical asteroid even if we're shooting at an unwrapped one
                         feasible=feasible,  # Will be True
