@@ -4587,7 +4587,8 @@ class Matrix():
                                         fire_this_timestep = False
                             #if self.sim_id == 88227:
                             #    print(f"Rip, we didn't lock in this ts. {fire_this_timestep=} {min_shot_heading_error_rad=}, {self.respawn_maneuver_pass_number=}")
-                            if self.respawn_maneuver_pass_number == 0:# or not fire_this_timestep):
+                            if self.respawn_maneuver_pass_number == 0 and (self.future_timesteps >= MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT):# or not fire_this_timestep):
+                            #if self.respawn_maneuver_pass_number == 0:# or not fire_this_timestep):
                                 # Might as well start turning toward our next target!
                                 if self.random_walk_schedule[self.asteroids_shot]:
                                     # We want to turn left
@@ -4616,7 +4617,7 @@ class Matrix():
                                     turn_rate = altered_turn_command
                                     if whole_move_sequence:
                                         whole_move_sequence[self.future_timesteps].turn_rate = altered_turn_command
-                        elif self.respawn_maneuver_pass_number == 0:
+                        elif self.respawn_maneuver_pass_number == 0 and (self.future_timesteps >= MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT or timesteps_until_can_fire == 1):
                             # timesteps_until_can_fire is 1, 2, or 3
                             # On the next timestep, hopefully we'd be aimed at the asteroid and then the above if case will kick in and we will shoot it!
                             # This makes the shot efficiency during maneuvering a lot better because we're not only dodging, but we're also targetting and firing at the same time!
@@ -5258,7 +5259,7 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
+        print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         # print([x['fitness'] for x in self.sims_this_planning_period])
         
         # all_ship_pos = []
@@ -5275,7 +5276,7 @@ class NeoController(KesslerController):
         #         ship_line_y.append(ship_pos[1])
         #     all_ship_x.append(ship_line_x)
         #     all_ship_y.append(ship_line_y)
-        # if len(all_ship_x) > 30:
+        # if len(all_ship_x) > 0:
         #     for i in range(len(all_ship_x)):
         #         plt.scatter(all_ship_x[i], all_ship_y[i], linewidths=1.0, label=f"Maneuver {i}")
         #     plt.xlim(0, 1000)
