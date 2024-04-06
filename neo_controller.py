@@ -117,7 +117,7 @@ COORDINATE_BOUND_CHECK_PADDING: Final[float] = 1.0  # px
 SHIP_AVOIDANCE_PADDING: Final = 25
 SHIP_AVOIDANCE_SPEED_PADDING_RATIO: Final[float] = 1/100
 PERFORMANCE_CONTROLLER_ROLLING_AVERAGE_FRAME_INTERVAL: Final[i64] = 10
-RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 30 # This needs to be at least the maximum number of shots that can be done in the longest possible maneuver. So take the max maneuver length in timesteps, and divide by 3 which is the shot cooldown
+RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 5 # However many shots to plan out the direction for. Any shots after this, there isn't a limitation on direction.
 # The reason we need this, is because without it, I'm checking whether I have the budget to do another iteration, but let's say I'm already taking 0 time. Kessler will pause for DELTA_TIME, taking up all the time, and I'd think I have no time to do anything!
 # So this fudge allows us to "push things" a bit, and fill up any remaining time so that Kessler is no longer pausing, and that time is spent in this controller to do more computations.
 # The side effect is that if we set this multiplier too low, then we're going to be operating at less than real time for sure.
@@ -127,7 +127,7 @@ RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 30 # This needs to be at least the max
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
-MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5
+MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
 ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
@@ -188,6 +188,8 @@ MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE_LUT = ((860, 680, 340), # 
                                                              (600, 500, 250)) # Fitness from 0.9 to 1.0
 
 # State dumping for debug
+PLOT_MANEUVER_TRACES: Final[bool] = False # For each planning period, plot out the traces showing where the maneuvers went for the sims
+PLOT_MANEUVER_MIN_TRACE_FOR_PLOT: Final[i64] = 30 # If the number of traces for the planning period is below this, plotting will be skipped
 REALITY_STATE_DUMP: Final[bool] = False  # Dump each game state to json
 SIMULATION_STATE_DUMP: Final[bool] = False  # Dump each simulated game state to json
 KEY_STATE_DUMP: Final[bool] = False  # Dump only key (base) states to json
@@ -199,6 +201,10 @@ START_GAMESTATE_PLOTTING_AT_SECOND: Final[float] = 0.0
 NEW_TARGET_PLOT_PAUSE_TIME_S: Final[float] = 0.5
 SLOW_DOWN_GAME_AFTER_SECOND: Final[float] = inf
 SLOW_DOWN_GAME_PAUSE_TIME: Final[float] = 2.0
+
+# Debug settings
+ENABLE_BAD_LUCK_EXCEPTION = False
+BAD_LUCK_EXCEPTION_PROBABILITY = 0.001
 
 # Quantities
 TAD: Final[float] = 0.1
@@ -1913,7 +1919,10 @@ def analyze_gamestate_for_heuristic_maneuver(game_state: GameState, ship_state: 
     nearby_asteroids = []
     for asteroid in asteroids:
         for a in unwrap_asteroid(asteroid, game_state.map_size[0], game_state.map_size[1], UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON, False):
-            imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, game_state)
+            if is_close_to_zero(ship_vel_x) and is_close_to_zero(ship_vel_y):
+                imminent_collision_time_s = predict_next_imminent_collision_time_with_asteroid(ship_pos_x, ship_pos_y, ship_vel_x, ship_vel_y, SHIP_RADIUS, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, game_state)
+            else:
+                imminent_collision_time_s = inf
             delta_x = a.position[0] - ship_pos_x
             delta_y = a.position[1] - ship_pos_y
             asteroid_speed = None
@@ -4339,8 +4348,8 @@ class Matrix():
         #if fire is not None and not wait_out_mines:
         #    print(f"Calling update in sim {self.sim_id} on future ts {self.future_timesteps} with fire {fire}")
         #global sim_update_total_time, sim_cull_total_time
-        #if random.random() < 0.002:
-        #    raise Exception("Bad luck exception!")
+        if ENABLE_BAD_LUCK_EXCEPTION and random.random() < BAD_LUCK_EXCEPTION_PROBABILITY:  # REMOVE_FOR_COMPETITION
+            raise Exception("Bad luck exception!")  # REMOVE_FOR_COMPETITION
         #start_time = time.perf_counter()
         # This should exactly match what kessler_game.py does.
         # Being even one timestep off is the difference between life and death!!!
@@ -4590,7 +4599,11 @@ class Matrix():
                             if self.respawn_maneuver_pass_number == 0 and (self.future_timesteps >= MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT):# or not fire_this_timestep):
                             #if self.respawn_maneuver_pass_number == 0:# or not fire_this_timestep):
                                 # Might as well start turning toward our next target!
-                                if self.random_walk_schedule[self.asteroids_shot]:
+                                if self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH:
+                                    # Can turn either left or right
+                                    min_shot_heading_error_rad = min(min_positive_shot_heading_error_rad, min_negative_shot_heading_error_rad)
+                                    second_min_shot_heading_error_rad = min(second_min_positive_shot_heading_error_rad, second_min_negative_shot_heading_error_rad)
+                                elif self.random_walk_schedule[self.asteroids_shot]:
                                     # We want to turn left
                                     min_shot_heading_error_rad = min_positive_shot_heading_error_rad
                                     second_min_shot_heading_error_rad = second_min_positive_shot_heading_error_rad
@@ -4673,7 +4686,7 @@ class Matrix():
                                             continue
                                         # feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception
                                         feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, _, _, _ = calculate_interception(ship_predicted_pos_x, ship_predicted_pos_y, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state, timesteps_until_can_fire)
-                                        if feasible and (self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad >= 0.0 or not self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad < 0.0):
+                                        if feasible and (self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH or self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad >= 0.0 or not self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad < 0.0):
                                             shot_heading_error_deg = degrees(shot_heading_error_rad)
                                             shot_heading_tolerance_deg = degrees(shot_heading_tolerance_rad)
                                             if abs(shot_heading_error_deg) - shot_heading_tolerance_deg < abs(asteroid_least_shot_heading_error_deg):
@@ -4708,7 +4721,7 @@ class Matrix():
                             raise Exception("This code should be unreachable currently")
                             actual_asteroid_hit, timesteps_until_bullet_hit_asteroid, ship_was_safe = self.bullet_sim(None, False, 0, True, self.future_timesteps, whole_move_sequence)
                             if actual_asteroid_hit is None:
-                                print("\nWe expected to hit stuff, but it's a good thing we checked because we don't hit shit!")
+                                print("\nWe expected to hit stuff, but it's a good thing we checked because we don't hit anything!")
                                 fire_this_timestep = False
                             else:
                                 print("\nVERIFIED THE SHOT WORKS")
@@ -5261,27 +5274,27 @@ class NeoController(KesslerController):
         assert self.best_fitness_this_planning_period_index is not None
         print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         # print([x['fitness'] for x in self.sims_this_planning_period])
-        
-        # all_ship_pos = []
-        # all_ship_x = []
-        # all_ship_y = []
-        # for thing in self.sims_this_planning_period:
-        #     state_seq = thing['sim'].get_state_sequence()
-        #     ship_line_x = []
-        #     ship_line_y = []
-        #     for state in state_seq:
-        #         ship_pos = state.ship_state.position
-        #         all_ship_pos.append(ship_pos)
-        #         ship_line_x.append(ship_pos[0])
-        #         ship_line_y.append(ship_pos[1])
-        #     all_ship_x.append(ship_line_x)
-        #     all_ship_y.append(ship_line_y)
-        # if len(all_ship_x) > 0:
-        #     for i in range(len(all_ship_x)):
-        #         plt.scatter(all_ship_x[i], all_ship_y[i], linewidths=1.0, label=f"Maneuver {i}")
-        #     plt.xlim(0, 1000)
-        #     plt.ylim(0, 800)
-        #     plt.show()
+        if PLOT_MANEUVER_TRACES:
+            all_ship_pos = []
+            all_ship_x = []
+            all_ship_y = []
+            for thing in self.sims_this_planning_period:
+                state_seq = thing['sim'].get_state_sequence()
+                ship_line_x = []
+                ship_line_y = []
+                for state in state_seq:
+                    ship_pos = state.ship_state.position
+                    all_ship_pos.append(ship_pos)
+                    ship_line_x.append(ship_pos[0])
+                    ship_line_y.append(ship_pos[1])
+                all_ship_x.append(ship_line_x)
+                all_ship_y.append(ship_line_y)
+            if len(all_ship_x) > PLOT_MANEUVER_MIN_TRACE_FOR_PLOT:
+                for i in range(len(all_ship_x)):
+                    plt.scatter(all_ship_x[i], all_ship_y[i], linewidths=1.0, label=f"Maneuver {i}")
+                plt.xlim(0, 1000)
+                plt.ylim(0, 800)
+                plt.show()
         
         #time.sleep(10)
         if ENABLE_SANITY_CHECKS:  # REMOVE_FOR_COMPETITION
@@ -5740,8 +5753,8 @@ class NeoController(KesslerController):
             #assert self.game_state_to_base_planning is not None
             if self.base_gamestate_analysis is None:
                 self.base_gamestate_analysis = analyze_gamestate_for_heuristic_maneuver(self.game_state_to_base_planning['game_state'], self.game_state_to_base_planning['ship_state'])
-            ship_is_stationary = True
-            if plan_stationary and self.game_state_to_base_planning['ship_state'].bullets_remaining != 0 and (ship_is_stationary := is_close_to_zero(self.game_state_to_base_planning['ship_state'].speed)):
+            ship_is_stationary = is_close_to_zero(self.game_state_to_base_planning['ship_state'].speed)
+            if plan_stationary and self.game_state_to_base_planning['ship_state'].bullets_remaining != 0 and ship_is_stationary:
                 # No need to check whether this is allowed, because we need to do this iteration at minimum
                 self.performance_controller_start_iteration()
                 # The first list element is the stationary targetting
@@ -5844,7 +5857,7 @@ class NeoController(KesslerController):
             elif self.game_state_to_base_planning['ship_state'].lives_remaining == 2:
                 search_iterations = floor(search_iterations*1.5)
             '''
-            if len(self.sims_this_planning_period) == 0 or (len(self.sims_this_planning_period) == 1 and self.sims_this_planning_period[0]['action_type'] != 'heuristic_maneuver'):
+            if (len(self.sims_this_planning_period) == 0 or (len(self.sims_this_planning_period) == 1 and self.sims_this_planning_period[0]['action_type'] != 'heuristic_maneuver')) and ship_is_stationary:
                 heuristic_maneuver = True
             else:
                 heuristic_maneuver = False
@@ -5934,6 +5947,7 @@ class NeoController(KesslerController):
                     elif thrust_direction < GRAIN:
                         # The FIS couldn't decide which way to thrust, so we'll just skip the heuristic maneuver altogether
                         heuristic_maneuver = False
+                # The reason this isn't an if-else statement is that even if we wanted to do a heuristic maneuver, the heuristic output could be bad and so we skip the heuristic maneuver altogether
                 if not heuristic_maneuver:
                     random_ship_heading_angle = random.triangular(-DEGREES_TURNED_PER_TIMESTEP*max_pre_maneuver_turn_timesteps, DEGREES_TURNED_PER_TIMESTEP*max_pre_maneuver_turn_timesteps, 0)
                     ship_accel_turn_rate = random.triangular(0, SHIP_MAX_TURN_RATE, SHIP_MAX_TURN_RATE)*(2.0*float(random.getrandbits(1)) - 1.0)
@@ -6040,6 +6054,7 @@ class NeoController(KesslerController):
                     self.best_fitness_this_planning_period = maneuver_fitness
                     self.best_fitness_this_planning_period_index = len(self.sims_this_planning_period) - 1
                 if heuristic_maneuver:
+                    # Make sure we don't do any more than one heuristic maneuver!
                     heuristic_maneuver = False
         # gc.enable()
         # gc.collect()
@@ -6152,6 +6167,21 @@ class NeoController(KesslerController):
             if unexpected_death:
                 # We need to refresh the state if we died unexpectedly
                 print_explanation(f"\nOuch! Due to the other ship, I unexpectedly died!", self.current_timestep)
+                if self.game_state_to_base_planning is None:
+                    print(f"WARNING: The game state to base planning was none. This better be because I'm recovering from a controller exception!")
+                    self.game_state_to_base_planning = {
+                        'timestep': self.current_timestep,
+                        'respawning': ship_state.is_respawning and ship_state.lives_remaining not in self.lives_remaining_that_we_did_respawn_maneuver_for,
+                        'ship_state': ship_state,
+                        'game_state': game_state,
+                        'ship_respawn_timer': 3.0,
+                        'asteroids_pending_death': {},
+                        'forecasted_asteroid_splits': [],
+                        'last_timestep_fired': INT_NEG_INF,
+                        'last_timestep_mined': INT_NEG_INF,
+                        'mine_positions_placed': set(),
+                        'fire_next_timestep_flag': False,
+                    }
                 assert self.game_state_to_base_planning is not None
                 self.game_state_to_base_planning = {
                     'timestep': self.current_timestep,
@@ -6242,7 +6272,8 @@ class NeoController(KesslerController):
             if not self.game_state_to_base_planning:
                 # set up the actions planning
                 if ENABLE_SANITY_CHECKS and not recovering_from_crash:  # REMOVE_FOR_COMPETITION
-                    assert self.current_timestep == 0, "Why is the game state to plan empty when we're not on timestep 0?!"  # REMOVE_FOR_COMPETITION
+                    #assert self.current_timestep == 0, "Why is the game state to plan empty when we're not on timestep 0?!"  # REMOVE_FOR_COMPETITION
+                    print("WARNING, Why is the game state to plan empty when we're not on timestep 0?! Maybe we're recovering from a controller exception")  # REMOVE_FOR_COMPETITION
                 if self.current_timestep == 0 or recovering_from_crash:
                     iterations_boost = True
                 self.game_state_to_base_planning = {
