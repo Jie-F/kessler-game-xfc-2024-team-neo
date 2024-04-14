@@ -49,7 +49,7 @@ else:
 global color_text
 color_text = True
 
-def color_print(text='', color='white', style='normal', same=False, previous=False):
+def color_print(text='', color='white', style='normal', same=False, previous=False) -> None:
     global color_text
     global colors
     global styles
@@ -267,7 +267,8 @@ custom_scenarios = [
     explainability_1,
     explainability_2,
     split_forecasting,
-    minefield_maze_scenario
+    minefield_maze_scenario,
+    wrap_collision_test
 ]
 
 rand_scenarios = []
@@ -339,7 +340,7 @@ while True:
         controllers_used = [NeoController(), BabyNeoController()]
 
         asteroids_random = generate_asteroids(
-                                        num_asteroids=random.randint(5, 60),
+                                        num_asteroids=random.randint(30, 60),
                                         position_range_x=(0, width),
                                         position_range_y=(0, height),
                                         speed_range=(-300, 300, 0),
@@ -362,15 +363,15 @@ while True:
                                     time_limit=240.0,
                                     ammo_limit_multiplier=random.choice([0]),
                                     stop_if_no_ammo=False)
-        
-        # benchmark_scenario = Scenario(name="Benchmark Scenario",
-        #                                 num_asteroids=100,
-        #                                 ship_states=[
-        #                                     {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
-        #                                 ],
-        #                                 map_size=(width, height),
-        #                                 seed=0,
-        #                                 time_limit=120)
+        random.seed(randseed)
+        benchmark_scenario = Scenario(name="Benchmark Scenario",
+                                        num_asteroids=100,
+                                        ship_states=[
+                                            {'position': (width/2, height/2), 'angle': 0.0, 'lives': 10000, 'team': 1, 'mines_remaining': 10000},
+                                        ],
+                                        map_size=(width, height),
+                                        seed=0,
+                                        time_limit=120)
 
         pre = time.perf_counter()
         if scenario is not None:
@@ -399,6 +400,7 @@ while True:
             if profile:
                 cProfile.run(f'game.run(scenario=scenario_to_run, controllers=controllers_used)')
             else:
+                random.seed(randseed)
                 score, perf_data = game.run(scenario=scenario_to_run, controllers=controllers_used)
 
         # Print out some general info about the result

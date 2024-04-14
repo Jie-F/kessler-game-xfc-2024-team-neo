@@ -1311,3 +1311,18 @@ minefield_maze_scenario = Scenario(
     ammo_limit_multiplier=0,
     stop_if_no_ammo=False,
 )
+
+
+
+
+
+wrap_collision_test = Scenario(name='Wrap Collision Test',
+                            asteroid_states=[{'position': (50, 800-50), 'speed': 100, 'angle': 90+45+0.000001, 'size': 4}, {'position': (1000-50, 50), 'speed': 100, 'angle': 180+90+45-0.01, 'size': 4}],
+                            ship_states=[
+                                {'position': (0.01, 0.01), 'angle': 80, 'lives': 3, 'team': 1, "mines_remaining": 1},
+                            ],
+                            map_size=(width, height),
+                            time_limit=500,
+                            ammo_limit_multiplier=0,
+                            stop_if_no_ammo=False)
+
