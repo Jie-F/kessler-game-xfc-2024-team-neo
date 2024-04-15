@@ -67,7 +67,7 @@ gc.set_threshold(50000)
 
 # Output config
 DEBUG_MODE: Final[bool] = False
-PRINT_EXPLANATIONS: Final[bool] = False
+PRINT_EXPLANATIONS: Final[bool] = True
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final[float] = 2.0  # Repeated messages within this time window get silenced
 
 # These can trade off to get better performance at the expense of safety
