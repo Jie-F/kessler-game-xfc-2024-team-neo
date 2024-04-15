@@ -4,7 +4,7 @@ from PIL import Image, ImageTk
 
 from .graphics_base import KesslerGraphics
 
-SCALE = 2.0
+SCALE = 2
 
 class GraphicsTK(KesslerGraphics):
     def __init__(self, UI_settings):
@@ -150,7 +150,7 @@ class GraphicsTK(KesslerGraphics):
         for mine in mines:
             self.game_canvas.create_oval(mine.position[0]*SCALE - mine.radius * SCALE, self.game_height - (mine.position[1]*SCALE + mine.radius * SCALE), mine.position[0]*SCALE + mine.radius * SCALE, self.game_height - (mine.position[1]*SCALE - mine.radius * SCALE), fill="yellow")
             light_fill = "red" if mine.countdown_timer - int(mine.countdown_timer) > 0.5 else "orange"
-            self.game_canvas.create_oval(mine.position[0]*SCALE - mine.radius * 0.6, self.game_height - (mine.position[1]*SCALE + mine.radius * 0.6), mine.position[0]*SCALE + mine.radius * 0.6, self.game_height - (mine.position[1]*SCALE - mine.radius * 0.6), fill=light_fill)
+            self.game_canvas.create_oval(mine.position[0]*SCALE - mine.radius * 0.6 * SCALE, self.game_height - (mine.position[1]*SCALE + mine.radius * 0.6 * SCALE), mine.position[0]*SCALE + mine.radius * 0.6 * SCALE, self.game_height - (mine.position[1]*SCALE - mine.radius * 0.6 * SCALE), fill=light_fill)
             if mine.countdown_timer < mine.detonation_time:
                 explosion_radius = mine.blast_radius * (1 - mine.countdown_timer / mine.detonation_time)**2 * SCALE
                 self.game_canvas.create_oval(mine.position[0]*SCALE - explosion_radius, self.game_height - (mine.position[1]*SCALE + explosion_radius), mine.position[0]*SCALE + explosion_radius, self.game_height - (mine.position[1]*SCALE - explosion_radius), fill="", outline="white", width=20)
