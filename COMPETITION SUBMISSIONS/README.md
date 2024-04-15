@@ -11,7 +11,13 @@ Copy the corresponding compiled Python extension module files into a place of yo
 
 `neo_controller.cp311-win_amd64.pyd` for 3.11
 
-To import the extension module, do `from neo_controller import NeoController`
+There is a separate controller that enables explanations by changing a single boolean flag. It will print explanations out to "Neo Explanations.txt" in the directory the game is ran from.
+
+`neo_controller_explanations.cp310-win_amd64.pyd` for 3.10
+
+`neo_controller_explanations.cp311-win_amd64.pyd` for 3.11
+
+To import the extension module, do `from neo_controller import NeoController`, or for the version with explanations, do `from neo_controller_explanations import NeoController`
 
 IMPORTANT: Make sure that neo_controller.py is not also in the directory you are importing from, otherwise you might be importing the interpreted Python script instead of the compiled extension module. The compiled version executes ~6 times faster than the interpreted version, and performs better in-game as a result.
 
