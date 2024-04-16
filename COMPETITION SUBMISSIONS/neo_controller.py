@@ -254,7 +254,7 @@ SHIP_RADIUS_PLUS_SIZE_4_ASTEROID_RADIUS: Final[float] = SHIP_RADIUS + ASTEROID_R
 
 # FIS Settings
 ASTEROIDS_HIT_VERY_GOOD: Final[i64] = 65
-ASTEROIDS_HIT_OKAY_CENTER: Final = 20
+ASTEROIDS_HIT_OKAY_CENTER: Final = 23
 
 # Dirty globals
 # Store messages and their last printed timestep
@@ -3806,12 +3806,10 @@ class Matrix():
         #global total_bullet_sim_iterations
         #total_bullet_sim_iterations += 1
         asteroid_remove_idxs: set[i64] = set()
-        global total_sim_timesteps
         #global bullet_sim_time
         #start_time = time.perf_counter()
         while True:
             #total_bullet_sim_timesteps += 1
-            total_sim_timesteps += 1
             # Simplified update() simulation loop
             timesteps_until_bullet_hit_asteroid += 1
             if timesteps_until_bullet_hit_asteroid > timestep_limit:
@@ -4047,8 +4045,6 @@ class Matrix():
         return True
 
     def update(self, thrust: float = 0.0, turn_rate: float = 0.0, fire: Optional[bool] = None, whole_move_sequence: Optional[list[Action]] = None, wait_out_mines: bool = False) -> bool:
-        global total_sim_timesteps
-        total_sim_timesteps += 1
         #if fire is not None and not wait_out_mines:
         #    print(f"Calling update in sim {self.sim_id} on future ts {self.future_timesteps} with fire {fire}")
         #global sim_update_total_time, sim_cull_total_time
@@ -4292,8 +4288,15 @@ class Matrix():
                                 # Might as well start turning toward our next target!
                                 if self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH:
                                     # Can turn either left or right
-                                    min_shot_heading_error_rad = min(min_positive_shot_heading_error_rad, min_negative_shot_heading_error_rad)
-                                    second_min_shot_heading_error_rad = min(second_min_positive_shot_heading_error_rad, second_min_negative_shot_heading_error_rad)
+                                    # Find the min absolute shot heading error
+                                    if min_positive_shot_heading_error_rad + min_negative_shot_heading_error_rad >= 0.0:
+                                        min_shot_heading_error_rad = min_negative_shot_heading_error_rad
+                                    else:
+                                        min_shot_heading_error_rad = min_positive_shot_heading_error_rad
+                                    if second_min_positive_shot_heading_error_rad + second_min_negative_shot_heading_error_rad >= 0.0:
+                                        second_min_shot_heading_error_rad = second_min_negative_shot_heading_error_rad
+                                    else:
+                                        second_min_shot_heading_error_rad = second_min_positive_shot_heading_error_rad
                                 elif self.random_walk_schedule[self.asteroids_shot]:
                                     # We want to turn left
                                     min_shot_heading_error_rad = min_positive_shot_heading_error_rad
@@ -4377,7 +4380,7 @@ class Matrix():
                                             continue
                                         # feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, intercept_x, intercept_y, asteroid_dist_during_interception
                                         feasible, shot_heading_error_rad, shot_heading_tolerance_rad, interception_time, _, _, _ = calculate_interception(ship_predicted_pos_x, ship_predicted_pos_y, a.position[0], a.position[1], a.velocity[0], a.velocity[1], a.radius, self.ship_state.heading, self.game_state, timesteps_until_can_fire)
-                                        if feasible and (self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH or self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad >= 0.0 or not self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad < 0.0):
+                                        if feasible and (self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH or (self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad >= 0.0) or (not self.random_walk_schedule[self.asteroids_shot] and shot_heading_error_rad <= 0.0)):
                                             shot_heading_error_deg = degrees(shot_heading_error_rad)
                                             shot_heading_tolerance_deg = degrees(shot_heading_tolerance_rad)
                                             if abs(shot_heading_error_deg) - shot_heading_tolerance_deg < abs(asteroid_least_shot_heading_error_deg):
@@ -4774,8 +4777,6 @@ class NeoController(KesslerController):
     def name(self) -> str:
         return "Neo"
 
-    def get_total_sim_ts(self) -> i64:
-        return total_sim_timesteps
 
     def __init__(self, chromosome: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None) -> None:
         self.reset(chromosome)
@@ -4831,7 +4832,6 @@ class NeoController(KesslerController):
         cruise_timesteps = [round(MAX_CRUISE_TIMESTEPS/2)]
         overall_fitness_record.clear()
         unwrap_cache.clear()
-        total_sim_timesteps = 0
 
 
     def finish_init(self, game_state: GameState, ship_state: Ship) -> None:
@@ -5110,39 +5110,40 @@ class NeoController(KesslerController):
         if len(overall_fitness_record) > OVERALL_FITNESS_ROLLING_AVERAGE_PERIOD:
             overall_fitness_record = overall_fitness_record[-OVERALL_FITNESS_ROLLING_AVERAGE_PERIOD:]
         
-        # Print out the explanation messages that were stored within the sim
-        if self.stationary_targetting_sim_index is not None:
-            stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
-            for message in stationary_safety_messages:
-                print_explanation(message, self.current_timestep)
-
-        # if best_action_fitness <= 0.1:
-        if best_action_fitness_breakdown[5] == 0.0:
-            # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
-            print_explanation("RIP, I'm gonna die", self.current_timestep)
-            #print('IT LOOKS LIKE THIS NEW ACTION WE ARE DOING ENDS IN DEATH!!!')
-            # if self.stationary_targetting_sim_index:
-            #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
-            #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
-            #    best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
-        if self.game_state_to_base_planning['respawning']:
-            print_explanation("Doing a respawn maneuver to get to a safe spot using my respawn invincibility", self.current_timestep)
-        if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type'] in ['random_maneuver', 'heuristic_maneuver']:
-            # [asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness]
-            #if self.stationary_targetting_sim_index is None:
-                #print(f"WARNING: There are no stationary targetting sims!")
+        if PRINT_EXPLANATIONS:
+            # Print out the explanation messages that were stored within the sim
             if self.stationary_targetting_sim_index is not None:
-                stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['fitness_breakdown']
-                # debug_print('stationary fitneses', stationary_fitness_breakdown)
-                #print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
-                if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
-                    # No mines are threatening us whether we stay put or move
-                    if best_action_fitness_breakdown[0] > stationary_fitness_breakdown[0]:
-                        print_explanation("Doing a maneuver to dodge asteroids!", self.current_timestep)
-                elif best_action_fitness_breakdown[1] > stationary_fitness_breakdown[1]:
-                    print_explanation("Doing a maneuver to dodge a mine!", self.current_timestep)
-                if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
-                    print_explanation("Doing a maneuver to get away from the other ship!", self.current_timestep)
+                stationary_safety_messages: list[str] = self.sims_this_planning_period[self.stationary_targetting_sim_index]['sim'].get_safety_messages()
+                for message in stationary_safety_messages:
+                    print_explanation(message, self.current_timestep)
+
+            # if best_action_fitness <= 0.1:
+            if best_action_fitness_breakdown[5] == 0.0:
+                # We're gonna die. Force select the one where I stay put and accept my fate, and don't even begin a maneuver.
+                print_explanation("RIP, I'm gonna die", self.current_timestep)
+                #print('IT LOOKS LIKE THIS NEW ACTION WE ARE DOING ENDS IN DEATH!!!')
+                # if self.stationary_targetting_sim_index:
+                #    self.best_fitness_this_planning_period_index = self.stationary_targetting_sim_index
+                #    best_action_sim: Simulation = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['sim']
+                #    best_action_fitness = self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness']
+            if self.game_state_to_base_planning['respawning']:
+                print_explanation(f"Doing a respawn maneuver to get to a safe spot using my respawn invincibility. This maneuver was the best one picked out of {len(self.sims_this_planning_period)} randomly chosen maneuvers!", self.current_timestep)
+            if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type'] in ['random_maneuver', 'heuristic_maneuver']:
+                # [asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness]
+                #if self.stationary_targetting_sim_index is None:
+                    #print(f"WARNING: There are no stationary targetting sims!")
+                if self.stationary_targetting_sim_index is not None:
+                    stationary_fitness_breakdown = self.sims_this_planning_period[self.stationary_targetting_sim_index]['fitness_breakdown']
+                    # debug_print('stationary fitneses', stationary_fitness_breakdown)
+                    #print(f"Stationary breakdown: {stationary_fitness_breakdown}, best sim breakdown: {best_action_fitness_breakdown}")
+                    if best_action_fitness_breakdown[1] == 1.0 and stationary_fitness_breakdown[1] == 1.0:
+                        # No mines are threatening us whether we stay put or move
+                        if best_action_fitness_breakdown[0] > stationary_fitness_breakdown[0]:
+                            print_explanation(f"Doing a maneuver to dodge asteroids! This maneuver was the best one picked out of {len(self.sims_this_planning_period)} randomly chosen maneuvers!", self.current_timestep)
+                    elif best_action_fitness_breakdown[1] > stationary_fitness_breakdown[1]:
+                        print_explanation(f"Doing a maneuver to dodge a mine! This maneuver was the best one picked out of {len(self.sims_this_planning_period)} randomly chosen maneuvers!", self.current_timestep)
+                    if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
+                        print_explanation(f"Doing a maneuver to get away from the other ship! This maneuver was the best one picked out of {len(self.sims_this_planning_period)} randomly chosen maneuvers!", self.current_timestep)
         best_move_sequence = best_action_sim.get_move_sequence()
         #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
         #print(f"Current average overall fitness is {weighted_average(overall_fitness_record)}")
@@ -5232,8 +5233,6 @@ class NeoController(KesslerController):
         self.second_best_fitness_this_planning_period_index = None
         self.stationary_targetting_sim_index = None
         self.base_gamestate_analysis = None
-        #if len(best_move_sequence) > 5:
-        #if random.random() > 0.5:
         global unwrap_cache
         unwrap_cache.clear()
 
