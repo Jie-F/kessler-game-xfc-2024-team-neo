@@ -4,3 +4,4 @@ inputs
 matplotlib
 scikit-fuzzy
 mypy-extensions
+mypy
