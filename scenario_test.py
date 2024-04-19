@@ -1,6 +1,6 @@
 import time
 import random
-from smith_controller import Smith
+from hardcoded_test_controller import Smith
 from src.baby_neo_controller import BabyNeoController
 from benchmark_controller import BenchmarkController
 import numpy as np
@@ -450,6 +450,8 @@ while True:
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
         print(f"Team 1, 2 shot efficiencies: ({team_1_shot_efficiency:.02%}, {team_2_shot_efficiency:.02%})")
         print(f"Team 1, 2 shot efficiencies inc. mines/ship hits: ({team_1_shot_efficiency_including_mines:.02%}, {team_2_shot_efficiency_including_mines:.02%})")
+        if args.once:
+            break
     if missed and len(team_deaths) == 1:
         color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
         break

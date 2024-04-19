@@ -127,14 +127,14 @@ RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 3 # However many shots to plan out the
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
-MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
+MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 30.0*1.5 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
 ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
 # Index 0 in the tuples is not used, but to be safe I put a sane number there
 
-MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
-MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
+MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100000
+MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100000
 # For each row of the lookup table, the index in the row corresponds to the number of lives left, minus one
 MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((21, 17, 14), # Fitness from 0.0 to 0.1
                                                          (20, 16, 13), # Fitness from 0.1 to 0.2
@@ -1051,6 +1051,7 @@ def mine_fis(num_mines_left: i64, num_lives_left: i64, num_asteroids_hit: i64) -
 
 @lru_cache()
 def mine_fis_lookup_table(num_mines_left: i64, num_lives_left: i64, num_asteroids_hit: i64) -> bool:
+    # UNUSED
     # The lru cache is simpler and just as fast as creating my own lookup table! Don't use this!
     if num_mines_left == 0 or num_asteroids_hit < 8:
         return False
@@ -1295,16 +1296,16 @@ def weighted_average(numbers: Sequence[float | i64], weights: Optional[Sequence[
     Raises:
     - ValueError: If weights are provided but their length doesn't match the numbers list.
     """
-    if weights is not None:
-        if len(weights) != len(numbers):
-            raise ValueError("Length of weights must match length of numbers.")
-        # Calculate weighted average
-        total_weighted = sum(float(number)*float(weight) for number, weight in zip(numbers, weights))
-        total_weight = sum(weights)
-        return float(total_weighted)/float(total_weight)
-    else:
-        # Calculate regular average if no weights are provided
-        return sum(numbers)/len(numbers) if numbers else 0.0
+    #if weights is not None:
+    if len(weights) != len(numbers):
+        raise ValueError("Length of weights must match length of numbers.")
+    # Calculate weighted average
+    total_weighted = sum(float(number)*float(weight) for number, weight in zip(numbers, weights))
+    total_weight = sum(weights)
+    return float(total_weighted)/float(total_weight)
+    #else:
+    #    # Calculate regular average if no weights are provided
+    #    return sum(numbers)/len(numbers) if numbers else 0.0
 
 
 def weighted_harmonic_mean(numbers: Sequence[float], weights: Optional[Sequence[float]] = None, offset: float = 0.0) -> float:

@@ -89,7 +89,7 @@ class KesslerGame:
         # MAIN SCENARIO LOOP #
         ######################
         while stop_reason == StopReason.not_stopped:
-
+            #print(f"Timestep {step} and time {sim_time} out of time limit {time_limit}")
             # Get perf time at the start of time step evaluation and initialize performance tracker
             step_start = time.perf_counter()
             perf_dict = OrderedDict()
@@ -365,11 +365,11 @@ class ReplayController{ind}:
 
     @property
     def name(self) -> str:
-        return "Replay Controller {ind}"
+        return "{'Neo' if ind == 0 else 'Baby Neo'} Replay Controller"
             """
 
             # Save this content to a .py file
-            file_path = f'controller_{scenario.name}_{ind}.py'
+            file_path = f'controller_{ind}_{scenario.name}.py'
             with open(file_path, 'w') as file:
                 file.write(controller_script_content)
 
