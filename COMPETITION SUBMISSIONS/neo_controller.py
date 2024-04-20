@@ -44,7 +44,7 @@
 # TODO: Make it so that if the other ship steals my shots, I realize sooner and avoid shooting.
 # Currently Neo takes up to 2 planning periods to realize, but if I do a second pass check of the planned actions and make sure all shots land,
 # then I can reduce this down to up to 1 planning period of delay. Neo can be only 96% accurate with a good adversary, so hopefully this can be bumped to like 98%.
-# This is VERY important in scenarios with a bullet limit
+# This is VERY important in scenarios with a bullet limit since a missed shot is a missed point
 
 # TODO: Inspired by OMUlettes taking out the Fuzzifiers by crashing into them, I want to implement the following hard-coded logic:
 # if the other ship is on its last life and I have at least 2 lives:
@@ -65,6 +65,12 @@
 # TODO: Remove my training wheels artificial limitation of placing mines 3 seconds apart.
 # I can place them as low as 1 second apart, so removing this might add more strategic options.
 # But this will also give Neo more opportunities to bomb itself, so this is hard to implement well.
+
+# TODO: Consider the time limit better, and adapt my strategy based on that. Currently it's not considered (other than avoiding shooting a bullet that won't land before the time's up).
+# For example, if there's a very long time limit and I have unlimited bullets, then I probably want to focus on killing the other ship first.
+# Otherwise if there's a short time limit, I shouldn't waste time killing the other ship because even if I do,
+# I don't have time to hit all the asteroids myself, and it's better to just shoot asteroids and trust that I'm gaining score quicker than the other team is able to gain score,
+# or at least I'm no worse than the other team
 
 
 import bisect
