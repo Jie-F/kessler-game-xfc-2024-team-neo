@@ -8,13 +8,12 @@
 # Jie Fan (jie.f@pm.me)
 # Feel free to reach out if you have questions or want to discuss anything!
 
-# This controller is meant to be compiled by mypyc into a compiled C library. During development this can be imported as a normal Python script, but mypyc gives 3-4X speed improvement.
+# This controller is meant to be compiled by mypyc into a compiled C library. During development this can be imported as a normal Python script, but mypyc gives 4X+ speed improvement.
 
-# This code has lines with the directive  # REMOVE_FOR_COMPETITION. I will use a preprocessor to delete these lines before passing to mypyc to compile to C, and then a compiled extension.
 # The reason I don't just hide these behind a boolean flag, is that the mypyc and C compilers aren't smart enough to remove the dead code, and in hot loops, it has to do the boolean check each time which slows down the code
 
 # TODO: Show stats at the end
-# DONE: Verify that frontrun protection's working, because it still feels like it's not totally working!
+# DONE: Verify that frontrun protection's working (shot stealing protection), because it still feels like it's not totally working!
 # DONE: Make it so during a respawn maneuver, if I'm no longer gonna hit anything, I can begin to shoot!
 # TODO: Use the tolerance in the shot for the target selection so I don't just aim for the center all the time
 # KINDA DONE: Add error handling as a catch-all
@@ -33,10 +32,45 @@
 # KINDA DONE: GA to beat the random maneuver search, and narrow down the search space. In crowded areas, don't cruise for as long, for example!
 # TRIED, not faster: Add per-timestep velocities to asteroids and bullets and stuff to save a multiplication
 # TODO: Revisit the aimbot and improve things more
-# TODO: If we're gonna die and we're the only ship left, don't shoot a bullet if it doesn't land before I die, because it'll count as a miss
-# TODO: Use math to see how the bullet lines up with the asteroid, to predict whether it's gonna hit before doing the bullet sim
+# NO NEED TO FIX because Kessler changed it so that it'll wait out the bullet, as long as there's still time remaining: If we're gonna die and we're the only ship left, don't shoot a bullet if it doesn't land before I die, because it'll count as a miss
+# EHH WON'T MAKE THIS CHANGE BECAUSE IT'S KINDA BAD AND COMPLEX: Use math to see how the bullet lines up with the asteroid, to predict whether it's gonna hit before doing the bullet sim
 # DONE: get_next_extrapolated_asteroid_collision_time doesn't handle the edges properly! Collisions can't go through the edge but this can predict that. Do the checks!
 # TODO: Improve targeting during maneuvers to maintain random maneuvers. Each sim should target differently, not just always aim at the closest asteroid! But we need to maintain cohesion in the targets from one iteration to the next, so Neo doesn't switch targets randomly within the sim.
+# PROBABLY NOT WORTH ADDING: Add corner camping hardcoded logic
+# PROBABLY NOT WORTH ADDING: Add closing ring freezing
+
+
+# POST-XFC 2024 IMPROVEMENT IDEAS:
+# TODO: Make it so that if the other ship steals my shots, I realize sooner and avoid shooting.
+# Currently Neo takes up to 2 planning periods to realize, but if I do a second pass check of the planned actions and make sure all shots land,
+# then I can reduce this down to up to 1 planning period of delay. Neo can be only 96% accurate with a good adversary, so hopefully this can be bumped to like 98%.
+# This is VERY important in scenarios with a bullet limit since a missed shot is a missed point
+
+# TODO: Inspired by OMUlettes taking out the Fuzzifiers by crashing into them, I want to implement the following hard-coded logic:
+# if the other ship is on its last life and I have at least 2 lives:
+#     SLAM INTO THE OTHER SHIP AND TAKE THEIR LAST LIFE
+
+# TODO: Improve avoiding shooting size-1 asteroids within the blast radius of my own mine.
+# Currently it avoids targeting these, but it could still accidentally hit such asteroids in the way of their intended target
+
+# TODO: Improve handling low bullet limits. Currently Neo just kinda chills and doesn't use its remaining mines effectively.
+# Improving its behavior here can help get a bit more score. Even sacrificing lives to get a couple more hits could be a good strat.
+
+# TODO: Ration mines better. Some scenarios Neo uses them too sparingly, and sometimes it dumps them all at the start, and doesn't have any left to use.
+# The former is a larger issue. If there's only 3 seconds left, Neo can dump a mine and it could get a few more hits at basically zero cost
+# The rationing issue might be solvable by scaling up and down what is considered a good number of asteroids within a blast radius. Currently these are hardcoded.
+
+# TODO: Print out a build date at the start of each run, so during the competition I can make sure the correct version of my controller is run.
+
+# TODO: Remove my training wheels artificial limitation of placing mines 3 seconds apart.
+# I can place them as low as 1 second apart, so removing this might add more strategic options.
+# But this will also give Neo more opportunities to bomb itself, so this is hard to implement well.
+
+# TODO: Consider the time limit better, and adapt my strategy based on that. Currently it's not considered (other than avoiding shooting a bullet that won't land before the time's up).
+# For example, if there's a very long time limit and I have unlimited bullets, then I probably want to focus on killing the other ship first.
+# Otherwise if there's a short time limit, I shouldn't waste time killing the other ship because even if I do,
+# I don't have time to hit all the asteroids myself, and it's better to just shoot asteroids and trust that I'm gaining score quicker than the other team is able to gain score,
+# or at least I'm no worse than the other team
 
 
 import bisect
@@ -101,6 +135,7 @@ MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
 MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
+# These fitness weights were picked after doing a ton of training with a genetic optimizer:
 DEFAULT_FITNESS_WEIGHTS: Final = (0.0, 0.13359801675028146, 0.1488417344765523, 0.0, 0.06974293843076491, 0.20559835937182916, 0.12775194210275548, 0.14357775694291458, 0.17088925192490204) # Hand picked: (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final[float] = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE: Final[float] = cos(math.radians(MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF))
