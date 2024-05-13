@@ -105,7 +105,7 @@ width, height = (1000, 800)
 # Define Game Settings
 game_settings = {'perf_tracker': True,
                  'graphics_type': GraphicsType.NoGraphics if args.invisible else (GraphicsType.UnrealEngine if args.unreal else GraphicsType.Tkinter),#UnrealEngine,Tkinter,NoGraphics
-                 'realtime_multiplier': 1.01,
+                 'realtime_multiplier': 1,
                  'graphics_obj': None,
                  'frequency': 30.0,
                  'UI_settings': 'all'}
@@ -323,7 +323,7 @@ demo_recordings_portfolio = [
     #exploding_grid_scenario, # 18
     grid_formation_explosion_scenario, # 19
     aspect_ratio_grid_formation_scenario, # 20
-    shredder, # 28
+    #shredder, # 28
     diagonal_shredder, # 29
 ]
 
@@ -362,7 +362,7 @@ controllers = [
     #[controller_0_exploding_grid_scenario(), None],
     [controller_0_grid_formation_explosion_scenario(), None],
     [controller_0_aspect_ratio_grid_formation_scenario(), None],
-    [controller_0_shredder(), controller_1_shredder()],
+    #[controller_0_shredder(), controller_1_shredder()],
     [controller_0_diagonal_shredder(), controller_1_diagonal_shredder()]
 ]
 
@@ -370,8 +370,8 @@ random.seed()
 
 for scenario_idx in range(len(demo_recordings_portfolio)):
     scenario = demo_recordings_portfolio[scenario_idx]
-    if scenario_idx in [0, 6]:# + [1, 2, 3, 4, 5]: these are gucci
-        continue
+    #if scenario_idx in [0, 6]:# + [1, 2, 3, 4, 5]: these are gucci
+    #    continue
     iterations += 1
     if args.seed is not None:
         randseed = args.seed
