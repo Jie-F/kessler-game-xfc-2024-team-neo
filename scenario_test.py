@@ -13,6 +13,7 @@ from scenarios import *
 import argparse
 #from controller_0 import ReplayController0
 #from controller_1 import ReplayController1
+from src.xfc2024_neo_controller import NeoController as XFC2024NeoController
 
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
@@ -338,7 +339,7 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        controllers_used = [NeoController(), NullController()]
+        controllers_used = [NeoController(), XFC2024NeoController()]
 
         asteroids_random = generate_asteroids(
                                         num_asteroids=random.randint(20, 30),
