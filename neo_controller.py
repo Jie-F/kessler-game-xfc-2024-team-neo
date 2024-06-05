@@ -72,6 +72,14 @@
 # I don't have time to hit all the asteroids myself, and it's better to just shoot asteroids and trust that I'm gaining score quicker than the other team is able to gain score,
 # or at least I'm no worse than the other team
 
+# TODO: Investigate why Neo just stayed on top of the mine near the end of the scenario for the closing double rings scenario
+
+# DONE: Don't place a mine if it can't explode before the time runs out
+
+# DONE: Dump mines if it can hit stuff right before the end of the scenario
+
+# TODO: Check for time running out condition to handle stuff like that better
+
 
 import bisect
 import gc
@@ -101,8 +109,8 @@ gc.set_threshold(50000)
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
 
 # Output config
-DEBUG_MODE: Final[bool] = False
-PRINT_EXPLANATIONS: Final[bool] = False
+DEBUG_MODE: Final[bool] = True
+PRINT_EXPLANATIONS: Final[bool] = True
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final[float] = 2.0  # Repeated messages within this time window get silenced
 
 # These can trade off to get better performance at the expense of safety
@@ -113,15 +121,16 @@ CLEAN_UP_STATE_FOR_SUBSEQUENT_SCENARIO_RUNS = True  # If NeoController is only i
 # FALSE FOR COMPETITION, slight performance hit
 ENABLE_SANITY_CHECKS: Final[bool] = False  # Miscellaneous sanity checks throughout the code
 # TRUE FOR COMPETITION, performance boost
-PRUNE_SIM_STATE_SEQUENCE: Final[bool] = True  # Good to have on, because we don't really need the full state
+PRUNE_SIM_STATE_SEQUENCE: Final[bool] = False  # Good to have on, because we don't really need the full state
 # FALSE FOR COMPETITION, slight performance hit
-VALIDATE_SIMULATED_KEY_STATES: Final[bool] = False  # Check for desyncs between Kessler and Neo's internal simulation of the game
+VALIDATE_SIMULATED_KEY_STATES: Final[bool] = True  # Check for desyncs between Kessler and Neo's internal simulation of the game
 # FALSE FOR COMPETITION, major performance hit
-VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
+VALIDATE_ALL_SIMULATED_STATES: Final[bool] = True  # Super meticulous check for desyncs. This is very slow! Not recommended, since just verifying the key states will catch desyncs eventually. This is only good for if you need to know exactly when the desync occurred.
 # FALSE FOR COMPETITION, major performance hit
-VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
+VERIFY_AST_TRACKING: Final[bool] = True  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
 # Strategic variables
+END_OF_SCENARIO_DONT_CARE_TIMESTEPS: Final[i64] = 8
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[i64] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
 # TODO: Actually wait, doesn't the rotation timestep fudge just need to be 5, because each stationary targetting is just 5 timesteps long? So using 20 may be overkill!
 UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON: Final[float] = 8.0
@@ -136,7 +145,7 @@ MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
 # These fitness weights were picked after doing a ton of training with a genetic optimizer:
-DEFAULT_FITNESS_WEIGHTS: Final = (0.0, 0.13359801675028146, 0.1488417344765523, 0.0, 0.06974293843076491, 0.20559835937182916, 0.12775194210275548, 0.14357775694291458, 0.17088925192490204) # Hand picked: (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
+DEFAULT_FITNESS_WEIGHTS: Final = (0.0, 0.13359801675028146, 0.1488417344765523, 0.0, 0.06974293843076491, 0.20559835937182916 + 0.4, 0.12775194210275548, 0.14357775694291458, 0.17088925192490204) # Hand picked: (7.0, 10.0, 1.5, 0.5, 6.0, 12.0, 0.5, 2.0, 7.0)
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF: Final[float] = 45.0  # I'd expect the smaller this is, the faster. But apparently 30 can be slower than 45 for some reason. So I'll leave it on 45 lol
 MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF_COSINE: Final[float] = cos(math.radians(MANEUVER_CONVENIENT_SHOT_CHECKER_CONE_WIDTH_ANGLE_HALF))
 MANEUVER_BULLET_SIM_CULLING_CONE_WIDTH_ANGLE_HALF: Final[float] = 60.0
@@ -162,8 +171,8 @@ RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 3 # However many shots to plan out the
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
-MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.5 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
-ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
+MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.75 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
+ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = False  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
 # Index 0 in the tuples is not used, but to be safe I put a sane number there
@@ -1398,8 +1407,8 @@ def print_explanation(message: str, current_timestep: i64) -> None:
     # Check if the message was printed within the time threshold
     last_timestep_printed = explanation_messages_with_timestamps.get(message, INT_NEG_INF)
     if current_timestep - last_timestep_printed >= i64(EXPLANATION_MESSAGE_SILENCE_INTERVAL_S*FPS):
-        #print(message)
-        log_explanation(message, current_timestep)
+        print(message)
+        #log_explanation(message, current_timestep)
         explanation_messages_with_timestamps[message] = current_timestep
 
 
@@ -3134,16 +3143,20 @@ class Matrix():
 
         def get_asteroid_safe_time_fitness(next_extrapolated_asteroid_collision_time: float, displacement: float, move_sequence_length_s: float) -> float:
             # NOTE THAT the move sequence length is discounted, because if we're deciding between maneuvers, we really mostly care about how long you're safe for after the maneuver is done!
-            if displacement < EPS:
-                # Stationary
-                # TODO: See whether there's something wrong with counting the move sequence length in this. It might be fine to count it all, or maybe use a discount factor
-                # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
-                # asteroid_safe_time_fitness = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (4, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)  # sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
+            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
+                # The scenario is done! We don't care about the future past the end of time!
+                return 1.0
             else:
-                # Maneuvering
-                # asteroid_safe_time_fitness = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (5, 1) SCRATCH THIS
-                asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)
+                if displacement < EPS:
+                    # Stationary
+                    # TODO: See whether there's something wrong with counting the move sequence length in this. It might be fine to count it all, or maybe use a discount factor
+                    # Only has to be safe for 4 seconds to get the max score, to encourage staying put and eliminating threats by shooting rather than by maneuvering and missing shot opportunities
+                    # asteroid_safe_time_fitness = max(0, min(5, 5 - 5/4*next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (4, 1) SCRATCH THIS
+                    asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)  # sigmoid(next_extrapolated_asteroid_collision_time, 2.1*4/5, 2.5)
+                else:
+                    # Maneuvering
+                    # asteroid_safe_time_fitness = max(0, min(5, 5 - next_extrapolated_asteroid_collision_time)) # Goes through (0, 0) (5, 1) SCRATCH THIS
+                    asteroid_safe_time_fitness = sigmoid(next_extrapolated_asteroid_collision_time + move_sequence_length_s*0.25, 1.4, 3.0)
             return asteroid_safe_time_fitness
 
         def get_asteroid_shot_frequency_fitness(asteroids_shot: i64, move_sequence_length_s: float) -> float:
@@ -3172,6 +3185,9 @@ class Matrix():
             # For each mine, as the time goes down, the danger should go up more than linearly
             if not next_extrapolated_mine_collision_times:
                 return 1.0, inf
+            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
+                # The scenario's done so we don't care about mine safety past the end of time!
+                return 1.0, inf
             # Regardless of stationary or maneuvering, the mine safe time score is calculated the same way
             mines_threat_level = 0.0
             next_extrapolated_mine_collision_time = inf
@@ -3191,6 +3207,9 @@ class Matrix():
             return mine_safe_time_fitness, next_extrapolated_mine_collision_time
 
         def get_asteroid_aiming_cone_fitness() -> float:
+            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
+                # The scenario's done so we don't care about this anymore
+                return 1.0
             # Iterate over all asteroids and get their heading angle from the ship's final position/heading, and see whether it's within +-30 degrees
             #ship_heading = self.ship_state.heading
             ship_pos_x, ship_pos_y = self.ship_state.position
@@ -3230,7 +3249,11 @@ class Matrix():
             return sigmoid(asts_within_cone, 1.0, 2.4)
 
         def get_crash_fitness() -> float:
-            if self.ship_crashed:
+            if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
+                # If we're near the end of the scenario, we're gonna fudge things so that we don't care if the ship crashes near the end.
+                # If anything, sacrificing a life to get another hit is probably optimal behavior, since we don't care about deaths, and we only care about asteroid hits!
+                crash_fitness = 1.0
+            elif self.ship_crashed:
                 crash_fitness = 0.0
             else:
                 crash_fitness = 1.0
@@ -4443,10 +4466,7 @@ class Matrix():
                                         # Added one to the timesteps to prevent off by one :P
                                         #print(f'WITHHOLDING SHOT BECAUSE SCENARIO IS ENDING, self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1 = {self.initial_timestep + self.future_timesteps + timesteps_until_bullet_hit_asteroid + 1}, {self.game_state.time_limit=}, {FPS*self.game_state.time_limit=}')
                                         fire_this_timestep = False
-                            #if self.sim_id == 88227:
-                            #    print(f"Rip, we didn't lock in this ts. {fire_this_timestep=} {min_shot_heading_error_rad=}, {self.respawn_maneuver_pass_number=}")
                             if self.respawn_maneuver_pass_number == 0 and (self.future_timesteps >= MANEUVER_SIM_DISALLOW_TARGETING_FOR_START_TIMESTEPS_AMOUNT):# or not fire_this_timestep):
-                            #if self.respawn_maneuver_pass_number == 0:# or not fire_this_timestep):
                                 # Might as well start turning toward our next target!
                                 if self.asteroids_shot >= RANDOM_WALK_SCHEDULE_LENGTH:
                                     # Can turn either left or right
@@ -4467,7 +4487,6 @@ class Matrix():
                                     # We want to turn right
                                     min_shot_heading_error_rad = min_negative_shot_heading_error_rad
                                     second_min_shot_heading_error_rad = second_min_negative_shot_heading_error_rad
-
                                 if not fire_this_timestep and not isinf(min_shot_heading_error_rad):
                                     # We didn't fire this timestep, so we can use the min shot heading error rad to turn toward the same target and try again on the next timestep
                                     next_target_heading_error = min_shot_heading_error_rad  # This is where we're aiming for the next timestep!
@@ -4482,7 +4501,6 @@ class Matrix():
                                         altered_turn_command = min_shot_heading_error_deg*FPS
                                     else:
                                         altered_turn_command = SHIP_MAX_TURN_RATE*sign(min_shot_heading_error_rad)
-                                    
                                     turn_rate = altered_turn_command
                                     if whole_move_sequence:
                                         whole_move_sequence[self.future_timesteps].turn_rate = altered_turn_command
@@ -4616,31 +4634,48 @@ class Matrix():
                     self.game_state.bullets.append(new_bullet)
 
             # We can drop a mine once every 30 frames, so make sure we wait at least that long before we try dropping another one
-            # It's expensive to check the mine FIS every timestep, so do it periodically as the ship moves around
-            if self.ship_state.mines_remaining != 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - MINE_COOLDOWN_TS - MINE_DROP_COOLDOWN_FUDGE_TS and not self.halt_shooting and self.future_timesteps % MINE_OPPORTUNITY_CHECK_INTERVAL_TS == 0:
-                drop_mine_this_timestep = check_mine_opportunity(self.ship_state, self.game_state, self.other_ships)  # Read only access of the ship and game states
+            if self.ship_state.mines_remaining != 0 and self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - MINE_COOLDOWN_TS:
+                # It's possible to drop a mine at this timestep. We now check whether we want to.
+
+                # It's expensive to check the mine FIS every timestep, so do it periodically as the ship moves around
+                # I also artificially restrict the mines to be placed at least 3 seconds (90 frames) apart. Technically it might be optimal to place them quicker than that though.
+                if self.last_timestep_mined <= self.initial_timestep + self.future_timesteps - MINE_COOLDOWN_TS - MINE_DROP_COOLDOWN_FUDGE_TS and not self.halt_shooting and self.future_timesteps % MINE_OPPORTUNITY_CHECK_INTERVAL_TS == 0:
+                    drop_mine_this_timestep = check_mine_opportunity(self.ship_state, self.game_state, self.other_ships)  # Read only access of the ship and game states
+                else:
+                    drop_mine_this_timestep = False
+                
+                if not isinf(self.game_state.time_limit):
+                    # The scenario has a time limit
+                    if self.initial_timestep + self.future_timesteps + 90 > floor(FPS*self.game_state.time_limit):
+                        # Dropping a mine at or past this timestep is useless because the mine won't get to explode before the scenario runs out of time, so we just veto it to not drop the mine
+                        drop_mine_this_timestep = False
+                    
+                    if not self.halt_shooting and self.initial_timestep + self.future_timesteps + 90 == floor(FPS*self.game_state.time_limit) and count_asteroids_in_mine_blast_radius(self.game_state, self.ship_state.position[0], self.ship_state.position[1], round(MINE_FUSE_TIME*FPS)) > 0:
+                        # This is the last possible frame to drop a mine and have it do something. Dump the mine!
+                        drop_mine_this_timestep = True
+                
+                if drop_mine_this_timestep:
+                    self.sim_placed_a_mine = True
+                    self.last_timestep_mined = self.initial_timestep + self.future_timesteps
+                    # This doesn't check whether it's valid to place a mine! It just does it!
+                    self.explanation_messages.append("This is a good chance to drop a mine to hit some asteroids and even the other ship. Bombs away!")
+                    # Remove respawn cooldown if we were in it
+                    self.ship_state.is_respawning = False
+                    self.respawn_timer = 0.0
+                    # debug_print(f'BOMBS AWAY! Sim ID {self.sim_id}, future timesteps {self.future_timesteps}')
+                    new_mine = Mine(
+                        position=self.ship_state.position,
+                        mass=MINE_MASS,
+                        fuse_time=MINE_FUSE_TIME,
+                        remaining_time=MINE_FUSE_TIME
+                    )
+                    self.mine_positions_placed.add(self.ship_state.position) # Track where we placed our mine
+                    self.game_state.mines.append(new_mine)
+                    self.ship_state.mines_remaining -= 1
+                    if ENABLE_SANITY_CHECKS:  # REMOVE_FOR_COMPETITION
+                        assert self.ship_state.mines_remaining >= 0  # REMOVE_FOR_COMPETITION
             else:
                 drop_mine_this_timestep = False
-            if drop_mine_this_timestep:
-                self.sim_placed_a_mine = True
-                self.last_timestep_mined = self.initial_timestep + self.future_timesteps
-                # This doesn't check whether it's valid to place a mine! It just does it!
-                self.explanation_messages.append("This is a good chance to drop a mine to hit some asteroids and even the other ship. Bombs away!")
-                # Remove respawn cooldown if we were in it
-                self.ship_state.is_respawning = False
-                self.respawn_timer = 0.0
-                # debug_print(f'BOMBS AWAY! Sim ID {self.sim_id}, future timesteps {self.future_timesteps}')
-                new_mine = Mine(
-                    position=self.ship_state.position,
-                    mass=MINE_MASS,
-                    fuse_time=MINE_FUSE_TIME,
-                    remaining_time=MINE_FUSE_TIME
-                )
-                self.mine_positions_placed.add(self.ship_state.position) # Track where we placed our mine
-                self.game_state.mines.append(new_mine)
-                self.ship_state.mines_remaining -= 1
-                if ENABLE_SANITY_CHECKS:  # REMOVE_FOR_COMPETITION
-                    assert self.ship_state.mines_remaining >= 0  # REMOVE_FOR_COMPETITION
 
             # Update respawn timer
             if self.respawn_timer <= 0:
@@ -5117,7 +5152,7 @@ class NeoController(KesslerController):
             else:
                 # In deterministic mode, just never do additional iterations. This will also test that the minimum iterations are sufficient for a baseline level of strategic performance.
                 # return False
-                if random.random() < 0.8:
+                if random.random() < 0.9:
                     return True
                 else:
                     return False
@@ -5128,8 +5163,8 @@ class NeoController(KesslerController):
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> None:
         assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index is not None
-        #print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
-        # print([x['fitness'] for x in self.sims_this_planning_period])
+        debug_print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
+        print(sorted([round(x['fitness'], 2) for x in self.sims_this_planning_period]))
         if PLOT_MANEUVER_TRACES:
             all_ship_pos = []
             all_ship_x = []
@@ -5212,9 +5247,19 @@ class NeoController(KesslerController):
             best_action_fitness = best_action_sim.get_fitness()
             best_action_fitness_breakdown = best_action_sim.get_fitness_breakdown()
             # debug_print(f"\nActual best action first state:", best_action_sim.get_state_sequence()[0])
-            # debug_print(f"\nUpdated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness: {best_action_fitness}")
+            debug_print(f"\nUpdated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness: {best_action_fitness}")
             if best_action_fitness < best_action_fitness_predicted - 0.05:
-                # debug_print(f"\n\n\n\nDANGERRRRR!!!!! Updated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness IS MUCH WORSE!!!!!!!: {best_action_fitness}")
+                debug_print(f"\n\n\n\nDANGERRRRR!!!!! Updated simmed state. Old predicted fitness: {best_action_fitness_predicted}, new predicted fitness IS MUCH WORSE!!!!!!!: {best_action_fitness}")
+                print("Old fitness breakdown:", self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['fitness_breakdown'])
+                print("New breakdown:", best_action_fitness_breakdown)
+                print('Actual base state which is now current:')
+                print(game_state)
+                print('Actual ship state which is now current:')
+                print(ship_state)
+                print('And the NEW sim predicts the ship state to be:')
+                print(best_action_sim.get_ship_state())
+                print('But the old sim thought the ship state would be:')
+                print(best_action_sim_predicted.get_ship_state())
                 if self.second_best_fitness_this_planning_period_index is not None:
                     # The best action sim's reality is worse than expected. Try our second best as a backup and hopefully this will be better, and go according to plan!
                     if self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['state_type'] == 'predicted':
@@ -5259,13 +5304,13 @@ class NeoController(KesslerController):
                         second_best_action_fitness_breakdown = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['fitness_breakdown']
                     second_best_action_maneuver_tuple = self.sims_this_planning_period[self.second_best_fitness_this_planning_period_index]['maneuver_tuple']
                     if second_best_action_fitness > best_action_fitness:
-                        # debug_print(f"HOORAY, the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} is better than the best!")
+                        debug_print(f"HOORAY, the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} is better than the best!")
                         best_action_fitness = second_best_action_fitness
                         best_action_sim = second_best_action_sim
                         best_action_fitness_breakdown = second_best_action_fitness_breakdown
                         best_action_maneuver_tuple = second_best_action_maneuver_tuple
-                    #else:
-                        # debug_print(f"CRAP, even the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} isn't better than the first, so we'll just have to go with what we have and maybe get screwed.")
+                    else:
+                        debug_print(f"CRAP, even the second best action's real fitness of {second_best_action_fitness} and predicted fitness of {second_best_action_fitness_predicted} isn't better than the first, so we'll just have to go with what we have and maybe get screwed.")
 
             if self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type'] == 'targetting':
                 # The targetting sim was done with the true state, so this should be the exact same and redundant
@@ -5369,7 +5414,7 @@ class NeoController(KesslerController):
                     if best_action_fitness_breakdown[4] > stationary_fitness_breakdown[4] + 0.05:
                         print_explanation(f"Doing a maneuver to get away from the other ship! This maneuver was the best one picked out of {len(self.sims_this_planning_period)} randomly chosen maneuvers!", self.current_timestep)
         best_move_sequence = best_action_sim.get_move_sequence()
-        #print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
+        debug_print(f"Best sim ID: {best_action_sim.get_sim_id()}, with index {self.best_fitness_this_planning_period_index} and fitness {best_action_fitness} breakdown: {best_action_fitness_breakdown} and length {len(best_move_sequence)}")#, move seq: {best_move_sequence}")
         #print(f"Current average overall fitness is {weighted_average(overall_fitness_record)}")
         # debug_print(f"Respawn maneuver status is: {self.game_state_to_base_planning['respawning']}, Move type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['action_type']}, state type: {self.sims_this_planning_period[self.best_fitness_this_planning_period_index]['state_type']}, Best move seq with fitness {best_action_fitness}: {best_move_sequence}")
         best_action_sim_state_sequence = best_action_sim.get_state_sequence()
@@ -5442,6 +5487,10 @@ class NeoController(KesslerController):
             'mine_positions_placed': best_action_sim.get_mine_positions_placed(),
             'fire_next_timestep_flag': new_fire_next_timestep_flag,
         }
+        print('New base gamestate:')
+        print(next_base_game_state)
+        print('New base shipstate:')
+        print(new_ship_state)
         if ENABLE_SANITY_CHECKS:  # REMOVE_FOR_COMPETITION
             if not (bool(self.game_state_to_base_planning['ship_respawn_timer']) == self.game_state_to_base_planning['ship_state'].is_respawning):  # REMOVE_FOR_COMPETITION
                 print(f"self.game_state_to_base_planning['ship_respawn_timer']: {self.game_state_to_base_planning['ship_respawn_timer']}, self.game_state_to_base_planning['ship_state'].is_respawning: {self.game_state_to_base_planning['ship_state'].is_respawning}")  # REMOVE_FOR_COMPETITION
@@ -5900,7 +5949,7 @@ class NeoController(KesslerController):
                     'fitness': maneuver_fitness,
                     'fitness_breakdown': maneuver_fitness_breakdown,
                     'action_type': 'heuristic_maneuver' if heuristic_maneuver else 'random_maneuver',
-                    'state_type': 'exact' if base_state_is_exact else 'predicted',
+                    'state_type': state_type,
                     'maneuver_tuple': (random_ship_heading_angle, ship_cruise_speed, ship_accel_turn_rate, ship_cruise_timesteps, ship_cruise_turn_rate)
                 })
                 # if heuristic_maneuver:
@@ -5940,13 +5989,13 @@ class NeoController(KesslerController):
             planning_base_state_outdated: bool = self.game_state_to_base_planning is not None and self.game_state_to_base_planning['timestep'] < self.current_timestep
             if timestep_mismatch or (STATE_CONSISTENCY_CHECK_AND_RECOVERY and (action_queue_desync or planning_base_state_outdated)):
                 if timestep_mismatch and not (action_queue_desync or planning_base_state_outdated):
-                    print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
+                    debug_print("This was not a fresh run of the controller! I'll try cleaning up the previous run and reset the state.")
                 elif timestep_mismatch:
-                    print(f"Neo didn't start from time 0. Was there a controller exception? Setting timestep to match the passed-in game state's nonzero starting timestep of: {game_state.sim_frame}")
+                    debug_print(f"Neo didn't start from time 0. Was there a controller exception? Setting timestep to match the passed-in game state's nonzero starting timestep of: {game_state.sim_frame}")
                 self.reset()
                 self.current_timestep += 1
                 if STATE_CONSISTENCY_CHECK_AND_RECOVERY and (action_queue_desync or planning_base_state_outdated):
-                    print("Neo probably crashed or something because the internal state is all messed up. Welp, let's try this again.")
+                    debug_print("Neo probably crashed or something because the internal state is all messed up. Welp, let's try this again.")
                     recovering_from_crash = True
                 if timestep_mismatch:
                     self.current_timestep = game_state.sim_frame
@@ -6228,8 +6277,8 @@ class NeoController(KesslerController):
                         raise Exception("Game states don't match!")  # REMOVE_FOR_COMPETITION
             else:  # REMOVE_FOR_COMPETITION
                 print(f"Timestep not in list of states!!!")  # REMOVE_FOR_COMPETITION
-        if (not VALIDATE_ALL_SIMULATED_STATES or PRUNE_SIM_STATE_SEQUENCE) and VALIDATE_SIMULATED_KEY_STATES and self.current_timestep in self.set_of_base_gamestate_timesteps and not self.other_ships_exist:  # REMOVE_FOR_COMPETITION
-            # debug_print(f"Validating KEY game state for timestep {self.current_timestep}")  # REMOVE_FOR_COMPETITION
+        if (not VALIDATE_ALL_SIMULATED_STATES or PRUNE_SIM_STATE_SEQUENCE) and VALIDATE_SIMULATED_KEY_STATES and self.current_timestep in self.set_of_base_gamestate_timesteps:# and not self.other_ships_exist:  # REMOVE_FOR_COMPETITION
+            debug_print(f"Validating KEY game state for timestep {self.current_timestep}")  # REMOVE_FOR_COMPETITION
             if game_state != self.base_gamestates[self.current_timestep]['game_state']:  # REMOVE_FOR_COMPETITION
                 print("Actual game state:", game_state)  # REMOVE_FOR_COMPETITION
                 print("\nSimulated game state:", self.base_gamestates[self.current_timestep]['game_state'])  # REMOVE_FOR_COMPETITION

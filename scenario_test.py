@@ -338,10 +338,10 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        controllers_used = [NeoController(), BabyNeoController()]
+        controllers_used = [NeoController(), NullController()]
 
         asteroids_random = generate_asteroids(
-                                        num_asteroids=random.randint(30, 60),
+                                        num_asteroids=random.randint(20, 30),
                                         position_range_x=(0, width),
                                         position_range_y=(0, height),
                                         speed_range=(-300, 300, 0),
@@ -361,7 +361,7 @@ while True:
                                         {'position': (width*2//3, height//2), 'angle': 90, 'lives': 3, 'team': 2, "mines_remaining": 3},
                                     ],
                                     map_size=(width, height),
-                                    time_limit=240.0,
+                                    time_limit=10.0,
                                     ammo_limit_multiplier=random.choice([0]),
                                     stop_if_no_ammo=False)
         random.seed(randseed)
