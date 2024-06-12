@@ -5178,7 +5178,7 @@ class NeoController(KesslerController):
             return True
 
     def decide_next_action(self, game_state: GameState, ship_state: Ship) -> bool:
-        assert self.game_state_to_base_planning is not None  # REMOVE_FOR_COMPETITION
+        assert self.game_state_to_base_planning is not None
         assert self.best_fitness_this_planning_period_index != INT_NEG_INF  # REMOVE_FOR_COMPETITION
         debug_print(f"\nDeciding next action! We're picking out of {len(self.sims_this_planning_period)} total sims")
         debug_print(sorted([round(x['fitness'], 2) for x in self.sims_this_planning_period]))
