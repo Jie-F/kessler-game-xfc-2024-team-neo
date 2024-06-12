@@ -1,0 +1,1 @@
+py -3.10 -m mypyc neo_controller.py && py -3.10 -m mypyc neo_controller_explanations.py && py -3.11 -m mypyc neo_controller.py && py -3.11 -m mypyc neo_controller_explanations.py
