@@ -14,7 +14,8 @@ class GraphicsTK(KesslerGraphics):
         self.show_accuracy = UI_settings.get('accuracy', True)
         self.show_asteroids_hit = UI_settings.get('asteroids_hit', True)
         self.show_shots_fired = UI_settings.get('shots_fired', False)
-        self.show_bullets_remaining = UI_settings.get('bullets_remaining', False)
+        self.show_bullets_remaining = UI_settings.get('bullets_remaining', True)
+        self.show_mines_remaining = UI_settings.get('mines_remaining', True)
         self.show_controller_name = UI_settings.get('controller_name', True)
 
     def start(self, scenario):
@@ -119,6 +120,8 @@ class GraphicsTK(KesslerGraphics):
             team_info += "Shots Fired: " + str(team.shots_fired) + "\n"
         if self.show_bullets_remaining:
             team_info += "Bullets Left: " + str(team.bullets_remaining) + "\n"
+        if self.show_mines_remaining:
+            team_info += "Mines Left: " + str(team.mines_remaining) + "\n"
         return team_info
 
     def plot_ships(self, ships):

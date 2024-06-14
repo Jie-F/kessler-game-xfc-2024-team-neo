@@ -18,6 +18,7 @@ class Team:
         self.bullets_hit = 0
         self.shots_fired = 0
         self.bullets_remaining = 0
+        self.mines_remaining: int = 0
         self.deaths = 0
         self.eval_times = []
         self.lives_remaining = 0

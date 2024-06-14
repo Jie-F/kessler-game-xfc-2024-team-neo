@@ -53,14 +53,14 @@
 # TODO: Improve avoiding shooting size-1 asteroids within the blast radius of my own mine.
 # Currently it avoids targeting these, but it could still accidentally hit such asteroids in the way of their intended target
 
-# TODO: Improve handling low bullet limits. Currently Neo just kinda chills and doesn't use its remaining mines effectively.
+# DONE: Improve handling low bullet limits. Currently Neo just kinda chills and doesn't use its remaining mines effectively.
 # Improving its behavior here can help get a bit more score. Even sacrificing lives to get a couple more hits could be a good strat.
 
 # TODO: Ration mines better. Some scenarios Neo uses them too sparingly, and sometimes it dumps them all at the start, and doesn't have any left to use.
 # The former is a larger issue. If there's only 3 seconds left, Neo can dump a mine and it could get a few more hits at basically zero cost
 # The rationing issue might be solvable by scaling up and down what is considered a good number of asteroids within a blast radius. Currently these are hardcoded.
 
-# TODO: Print out a build date at the start of each run, so during the competition I can make sure the correct version of my controller is run.
+# DONE: Print out a build date at the start of each run, so during the competition I can make sure the correct version of my controller is run.
 
 # WON'T FIX: Remove my training wheels artificial limitation of placing mines 3 seconds apart.
 # I can place them as low as 1 second apart, so removing this might add more strategic options.
@@ -78,7 +78,7 @@
 
 # DONE: Dump mines if it can hit stuff right before the end of the scenario
 
-# TODO: Check for time running out condition to handle stuff like that better
+# DONE: Check for time running out condition to handle stuff like that better
 
 
 import bisect
@@ -108,11 +108,11 @@ gc.set_threshold(50000)
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
 
-BUILD_NUMBER: Final = "2024-06-12 Neo"
+BUILD_NUMBER: Final = "2024-06-14 Neo"
 
 # Output config
-DEBUG_MODE: Final[bool] = True
-PRINT_EXPLANATIONS: Final[bool] = True
+DEBUG_MODE: Final[bool] = False
+PRINT_EXPLANATIONS: Final[bool] = False
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final[float] = 2.0  # Repeated messages within this time window get silenced
 
 # These can trade off to get better performance at the expense of safety
@@ -145,7 +145,7 @@ MINE_DROP_COOLDOWN_FUDGE_TS: Final[i64] = 61  # We can drop a mine every 30 time
 MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final[float] = 50.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final[i64] = 10
 MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
-MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 10
+MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 8
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
 # These fitness weights were picked after doing a ton of training with a genetic optimizer:
@@ -184,42 +184,42 @@ ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller 
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
 MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
 # For each row of the lookup table, the index in the row corresponds to the number of lives left, minus one
-MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((21, 17, 14), # Fitness from 0.0 to 0.1
-                                                         (20, 16, 13), # Fitness from 0.1 to 0.2
-                                                         (19, 15, 12), # Fitness from 0.2 to 0.3
-                                                         (18, 14, 11), # Fitness from 0.3 to 0.4
-                                                         (17, 13, 10), # Fitness from 0.4 to 0.5
+MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((50, 30, 14), # Fitness from 0.0 to 0.1
+                                                         (40, 27, 13), # Fitness from 0.1 to 0.2
+                                                         (35, 23, 12), # Fitness from 0.2 to 0.3
+                                                         (27, 20, 11), # Fitness from 0.3 to 0.4
+                                                         (24, 14, 10), # Fitness from 0.4 to 0.5
                                                          (16, 12, 9), # Fitness from 0.5 to 0.6
                                                          (15, 11, 8), # Fitness from 0.6 to 0.7
                                                          (14, 10, 7), # Fitness from 0.7 to 0.8
                                                          (13, 9, 6), # Fitness from 0.8 to 0.9
                                                          (12, 8, 5)) # Fitness from 0.9 to 1.0
-MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS_LUT: Final = ((960, 780, 440), # Fitness from 0.0 to 0.1
-                                                       (930, 760, 430), # Fitness from 0.1 to 0.2
-                                                       (900, 740, 420), # Fitness from 0.2 to 0.3
-                                                       (870, 720, 410), # Fitness from 0.3 to 0.4
-                                                       (840, 700, 400), # Fitness from 0.4 to 0.5
-                                                       (810, 680, 390), # Fitness from 0.5 to 0.6
+MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS_LUT: Final = ((1000, 900, 440), # Fitness from 0.0 to 0.1
+                                                       (950, 810, 430), # Fitness from 0.1 to 0.2
+                                                       (925, 780, 420), # Fitness from 0.2 to 0.3
+                                                       (900, 730, 410), # Fitness from 0.3 to 0.4
+                                                       (850, 715, 400), # Fitness from 0.4 to 0.5
+                                                       (815, 680, 390), # Fitness from 0.5 to 0.6
                                                        (790, 660, 380), # Fitness from 0.6 to 0.7
                                                        (760, 640, 370), # Fitness from 0.7 to 0.8
                                                        (730, 620, 360), # Fitness from 0.8 to 0.9
                                                        (700, 600, 350)) # Fitness from 0.9 to 1.0
-MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((20, 18, 15), # Fitness from 0.0 to 0.1
-                                                          (18, 15, 13), # Fitness from 0.1 to 0.2
-                                                          (15, 13, 10), # Fitness from 0.2 to 0.3
-                                                          (12, 10, 9), # Fitness from 0.3 to 0.4
-                                                          (10, 8, 7), # Fitness from 0.4 to 0.5
-                                                          (8, 7, 6), # Fitness from 0.5 to 0.6
-                                                          (7, 6, 5), # Fitness from 0.6 to 0.7
-                                                          (6, 5, 4), # Fitness from 0.7 to 0.8
+MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((50, 40, 30), # Fitness from 0.0 to 0.1
+                                                          (40, 30, 25), # Fitness from 0.1 to 0.2
+                                                          (30, 25, 20), # Fitness from 0.2 to 0.3
+                                                          (25, 20, 15), # Fitness from 0.3 to 0.4
+                                                          (15, 10, 9), # Fitness from 0.4 to 0.5
+                                                          (12, 8, 6), # Fitness from 0.5 to 0.6
+                                                          (10, 7, 5), # Fitness from 0.6 to 0.7
+                                                          (7, 5, 4), # Fitness from 0.7 to 0.8
                                                           (4, 3, 3), # Fitness from 0.8 to 0.9
                                                           (3, 3, 2)) # Fitness from 0.9 to 1.0
-MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((39, 36, 33), # Fitness from 0.0 to 0.1
-                                                 (36, 33, 30), # Fitness from 0.1 to 0.2
-                                                 (33, 30, 27), # Fitness from 0.2 to 0.3
-                                                 (30, 27, 24), # Fitness from 0.3 to 0.4
-                                                 (27, 24, 21), # Fitness from 0.4 to 0.5
-                                                 (24, 21, 18), # Fitness from 0.5 to 0.6
+MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((40, 38, 33), # Fitness from 0.0 to 0.1
+                                                 (38, 35, 30), # Fitness from 0.1 to 0.2
+                                                 (35, 33, 27), # Fitness from 0.2 to 0.3
+                                                 (32, 29, 24), # Fitness from 0.3 to 0.4
+                                                 (29, 25, 21), # Fitness from 0.4 to 0.5
+                                                 (25, 21, 18), # Fitness from 0.5 to 0.6
                                                  (21, 18, 15), # Fitness from 0.6 to 0.7
                                                  (18, 15, 12), # Fitness from 0.7 to 0.8
                                                  (12, 9, 9), # Fitness from 0.8 to 0.9
