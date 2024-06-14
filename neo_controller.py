@@ -111,8 +111,8 @@ gc.set_threshold(50000)
 BUILD_NUMBER: Final = "2024-06-12 Neo"
 
 # Output config
-DEBUG_MODE: Final[bool] = False
-PRINT_EXPLANATIONS: Final[bool] = False
+DEBUG_MODE: Final[bool] = True
+PRINT_EXPLANATIONS: Final[bool] = True
 EXPLANATION_MESSAGE_SILENCE_INTERVAL_S: Final[float] = 2.0  # Repeated messages within this time window get silenced
 
 # These can trade off to get better performance at the expense of safety
@@ -131,6 +131,8 @@ VALIDATE_ALL_SIMULATED_STATES: Final[bool] = False  # Super meticulous check for
 # FALSE FOR COMPETITION, major performance hit
 VERIFY_AST_TRACKING: Final[bool] = False  # I'm using a very error prone way to track asteroids, where I very easily get the time of the asteroid wrong. This will check to make sure the times aren't mismatched, by checking whether the asteroid we're looking for appears in the wrong timestep.
 
+RESEED_RNG: Final[bool] = True # If the random seed was set outside of Neo, this will reseed the RNG to ensure good randomness
+
 # Strategic variables
 END_OF_SCENARIO_DONT_CARE_TIMESTEPS: Final[i64] = 8
 ADVERSARY_ROTATION_TIMESTEP_FUDGE: Final[i64] = 20  # Since we can't predict the adversary ship, in the targetting frontrun protection, fudge the adversary's ship to be more conservative. Since we predict they don't move, but they could be aiming toward the target.
@@ -139,7 +141,7 @@ UNWRAP_ASTEROID_COLLISION_FORECAST_TIME_HORIZON: Final[float] = 8.0
 UNWRAP_ASTEROID_TARGET_SELECTION_TIME_HORIZON: Final[float] = 2.3 # The upper bound would be sqrt(1000.0**2 + 800.0**2)/800.0 + 1.0 = 2.600781059358212 s, which is 1 second to turn and the rest for bullet travel time. But this is the worst case scenario. In most cases, we don't need this much.
 ASTEROID_SIZE_SHOT_PRIORITY: Final = (nan, 1, 2, 3, 4)  # Index i holds the priority of shooting an asteroid of size i (the first element is not important)
 fitness_function_weights: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None
-MINE_DROP_COOLDOWN_FUDGE_TS: Final[i64] = 60  # We can drop a mine every 30 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
+MINE_DROP_COOLDOWN_FUDGE_TS: Final[i64] = 61  # We can drop a mine every 30 timesteps. But it's better to wait a bit longer between mines, so then if I drop two and the first one blows me up, I have time to get out of the radius of the second blast!
 MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final[float] = 50.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final[i64] = 10
 MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
@@ -173,7 +175,7 @@ RANDOM_WALK_SCHEDULE_LENGTH: Final[i64] = 3 # However many shots to plan out the
 # You can kind of think of this as the percentage of real time we're going at. Kinda...
 # Also my logic is that if I always make sure I have enough time, then I’ll actually be within budget. Because say I take 10 time to do something. Well if I have 10 time left, I do it, but anything from 9 to 0 time left, I don’t. So on average, I leave out 10/2 time on the table. So that’s why I set the fudge multiplier to 0.5, so things average out to me being exactly on budget.
 PERFORMANCE_CONTROLLER_PUSHING_THE_ENVELOPE_FUDGE_MULTIPLIER: Final[float] = 0.55
-MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.6 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
+MINIMUM_DELTA_TIME_FRACTION_BUDGET: Final[float] = 0.55 # One frametime is 1.0. If we give the other ship half of the time, then we should set this to 0.5. If we want non-realtime performance, we can change this to be >1
 ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller uses realtime, so it's nondeterministic. For debugging and using set random seeds, turn this off so the controller is determinstic again
 
 # For the tuples below, the index is the number of lives Neo has left while going into the move
@@ -1025,7 +1027,7 @@ def set_up_mine_fis() -> control.ControlSystemSimulation:
     # Defining the membership functions
     mines_left['few'] = trimf(mines_left.universe, [1, 1, 3])
     mines_left['many'] = trimf(mines_left.universe, [1.5, 3, 3])
-    lives_left['few'] = trimf(lives_left.universe, [1, 1, 3])
+    lives_left['few'] = trimf(lives_left.universe, [1, 1, 2])
     lives_left['many'] = trimf(lives_left.universe, [1.5, 3, 3])
     asteroids_hit['few'] = trimf(asteroids_hit.universe, [0, 0, ASTEROIDS_HIT_OKAY_CENTER])
     asteroids_hit['okay'] = trimf(asteroids_hit.universe, [0, ASTEROIDS_HIT_OKAY_CENTER, ASTEROIDS_HIT_VERY_GOOD])
@@ -3152,6 +3154,9 @@ class Matrix():
             if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
                 # The scenario is done! We don't care about the future past the end of time!
                 return 1.0
+            elif self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+                # We stop caring at this point!
+                return 1.0
             else:
                 if displacement < EPS:
                     # Stationary
@@ -3215,6 +3220,9 @@ class Matrix():
         def get_asteroid_aiming_cone_fitness() -> float:
             if not isinf(self.game_state.time_limit) and self.initial_timestep + self.future_timesteps + END_OF_SCENARIO_DONT_CARE_TIMESTEPS >= floor(FPS*self.game_state.time_limit):
                 # The scenario's done so we don't care about this anymore
+                return 1.0
+            elif self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+                # Can't shoot anyway so don't care about this
                 return 1.0
             # Iterate over all asteroids and get their heading angle from the ship's final position/heading, and see whether it's within +-30 degrees
             #ship_heading = self.ship_state.heading
@@ -3282,6 +3290,13 @@ class Matrix():
             # Penalize being too close to the other ship. If the other ship is moving, penalize that as well by effectively treating the distance as closer to the other ship
             # There is no maximum detection distance.
             # On a 1000x800 board, the max distance between two ships is 640.3 pixels
+
+            # If I'm out of bullets and mines, then I actually want to crash into the other ship to try and kill them to make sure they can't get more hits
+            if self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+                invert_ship_affinity = True
+                self.explanation_messages.append("I'm out of bullets/mines so I'm gonna try to crash into the other ship because there's nothing else better to do haha")
+            else:
+                invert_ship_affinity = False
             for other_ship in self.other_ships:
                 # It's assume there's only one ship, so this returns after the first ship is checked
                 other_ship_pos_x, other_ship_pos_y = other_ship.position
@@ -3308,7 +3323,7 @@ class Matrix():
                 mean_separation_dist = weighted_harmonic_mean(separation_dists)
                 #print(f"{self.sim_id=} {separation_dists=} {mean_separation_dist=}")
                 # other_ship_proximity_fitness += prox_score_speed_mul*ship_proximity_max_penalty/(ship_proximity_detection_radius**ship_prox_exponent)*(ship_proximity_detection_radius - separation_dist)**ship_prox_exponent
-                return sigmoid(mean_separation_dist*other_ship_speed_dist_mul, 0.032, 120)
+                return 1.0 - sigmoid(mean_separation_dist*other_ship_speed_dist_mul, 0.032, 120) if invert_ship_affinity else sigmoid(mean_separation_dist*other_ship_speed_dist_mul, 0.032, 120)
             else:
                 return 1.0
 
@@ -3387,7 +3402,10 @@ class Matrix():
             #    placed_mine_fitness = 1.0
             #else:
             #    placed_mine_fitness = 0.5
-            placed_mine_fitness = mine_safe_time_fitness
+            if self.ship_state.lives_remaining >= 3:
+                placed_mine_fitness = 1.0
+            else:
+                placed_mine_fitness = mine_safe_time_fitness
         else:
             placed_mine_fitness = 0.0
 
@@ -5169,7 +5187,7 @@ class NeoController(KesslerController):
             else:
                 # In deterministic mode, just never do additional iterations. This will also test that the minimum iterations are sufficient for a baseline level of strategic performance.
                 # return False
-                if random.random() < 0.5:
+                if random.random() < 0.0:
                     return True
                 else:
                     return False
@@ -6014,6 +6032,9 @@ class NeoController(KesslerController):
         #    unwrap_cache.clear()
         #print(f"Cache hits: {unwrap_cache_hits}, misses: {unwrap_cache_misses}")
         # Method processed each time step by this controller.
+
+        if RESEED_RNG:
+            random.seed()
         self.current_timestep += 1
         recovering_from_crash = False
         #print(f"Calling Neo's actions() on timestep {game_state_dict['sim_frame']}, and Neo thinks it's timestep {self.current_timestep}")

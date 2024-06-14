@@ -10,6 +10,7 @@ from r_controller import RController
 from null_controller import NullController
 from test_controller import TestController
 from scenarios import *
+from adversarial_scenarios_for_jie import *
 import argparse
 #from controller_0 import ReplayController0
 #from controller_1 import ReplayController1
@@ -234,6 +235,24 @@ xfc2023 = [
     adv_multi_ring_closing_both_inside_fast
 ]
 
+xfc2024 = [
+    adv_random_small_1,
+    adv_random_small_1_2,
+    adv_multi_wall_left_easy,
+    adv_multi_four_corners,
+    adv_multi_wall_top_easy,
+    adv_multi_2wall_closing,
+    adv_wall_bottom_staggered,
+    adv_multi_wall_right_hard,
+    adv_moving_corridor_angled_1,
+    adv_moving_corridor_angled_1_mines,
+    adv_multi_ring_closing_left,
+    adv_multi_ring_closing_left2,
+    adv_multi_ring_closing_both2,
+    adv_multi_ring_closing_both_inside_fast,
+    adv_multi_two_rings_closing
+]
+
 custom_scenarios = [
     target_priority_optimization1,
     closing_ring_scenario,
@@ -312,6 +331,10 @@ team_1_shot_efficiency = 0
 team_2_shot_efficiency = 0
 team_1_shot_efficiency_including_mines = 0
 team_2_shot_efficiency_including_mines = 0
+team_1_bullets_hit = 0
+team_1_shots_fired = 0
+team_2_bullets_hit = 0
+team_2_shots_fired = 0
 
 selected_portfolio = [None]
 if args.portfolio is not None:
@@ -326,6 +349,8 @@ if args.portfolio is not None:
             selected_portfolio = custom_scenarios
         case 'rand_scenarios':
             selected_portfolio = rand_scenarios
+        case 'xfc2024':
+            selected_portfolio = xfc2024
 
 random.seed()
 
@@ -339,8 +364,9 @@ while True:
             randseed = random.randint(1, 1000000000)
         color_print(f'\nUsing seed {randseed}, running test iteration {iterations}', 'green')
         random.seed(randseed)
-        #controllers_used = [NeoController(), XFC2024NeoController()]
-        controllers_used = [NeoController(), NeoController()]
+        controllers_used = [NeoController(), XFC2024NeoController()]
+        #controllers_used = [XFC2024NeoController(), NeoController()]
+        #controllers_used = [NeoController(), BabyNeoController()]
 
         asteroids_random = generate_asteroids(
                                         num_asteroids=random.randint(20, 30),
@@ -447,13 +473,18 @@ while True:
             if num_teams > 1:
                 team_2_shot_efficiency = (team2.bullets_hit/score.sim_time)/(1/(1/10))
                 team_2_shot_efficiency_including_mines = (team2.asteroids_hit/score.sim_time)/(1/(1/10))
+                team_1_bullets_hit += team1.bullets_hit
+                team_2_bullets_hit += team2.bullets_hit
+                team_1_shots_fired += team1.shots_fired
+                team_2_shots_fired += team2.shots_fired
         print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
         print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
+        print(f"Team 1, 2 accuracies: ({team_1_bullets_hit/team_1_shots_fired}, {team_2_bullets_hit/team_2_shots_fired})")
         print(f"Team 1, 2 shot efficiencies: ({team_1_shot_efficiency:.02%}, {team_2_shot_efficiency:.02%})")
         print(f"Team 1, 2 shot efficiencies inc. mines/ship hits: ({team_1_shot_efficiency_including_mines:.02%}, {team_2_shot_efficiency_including_mines:.02%})")
-        if args.once:
-            break
+        #if args.once:
+        #    break
     if missed and len(team_deaths) == 1:
         color_print(f"Ran {iterations} simulations to get one where Neo missed!", 'green')
         break
