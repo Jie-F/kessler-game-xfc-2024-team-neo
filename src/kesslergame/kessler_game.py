@@ -370,8 +370,8 @@ class ReplayController{ind}:
 
             # Save this content to a .py file
             file_path = f'controller_{ind}_{scenario.name}.py'
-            with open(file_path, 'w') as file:
-                file.write(controller_script_content)
+            #with open(file_path, 'w') as file:
+            #    file.write(controller_script_content)
 
         # Return the score and stop condition
         return score, perf_list
