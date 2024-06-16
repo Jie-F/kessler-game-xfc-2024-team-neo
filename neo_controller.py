@@ -46,7 +46,7 @@
 # then I can reduce this down to up to 1 planning period of delay. Neo can be only 96% accurate with a good adversary, so hopefully this can be bumped to like 98%.
 # This is VERY important in scenarios with a bullet limit since a missed shot is a missed point
 
-# TODO: Inspired by OMUlettes taking out the Fuzzifiers by crashing into them, I want to implement the following hard-coded logic:
+# DONE: Inspired by OMUlettes taking out the Fuzzifiers by crashing into them, I want to implement the following hard-coded logic:
 # if the other ship is on its last life and I have at least 2 lives:
 #     SLAM INTO THE OTHER SHIP AND TAKE THEIR LAST LIFE
 
@@ -72,7 +72,7 @@
 # I don't have time to hit all the asteroids myself, and it's better to just shoot asteroids and trust that I'm gaining score quicker than the other team is able to gain score,
 # or at least I'm no worse than the other team
 
-# TODO: Investigate why Neo just stayed on top of the mine near the end of the scenario for the closing double rings scenario
+# DONE: Investigate why Neo just stayed on top of the mine near the end of the scenario for the closing double rings scenario
 
 # DONE: Don't place a mine if it can't explode before the time runs out
 
