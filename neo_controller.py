@@ -4,7 +4,7 @@
 # _  /|  / /  __/ /_/ /
 # /_/ |_/  \___/\____/ 
 
-# XFC 2024 Kessler controller
+# XFC 2024 and WCCI Kessler controller
 # Jie Fan (jie.f@pm.me)
 # Feel free to reach out if you have questions or want to discuss anything!
 
@@ -108,7 +108,7 @@ gc.set_threshold(50000)
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
 
-BUILD_NUMBER: Final = "2024-06-14 Neo"
+BUILD_NUMBER: Final = "2024-06-15 Neo - Jie Fan (jie.f@pm.me)"
 
 # Output config
 DEBUG_MODE: Final[bool] = False
@@ -145,7 +145,7 @@ MINE_DROP_COOLDOWN_FUDGE_TS: Final[i64] = 61  # We can drop a mine every 30 time
 MINE_ASTEROID_COUNT_FUDGE_DISTANCE: Final[float] = 50.0
 MINE_OPPORTUNITY_CHECK_INTERVAL_TS: Final[i64] = 10
 MINE_OTHER_SHIP_RADIUS_FUDGE: Final[float] = 40.0
-MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 8
+MINE_OTHER_SHIP_ASTEROID_COUNT_EQUIVALENT: Final[i64] = 10
 TARGETING_AIMING_UNDERTURN_ALLOWANCE_DEG: Final[float] = 6.0
 # (asteroid_safe_time_fitness, mine_safe_time_fitness, asteroids_fitness, sequence_length_fitness, other_ship_proximity_fitness, crash_fitness, asteroid_aiming_cone_fitness, placed_mine_fitness, overall_safe_time_fitness)
 # These fitness weights were picked after doing a ton of training with a genetic optimizer:
@@ -3267,10 +3267,17 @@ class Matrix():
                 # If we're near the end of the scenario, we're gonna fudge things so that we don't care if the ship crashes near the end.
                 # If anything, sacrificing a life to get another hit is probably optimal behavior, since we don't care about deaths, and we only care about asteroid hits!
                 crash_fitness = 1.0
-            elif self.ship_crashed:
-                crash_fitness = 0.0
             else:
-                crash_fitness = 1.0
+                if self.ship_crashed:
+                    if self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+                        crash_fitness = 1.0
+                    else:
+                        crash_fitness = 0.0
+                else:
+                    if self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+                        crash_fitness = 0.0
+                    else:
+                        crash_fitness = 1.0
             return crash_fitness
 
         def get_sequence_length_fitness(move_sequence_length_s: float, displacement: float) -> float:

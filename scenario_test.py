@@ -23,7 +23,7 @@ windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor i
 
 ASTEROID_COUNT_LOOKUP = (0, 1, 4, 13, 40)
 
-from xfc_2023_replica_scenarios import *
+#from xfc_2023_replica_scenarios import *
 from custom_scenarios import *
 
 from src.kesslergame import Scenario, KesslerGame, GraphicsType
@@ -214,28 +214,28 @@ alternate_scenarios = [
     scenario_2_still_corridors,
 ]
 
-xfc2023 = [
-    ex_adv_four_corners_pt1,
-    ex_adv_four_corners_pt2,
-    ex_adv_asteroids_down_up_pt1,
-    ex_adv_asteroids_down_up_pt2,
-    ex_adv_direct_facing,
-    ex_adv_two_asteroids_pt1,
-    ex_adv_two_asteroids_pt2,
-    ex_adv_ring_pt1,
-    adv_random_big_1,
-    adv_random_big_2,
-    adv_random_big_3,
-    adv_random_big_4,
-    adv_multi_wall_bottom_hard_1,
-    adv_multi_wall_right_hard_1,
-    adv_multi_ring_closing_left,
-    adv_multi_ring_closing_right,
-    adv_multi_two_rings_closing,
-    avg_multi_ring_closing_both2,
-    adv_multi_ring_closing_both_inside,
-    adv_multi_ring_closing_both_inside_fast
-]
+# xfc2023 = [
+#     ex_adv_four_corners_pt1,
+#     ex_adv_four_corners_pt2,
+#     ex_adv_asteroids_down_up_pt1,
+#     ex_adv_asteroids_down_up_pt2,
+#     ex_adv_direct_facing,
+#     ex_adv_two_asteroids_pt1,
+#     ex_adv_two_asteroids_pt2,
+#     ex_adv_ring_pt1,
+#     adv_random_big_1,
+#     adv_random_big_2,
+#     adv_random_big_3,
+#     adv_random_big_4,
+#     adv_multi_wall_bottom_hard_1,
+#     adv_multi_wall_right_hard_1,
+#     adv_multi_ring_closing_left,
+#     adv_multi_ring_closing_right,
+#     adv_multi_two_rings_closing,
+#     avg_multi_ring_closing_both2,
+#     adv_multi_ring_closing_both_inside,
+#     adv_multi_ring_closing_both_inside_fast
+# ]
 
 xfc2024 = [
     adv_random_small_1,
