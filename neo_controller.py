@@ -108,7 +108,7 @@ gc.set_threshold(50000)
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
 
-BUILD_NUMBER: Final = "2024-06-15 Neo - Jie Fan (jie.f@pm.me)"
+BUILD_NUMBER: Final = "2024-06-16 Neo - Jie Fan (jie.f@pm.me)"
 
 # Output config
 DEBUG_MODE: Final[bool] = False
@@ -184,11 +184,11 @@ ENABLE_PERFORMANCE_CONTROLLER: Final[bool] = True  # The performance controller 
 MAX_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
 MAX_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS: Final[i64] = 100
 # For each row of the lookup table, the index in the row corresponds to the number of lives left, minus one
-MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((50, 30, 14), # Fitness from 0.0 to 0.1
-                                                         (40, 27, 13), # Fitness from 0.1 to 0.2
-                                                         (35, 23, 12), # Fitness from 0.2 to 0.3
-                                                         (27, 20, 11), # Fitness from 0.3 to 0.4
-                                                         (24, 14, 10), # Fitness from 0.4 to 0.5
+MIN_RESPAWN_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((80, 55, 14), # Fitness from 0.0 to 0.1
+                                                         (70, 40, 13), # Fitness from 0.1 to 0.2
+                                                         (60, 28, 12), # Fitness from 0.2 to 0.3
+                                                         (50, 26, 11), # Fitness from 0.3 to 0.4
+                                                         (45, 14, 10), # Fitness from 0.4 to 0.5
                                                          (16, 12, 9), # Fitness from 0.5 to 0.6
                                                          (15, 11, 8), # Fitness from 0.6 to 0.7
                                                          (14, 10, 7), # Fitness from 0.7 to 0.8
@@ -204,26 +204,26 @@ MIN_RESPAWN_PER_PERIOD_SEARCH_ITERATIONS_LUT: Final = ((1000, 900, 440), # Fitne
                                                        (760, 640, 370), # Fitness from 0.7 to 0.8
                                                        (730, 620, 360), # Fitness from 0.8 to 0.9
                                                        (700, 600, 350)) # Fitness from 0.9 to 1.0
-MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((50, 40, 30), # Fitness from 0.0 to 0.1
-                                                          (40, 30, 25), # Fitness from 0.1 to 0.2
-                                                          (30, 25, 20), # Fitness from 0.2 to 0.3
-                                                          (25, 20, 15), # Fitness from 0.3 to 0.4
-                                                          (15, 10, 9), # Fitness from 0.4 to 0.5
-                                                          (12, 8, 6), # Fitness from 0.5 to 0.6
+MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((85, 65, 30), # Fitness from 0.0 to 0.1
+                                                          (65, 52, 25), # Fitness from 0.1 to 0.2
+                                                          (55, 40, 20), # Fitness from 0.2 to 0.3
+                                                          (45, 25, 15), # Fitness from 0.3 to 0.4
+                                                          (25, 12, 9), # Fitness from 0.4 to 0.5
+                                                          (16, 8, 6), # Fitness from 0.5 to 0.6
                                                           (10, 7, 5), # Fitness from 0.6 to 0.7
                                                           (7, 5, 4), # Fitness from 0.7 to 0.8
                                                           (4, 3, 3), # Fitness from 0.8 to 0.9
                                                           (3, 3, 2)) # Fitness from 0.9 to 1.0
-MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((40, 38, 33), # Fitness from 0.0 to 0.1
-                                                 (38, 35, 30), # Fitness from 0.1 to 0.2
-                                                 (35, 33, 27), # Fitness from 0.2 to 0.3
-                                                 (32, 29, 24), # Fitness from 0.3 to 0.4
-                                                 (29, 25, 21), # Fitness from 0.4 to 0.5
-                                                 (25, 21, 18), # Fitness from 0.5 to 0.6
-                                                 (21, 18, 15), # Fitness from 0.6 to 0.7
-                                                 (18, 15, 12), # Fitness from 0.7 to 0.8
-                                                 (12, 9, 9), # Fitness from 0.8 to 0.9
-                                                 (9, 9, 6)) # Fitness from 0.9 to 1.0
+MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((300, 230, 105), # Fitness from 0.0 to 0.1
+                                                 (230, 185, 88), # Fitness from 0.1 to 0.2
+                                                 (193, 140, 70), # Fitness from 0.2 to 0.3
+                                                 (160, 88, 55), # Fitness from 0.3 to 0.4
+                                                 (88, 42, 32), # Fitness from 0.4 to 0.5
+                                                 (56, 28, 21), # Fitness from 0.5 to 0.6
+                                                 (35, 25, 18), # Fitness from 0.6 to 0.7
+                                                 (25, 18, 14), # Fitness from 0.7 to 0.8
+                                                 (14, 11, 10), # Fitness from 0.8 to 0.9
+                                                 (11, 11, 7)) # Fitness from 0.9 to 1.0
 MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_IF_WILL_DIE_LUT = ((860, 680, 340), # Fitness from 0.0 to 0.1
                                                              (830, 660, 330), # Fitness from 0.1 to 0.2
                                                              (800, 640, 320), # Fitness from 0.2 to 0.3
