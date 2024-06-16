@@ -3299,9 +3299,10 @@ class Matrix():
             # On a 1000x800 board, the max distance between two ships is 640.3 pixels
 
             # If I'm out of bullets and mines, then I actually want to crash into the other ship to try and kill them to make sure they can't get more hits
-            if self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0:
+            # Alternatively, if our ship is at full health and the other ship is about to die, ram into the other ship to take them out of the competition. Inspired by OMU from XFC 2024.
+            if (self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0) or (self.other_ships and self.other_ships[0].lives_remaining == 1 and self.ship_state.lives_remaining >= 3):
                 invert_ship_affinity = True
-                self.explanation_messages.append("I'm out of bullets/mines so I'm gonna try to crash into the other ship because there's nothing else better to do haha")
+                self.explanation_messages.append("I'm either out of bullets/mines or the other ship is about to die, so I'm gonna try to crash into the other ship mwahahahaha")
             else:
                 invert_ship_affinity = False
             for other_ship in self.other_ships:
@@ -5057,6 +5058,7 @@ class NeoController(KesslerController):
 
     def __init__(self, chromosome: Optional[tuple[float, float, float, float, float, float, float, float, float]] = None) -> None:
         print(BUILD_NUMBER)
+        print(__file__)
         self.reset(chromosome)
         #self.ship_id: int = -1 # Dangerous!
         #self._ship_id: int = -1
