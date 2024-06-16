@@ -16,8 +16,6 @@ import argparse
 #from controller_1 import ReplayController1
 from src.xfc2024_neo_controller import NeoController as XFC2024NeoController
 
-from main_controller_akila import AkilaController
-
 from ctypes import windll
 windll.shcore.SetProcessDpiAwareness(1) # Fixes blurriness when a scale factor is used in Windows
 
@@ -368,7 +366,6 @@ while True:
         random.seed(randseed)
         #controllers_used = [NeoController(), XFC2024NeoController()]
         
-        controllers_used = [NeoController(), AkilaController()]
         #controllers_used = [XFC2024NeoController(), NeoController()]
         #controllers_used = [NeoController(), BabyNeoController()]
 
