@@ -3239,7 +3239,7 @@ class Matrix():
 
             # If I'm out of bullets and mines, then I actually want to crash into the other ship to try and kill them to make sure they can't get more hits
             # Alternatively, if our ship is at full health and the other ship is about to die, ram into the other ship to take them out of the competition. Inspired by OMU from XFC 2024.
-            if (self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0) or (self.other_ships and ((weighted_average(overall_fitness_record) > 0.6 and self.other_ships[0].lives_remaining == 1 and self.ship_state.lives_remaining >= 3) or (weighted_average(overall_fitness_record) > 0.85 and self.other_ships[0].lives_remaining < self.ship_state.lives_remaining))):
+            if (self.ship_state.bullets_remaining == 0 and self.ship_state.mines_remaining == 0) or (self.other_ships and ((weighted_average(overall_fitness_record) > 0.55 and self.other_ships[0].lives_remaining == 1 and self.ship_state.lives_remaining >= 3) or (weighted_average(overall_fitness_record) > 0.7 and self.other_ships[0].lives_remaining < self.ship_state.lives_remaining))):
                 invert_ship_affinity = True
                 self.explanation_messages.append("I'm either out of bullets/mines or the other ship is about to die, so I'm gonna try to crash into the other ship mwahahahaha")
             else:
