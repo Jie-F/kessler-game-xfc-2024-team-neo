@@ -484,7 +484,7 @@ while True:
         print(f"Team 1, 2 hits: ({team_1_hits}, {team_2_hits})")
         print(f"Team 1, 2 wins: ({team_1_wins}, {team_2_wins})")
         print(f"Team 1, 2 deaths: ({team_1_deaths}, {team_2_deaths})")
-        print(f"Team 1, 2 accuracies: ({team_1_bullets_hit/team_1_shots_fired}, {team_2_bullets_hit/team_2_shots_fired})")
+        print(f"Team 1, 2 accuracies: ({team_1_bullets_hit/(team_1_shots_fired + 0.000000000000001)}, {team_2_bullets_hit/(team_2_shots_fired + 0.000000000000001)})")
         print(f"Team 1, 2 shot efficiencies: ({team_1_shot_efficiency:.02%}, {team_2_shot_efficiency:.02%})")
         print(f"Team 1, 2 shot efficiencies inc. mines/ship hits: ({team_1_shot_efficiency_including_mines:.02%}, {team_2_shot_efficiency_including_mines:.02%})")
         #if args.once:
