@@ -35,7 +35,7 @@
 # NO NEED TO FIX because Kessler changed it so that it'll wait out the bullet, as long as there's still time remaining: If we're gonna die and we're the only ship left, don't shoot a bullet if it doesn't land before I die, because it'll count as a miss
 # EHH WON'T MAKE THIS CHANGE BECAUSE IT'S KINDA BAD AND COMPLEX: Use math to see how the bullet lines up with the asteroid, to predict whether it's gonna hit before doing the bullet sim
 # DONE: get_next_extrapolated_asteroid_collision_time doesn't handle the edges properly! Collisions can't go through the edge but this can predict that. Do the checks!
-# TODO: Improve targeting during maneuvers to maintain random maneuvers. Each sim should target differently, not just always aim at the closest asteroid! But we need to maintain cohesion in the targets from one iteration to the next, so Neo doesn't switch targets randomly within the sim.
+# DONE: Improve targeting during maneuvers to maintain random maneuvers. Each sim should target differently, not just always aim at the closest asteroid! But we need to maintain cohesion in the targets from one iteration to the next, so Neo doesn't switch targets randomly within the sim.
 # PROBABLY NOT WORTH ADDING: Add corner camping hardcoded logic
 # PROBABLY NOT WORTH ADDING: Add closing ring freezing
 
@@ -108,7 +108,7 @@ gc.set_threshold(50000)
 # IMPORTANT: if multiple scenarios are run back-to-back, this controller doesn't get freshly initialized in the subsequent runs.
 # If any global variables are changed during execution, make sure to reset them when the timestep is 0.
 
-BUILD_NUMBER: Final = "2024-06-16 Neo - Jie Fan (jie.f@pm.me)"
+BUILD_NUMBER: Final = "2024-06-17 Neo - Jie Fan (jie.f@pm.me)"
 
 # Output config
 DEBUG_MODE: Final[bool] = False
@@ -209,11 +209,11 @@ MIN_MANEUVER_PER_TIMESTEP_SEARCH_ITERATIONS_LUT: Final = ((85, 65, 30), # Fitnes
                                                           (55, 40, 20), # Fitness from 0.2 to 0.3
                                                           (45, 25, 15), # Fitness from 0.3 to 0.4
                                                           (25, 12, 9), # Fitness from 0.4 to 0.5
-                                                          (16, 8, 6), # Fitness from 0.5 to 0.6
-                                                          (10, 7, 5), # Fitness from 0.6 to 0.7
-                                                          (7, 5, 4), # Fitness from 0.7 to 0.8
-                                                          (4, 3, 3), # Fitness from 0.8 to 0.9
-                                                          (3, 3, 2)) # Fitness from 0.9 to 1.0
+                                                          (20, 9, 6), # Fitness from 0.5 to 0.6
+                                                          (14, 7, 5), # Fitness from 0.6 to 0.7
+                                                          (8, 5, 4), # Fitness from 0.7 to 0.8
+                                                          (7, 4, 3), # Fitness from 0.8 to 0.9
+                                                          (6, 3, 2)) # Fitness from 0.9 to 1.0
 MIN_MANEUVER_PER_PERIOD_SEARCH_ITERATIONS_LUT = ((300, 230, 105), # Fitness from 0.0 to 0.1
                                                  (230, 185, 88), # Fitness from 0.1 to 0.2
                                                  (193, 140, 70), # Fitness from 0.2 to 0.3
@@ -5052,6 +5052,10 @@ class NeoController(KesslerController):
     @property
     def name(self) -> str:
         return "Neo"
+
+    @property
+    def custom_sprite_path(self) -> str:
+        return "neo.png"
 
     def get_total_sim_ts(self) -> i64:  # REMOVE_FOR_COMPETITION
         return total_sim_timesteps  # REMOVE_FOR_COMPETITION
