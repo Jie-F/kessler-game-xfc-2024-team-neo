@@ -1,43 +1,22 @@
-# Kessler
+# Neo - Kessler Controller
 
-## Getting started
+## About
 
-Kessler is a simulation environment loosely modeled after our internal project PsiBee and the external project [Fuzzy Asteroids](https://github.com/xfuzzycomp/FuzzyAsteroids).
-The game has ships that shoot bullets at asteroids to gain score. Ships can collide with asteroids and lose lives.
-If the ship runs out of lives, the game terminates. In multi-ship scenarios, ships can collide with each other as well, 
-but cannot shoot each other.
+Neo is a controller I made for the XFC 2024 and WCCI 2024 competitions.
+This repo was forked from the [main kesslergame repo](https://github.com/ThalesGroup/kessler-game/tree/main/src/kesslergame)
 
-Kessler can be built as python extension for install using pip, or used as a local package by copying the
-`src/kessler_game` directory to your project. Wheels are provided in
-[releases](https://github.com/ThalesGroup/kessler-game/releases) for install using:
-``` 
-pip install <path to kessler_game-#.#.#-py3-none-any.whl>
-```
+The explainable fuzzy competition's main website is at: [https://xfuzzycomp.github.io/XFC/](https://xfuzzycomp.github.io/XFC/)
 
-Kessler has two primary graphics modules. The first uses Python's Tkinter UI library to display the game. The second
-utilizes a separate executable process called kessler_graphics made in Unreal Engine 5. Data is sent to the
-kessler_graphics instance using UDP protocol on a local machine.
+To see Neo compete in XFC, see my presentation and matches from XFC 2024 [here](https://www.youtube.com/watch?v=27L8-dkrL-I&t=1627s)
 
-## Using the UE5 graphics engine
-Under kessler_graphics is an Unreal Engine 5 project for receiving simulation data from the Kessler Python process and
-displaying it in a 3d environment. To contribute to the UE5 project, you will need to do the following.
-- Install Visual Studio 2019 v16.11.5 or later with "Game Development with C++" selected on install
-- Install the .NET Core 3.1 Runtime from [here](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-3.1.30-windows-x64-installer?cid=getdotnetcore)
-- Install Unreal Engine 5.0.x from the [Epic Games Launcher](https://store.epicgames.com/en-US/download)
-- Grab the latest release of the UDP-Unreal plugin from [here](https://github.com/getnamo/UDP-Unreal/releases)
-- Follow installation instructions for UDP-Unreal from its included README
-- Right click `kessler_graphics.uproject` under the `kessler_graphics` directory and select "Generate Visual Studio Project Files" from the context menu
-- Launch the project by double-clicking on `kessler_graphics.uproject`, and select "Yes" if prompted to rebuild engine modules
+And see Neo's WCCI competition [here](https://www.youtube.com/watch?v=863WyDLXvNI). Neo was made significantly better, by fixing a bug, and also by making it attack the other ship, taking away its lives and taking all the asteroids for itself. It also purposely runs into asteroids at the end of the game, to exchange a life for an extra point.
 
-## Documentation
+## Repo
 
-Documentation is not yet available for Kessler. If you would like to contribute to documentation, check out 
-[CONTRIBUTING.md](CONTRIBUTING.md) for info on how to get started
+Neo's code is all in neo_controller.py. Competition specific versions were created and put in the SUBMISSIONS folders for XFC 2024 and WCCI 2024. Those versions of neo_controller.py were derived by running the competition preprocessor to strip out unnecessary code. And then the controller was compiled with MyPyC into a compiled Python module to get a 5-10X speedup in performance.
 
-## Contributing
-
-If you are interested in contributing to the Kessler project, start by reading the [Contributing guide](/CONTRIBUTING.md).
-
-## License
-
-Kessler is licensed under the Apache 2.0 license. Please read [LICENSE](LICENSE) for more information.
+Additionally, I also have scenarios you can use to test on:
+- custom_scenarios.py have a ton of crazy scenarios I made
+- adversarial_scenarios_for_jie.py are xfc 2024 scenarios from Tim
+- scenarios.py are official xfc 2021 scenarios from their repo
+- xfc_2023_replica_scenarios.py were made by me manually
